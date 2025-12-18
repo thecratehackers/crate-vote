@@ -1,0 +1,942 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { signIn, signOut, useSession } from 'next-auth/react';
+import Link from 'next/link';
+
+interface Song {
+    id: string;
+    spotifyUri: string;
+    name: string;
+    artist: string;
+    album: string;
+    albumArt: string;
+    addedBy: string;        // Visitor ID (fingerprint)
+    addedByName: string;
+    score: number;
+}
+
+interface ActiveUser {
+    visitorId: string;
+    name: string;
+    songsAdded: number;
+    isBanned: boolean;
+    karma: number;
+}
+
+interface Stats {
+    totalSongs: number;
+    totalVotes: number;
+    uniqueVoters: number;
+}
+
+interface TimerStatus {
+    endTime: number | null;
+    running: boolean;
+    remaining: number;
+}
+
+export default function AdminPage() {
+    const { data: session } = useSession();
+    const [adminPassword, setAdminPassword] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [songs, setSongs] = useState<Song[]>([]);
+    const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
+    const [isLocked, setIsLocked] = useState(false);
+    const [stats, setStats] = useState<Stats>({ totalSongs: 0, totalVotes: 0, uniqueVoters: 0 });
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [exportUrl, setExportUrl] = useState<string | null>(null);
+    const [adminVotes, setAdminVotes] = useState<Record<string, 1 | -1>>({});
+    const [activeAdminCount, setActiveAdminCount] = useState(0);
+
+    // Unique admin ID for this session
+    const [adminId] = useState(() => 'admin-' + Math.random().toString(36).substr(2, 9));
+
+    // Timer state
+    const [timerRunning, setTimerRunning] = useState(false);
+    const [timerRemaining, setTimerRemaining] = useState(0);
+    const [timerEndTime, setTimerEndTime] = useState<number | null>(null);
+    const [selectedDuration, setSelectedDuration] = useState(60); // minutes
+
+    // Playlist title state
+    const [playlistTitle, setPlaylistTitle] = useState('Hackathon Playlist');
+    const [titleInput, setTitleInput] = useState('');
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+
+    // Admin song search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [showSearchResults, setShowSearchResults] = useState(false);
+
+    // Fetch playlist data (with admin heartbeat)
+    const fetchPlaylist = useCallback(async () => {
+        try {
+            const res = await fetch('/api/playlist', {
+                headers: isAuthenticated ? {
+                    'x-admin-key': adminPassword,
+                    'x-admin-id': adminId,
+                } : {},
+            });
+            const data = await res.json();
+            setSongs(data.songs);
+            setIsLocked(data.isLocked);
+            setStats(data.stats);
+            setActiveUsers(data.activeUsers || []);
+            setActiveAdminCount(data.activeAdminCount || 0);
+            if (data.playlistTitle) {
+                setPlaylistTitle(data.playlistTitle);
+                if (!isEditingTitle) setTitleInput(data.playlistTitle);
+            }
+        } catch (error) {
+            console.error('Failed to fetch playlist:', error);
+        }
+    }, [isAuthenticated, adminPassword, adminId, isEditingTitle]);
+
+    // Fetch timer status
+    const fetchTimer = useCallback(async () => {
+        try {
+            const res = await fetch('/api/timer');
+            const data: TimerStatus = await res.json();
+            setTimerRunning(data.running);
+            setTimerEndTime(data.endTime);
+            if (data.running && data.endTime) {
+                setTimerRemaining(Math.max(0, data.endTime - Date.now()));
+            } else {
+                setTimerRemaining(0);
+            }
+        } catch (error) {
+            console.error('Failed to fetch timer:', error);
+        }
+    }, []);
+
+    // Initial fetch when authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            fetchPlaylist();
+            fetchTimer();
+        }
+    }, [isAuthenticated, fetchPlaylist, fetchTimer]);
+
+    // REAL-TIME POLLING - refresh every 3 seconds
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const interval = setInterval(() => {
+            fetchPlaylist();
+            fetchTimer();
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [isAuthenticated, fetchPlaylist, fetchTimer]);
+
+    // Update timer display every second
+    useEffect(() => {
+        if (!timerRunning || !timerEndTime) return;
+
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, timerEndTime - Date.now());
+            setTimerRemaining(remaining);
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [timerRunning, timerEndTime]);
+
+    // Format timer display (supports days, hours, minutes, seconds)
+    const formatTime = (ms: number) => {
+        const totalSeconds = Math.ceil(ms / 1000);
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        if (days > 0) {
+            return `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // Auto-hide message
+    useEffect(() => {
+        if (message) {
+            const timeout = setTimeout(() => setMessage(null), 4000);
+            return () => clearTimeout(timeout);
+        }
+    }, [message]);
+
+    // Admin song search effect
+    useEffect(() => {
+        if (!searchQuery.trim()) {
+            setSearchResults([]);
+            setShowSearchResults(false);
+            return;
+        }
+
+        const timeout = setTimeout(async () => {
+            setIsSearching(true);
+            try {
+                const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+                const data = await res.json();
+                setSearchResults(data.tracks || []);
+                setShowSearchResults(true);
+            } catch (error) {
+                console.error('Search failed:', error);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timeout);
+    }, [searchQuery]);
+
+    // Admin add song (unlimited, bypasses all restrictions)
+    const handleAdminAddSong = async (track: any) => {
+        const adminVisitorId = `admin-${adminPassword.slice(0, 8)}`;
+
+        try {
+            const res = await fetch('/api/songs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-visitor-id': adminVisitorId,
+                    'x-admin-key': adminPassword,
+                },
+                body: JSON.stringify({
+                    ...track,
+                    addedByName: 'Admin',
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setMessage({ type: 'error', text: data.error || 'Failed to add song' });
+                return;
+            }
+
+            setMessage({ type: 'success', text: `Added "${track.name}"` });
+            setSearchQuery('');
+            setShowSearchResults(false);
+            fetchPlaylist();
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to add song' });
+        }
+    };
+
+    // Check if song is already in playlist
+    const isSongInPlaylist = (trackId: string) => songs.some(s => s.id === trackId);
+
+    // Admin API call helper
+    const adminFetch = async (url: string, options: RequestInit = {}) => {
+        return fetch(url, {
+            ...options,
+            headers: {
+                ...options.headers,
+                'Content-Type': 'application/json',
+                'x-admin-key': adminPassword,
+                'x-admin-id': adminId,
+            },
+        });
+    };
+
+    // Admin vote on song (contributes to aggregate score)
+    const handleAdminVote = async (songId: string, vote: 1 | -1) => {
+        const previousVote = adminVotes[songId];
+
+        // Optimistic update for admin votes display
+        setAdminVotes(prev => {
+            const newVotes = { ...prev };
+            if (newVotes[songId] === vote) {
+                delete newVotes[songId];
+            } else {
+                newVotes[songId] = vote;
+            }
+            return newVotes;
+        });
+
+        // Optimistic update for song scores and re-sort
+        setSongs(prev => {
+            const updated = prev.map(song => {
+                if (song.id !== songId) return song;
+
+                let scoreDelta = 0;
+                if (previousVote === vote) {
+                    scoreDelta = -vote;
+                } else if (previousVote) {
+                    scoreDelta = vote - previousVote;
+                } else {
+                    scoreDelta = vote;
+                }
+
+                return { ...song, score: song.score + scoreDelta };
+            });
+
+            // Re-sort by score (descending)
+            return updated.sort((a, b) => b.score - a.score);
+        });
+
+        try {
+            // Use a special admin visitor ID for admin votes
+            const adminVisitorId = `admin-${adminPassword.slice(0, 8)}`;
+
+            const res = await fetch(`/api/songs/${songId}/vote`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-visitor-id': adminVisitorId,
+                    'x-admin-key': adminPassword,
+                },
+                body: JSON.stringify({ vote }),
+            });
+
+            if (!res.ok) {
+                // Revert on error
+                fetchPlaylist();
+                setMessage({ type: 'error', text: 'Vote failed' });
+            }
+        } catch (error) {
+            console.error('Admin vote failed:', error);
+            fetchPlaylist();
+            setMessage({ type: 'error', text: 'Vote failed - network error' });
+        }
+    };
+
+    // Timer controls
+    const handleStartTimer = async () => {
+        try {
+            const res = await adminFetch('/api/timer', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'start', duration: selectedDuration * 60 * 1000 }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setTimerRunning(data.running);
+                setTimerEndTime(data.endTime);
+                // Format duration nicely
+                let durationText = '';
+                if (selectedDuration >= 1440) {
+                    const days = selectedDuration / 1440;
+                    durationText = `${days} day${days > 1 ? 's' : ''}`;
+                } else if (selectedDuration >= 60) {
+                    const hours = selectedDuration / 60;
+                    durationText = `${hours} hour${hours > 1 ? 's' : ''}`;
+                } else {
+                    durationText = `${selectedDuration} minutes`;
+                }
+                setMessage({ type: 'success', text: `Session started! ${durationText} on the clock.` });
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to start timer' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to start timer - network error' });
+        }
+    };
+
+    const handleStopTimer = async () => {
+        try {
+            const res = await adminFetch('/api/timer', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'stop' }),
+            });
+            if (res.ok) {
+                setTimerRunning(false);
+                setMessage({ type: 'success', text: 'Session stopped. Playlist locked.' });
+                fetchPlaylist();
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to stop timer' });
+        }
+    };
+
+    const handleResetTimer = async () => {
+        try {
+            const res = await adminFetch('/api/timer', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'reset' }),
+            });
+            if (res.ok) {
+                setTimerRunning(false);
+                setTimerEndTime(null);
+                setTimerRemaining(0);
+                setMessage({ type: 'success', text: 'Timer reset.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to reset timer' });
+        }
+    };
+
+    // Remove song
+    const handleRemoveSong = async (songId: string) => {
+        try {
+            const res = await adminFetch(`/api/songs/${songId}`, { method: 'DELETE' });
+            if (res.ok) {
+                setMessage({ type: 'success', text: 'Song removed' });
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: 'Failed to remove song' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to remove song' });
+        }
+    };
+
+    // Ban user directly from users list
+    const handleBanUserDirect = async (visitorId: string, userName: string) => {
+        if (!confirm(`Ban ${userName}? This will remove them AND all their songs.`)) return;
+
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'ban', visitorId }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: `${userName} banned! ${data.deletedSongs || 0} song(s) removed.` });
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to ban user' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to ban user' });
+        }
+    };
+
+    // Grant karma to user
+    const handleGrantKarma = async (visitorId: string, userName: string) => {
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'grantKarma', visitorId, points: 1 }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: `⭐ +1 Karma to ${userName}! (Now: ${data.karma})` });
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to grant karma' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to grant karma' });
+        }
+    };
+
+    // Save playlist title
+    const handleSaveTitle = async () => {
+        if (!titleInput.trim()) {
+            setMessage({ type: 'error', text: 'Please enter a playlist title' });
+            return;
+        }
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'setTitle', title: titleInput.trim() }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setPlaylistTitle(data.playlistTitle);
+                setIsEditingTitle(false);
+                setMessage({ type: 'success', text: 'Playlist title updated!' });
+            } else {
+                setMessage({ type: 'error', text: 'Failed to update title' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to update title' });
+        }
+    };
+
+    // Wipe session (full reset)
+    const handleWipeSession = async () => {
+        if (!confirm('⚠️ WIPE ENTIRE SESSION?\n\nThis will delete ALL songs, reset the timer, and unban all users.\n\nThis cannot be undone!')) {
+            return;
+        }
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'reset' }),
+            });
+            if (res.ok) {
+                // Also reset timer
+                await adminFetch('/api/timer', {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'reset' }),
+                });
+                setMessage({ type: 'success', text: 'Session wiped! Fresh start.' });
+                setTimerRunning(false);
+                setTimerEndTime(null);
+                setExportUrl(null);
+                setSongs([]);  // Clear local state immediately
+                setActiveUsers([]);  // Clear users too
+                setStats({ totalSongs: 0, totalVotes: 0, uniqueVoters: 0 });
+                fetchPlaylist();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                setMessage({ type: 'error', text: data.error || 'Failed to wipe session - check admin password' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to wipe session - network error' });
+        }
+    };
+
+    // Refresh audio features for all songs
+    const handleRefreshFeatures = async () => {
+        try {
+            setMessage({ type: 'success', text: 'Refreshing audio features...' });
+            const res = await adminFetch('/api/admin/refresh-features', {
+                method: 'POST',
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message });
+                fetchPlaylist(); // Refresh to show updated features
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to refresh features' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to refresh features - network error' });
+        }
+    };
+
+    // Toggle lock
+    const handleToggleLock = async () => {
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: isLocked ? 'unlock' : 'lock' }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setIsLocked(data.isLocked);
+                setMessage({ type: 'success', text: data.isLocked ? 'Playlist locked' : 'Playlist unlocked' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to toggle lock' });
+        }
+    };
+
+    // Export to Spotify (only if connected)
+    const handleExportSpotify = async () => {
+        if (!session) {
+            signIn('spotify');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/playlist/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: `Hackathon - ${new Date().toLocaleDateString()}`,
+                    description: `Created with Hackathon | ${stats.totalSongs} songs | ${stats.uniqueVoters} voters`,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                setExportUrl(data.playlistUrl);
+                setMessage({ type: 'success', text: `Playlist created with ${data.trackCount} tracks!` });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Export failed' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to export playlist' });
+        }
+    };
+
+    // Export JSON download
+    const handleExportJSON = async () => {
+        try {
+            const res = await fetch('/api/playlist/export');
+            const data = await res.json();
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `hackathon-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            setMessage({ type: 'success', text: 'Exported as JSON' });
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Export failed' });
+        }
+    };
+
+    // Password login
+    const handlePasswordLogin = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (adminPassword.trim()) {
+            setIsAuthenticated(true);
+        }
+    };
+
+    // Show login screen if not authenticated
+    if (!isAuthenticated) {
+        return (
+            <div className="auth-container">
+                <div className="auth-card">
+                    <img src="/logo.png" alt="Hackathon" style={{ width: 80, height: 80, marginBottom: 16 }} />
+                    <h1>Admin Panel</h1>
+                    <p>Enter the admin password to access controls</p>
+
+                    <form className="password-form" onSubmit={handlePasswordLogin} autoComplete="off">
+                        <input
+                            type="password"
+                            placeholder="Admin password"
+                            value={adminPassword}
+                            onChange={(e) => setAdminPassword(e.target.value)}
+                            autoFocus
+                            autoComplete="new-password"
+                            data-lpignore="true"
+                            data-form-type="other"
+                        />
+                        <button type="submit" className="admin-btn primary">
+                            Enter Admin Panel
+                        </button>
+                    </form>
+
+                    <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
+                        <Link href="/" style={{ color: 'var(--orange-primary)', fontSize: '0.875rem' }}>
+                            ← Back to voting
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="container">
+            {/* Top bar */}
+            <div className="top-bar">
+                <Link href="/" className="admin-link">
+                    ← Back to Voting
+                </Link>
+                {timerRunning && <span className="live-indicator">🔴 LIVE</span>}
+            </div>
+
+            <header className="header">
+                <div className="logo-header-admin">
+                    <img src="/logo.png" alt="Hackathon" className="header-logo-admin" />
+                    <div>
+                        <h1>
+                            <span className="logo-text">Hackathon</span>
+                        </h1>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+                {/* 👥 ADMIN COUNT INDICATOR */}
+                <div className="admin-count-indicator">
+                    <span className="admin-dot"></span>
+                    <span className="admin-count-text">
+                        {activeAdminCount} Admin{activeAdminCount !== 1 ? 's' : ''} Online
+                    </span>
+                </div>
+            </header>
+
+            {/* 📝 PLAYLIST TITLE EDITOR */}
+            <div className="title-editor-panel">
+                <label>📝 Playlist Title (shown to users):</label>
+                {isEditingTitle ? (
+                    <div className="title-edit-row">
+                        <input
+                            type="text"
+                            value={titleInput}
+                            onChange={(e) => setTitleInput(e.target.value)}
+                            placeholder="Enter playlist title..."
+                            maxLength={100}
+                            autoFocus
+                        />
+                        <button className="admin-btn success small" onClick={handleSaveTitle}>
+                            ✓ Save
+                        </button>
+                        <button className="admin-btn small" onClick={() => {
+                            setIsEditingTitle(false);
+                            setTitleInput(playlistTitle);
+                        }}>
+                            ✕ Cancel
+                        </button>
+                    </div>
+                ) : (
+                    <div className="title-display-row">
+                        <span className="current-title">{playlistTitle}</span>
+                        <button className="admin-btn small" onClick={() => setIsEditingTitle(true)}>
+                            ✏️ Edit
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Timer Control Panel */}
+            <div className="timer-control-panel">
+                <div className="timer-display-large">
+                    {timerRunning ? (
+                        <>
+                            <div className="timer-label">Session Active</div>
+                            <div className={`timer-value-large ${timerRemaining < 60000 ? 'urgent' : ''}`}>
+                                {formatTime(timerRemaining)}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="timer-label">Session Inactive</div>
+                    )}
+                </div>
+
+                <div className="timer-controls">
+                    <div className="timer-duration-select">
+                        <label>Duration:</label>
+                        <select
+                            value={selectedDuration}
+                            onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                            disabled={timerRunning}
+                        >
+                            <option value={5}>5 min</option>
+                            <option value={10}>10 min</option>
+                            <option value={15}>15 min</option>
+                            <option value={30}>30 min</option>
+                            <option value={45}>45 min</option>
+                            <option value={60}>1 hour</option>
+                            <option value={120}>2 hours</option>
+                            <option value={360}>6 hours</option>
+                            <option value={720}>12 hours</option>
+                            <option value={1440}>24 hours</option>
+                            <option value={10080}>7 days</option>
+                        </select>
+                    </div>
+
+                    <div className="timer-buttons">
+                        {!timerRunning ? (
+                            <button className="admin-btn success" onClick={handleStartTimer}>
+                                ▶️ Start Session
+                            </button>
+                        ) : (
+                            <button className="admin-btn danger" onClick={handleStopTimer}>
+                                ⏹️ Stop Session
+                            </button>
+                        )}
+                        <button className="admin-btn" onClick={handleResetTimer}>
+                            🔄 Reset Timer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Stats */}
+            <div className="stats-panel">
+                <div className="stat-card">
+                    <div className="value">{stats.totalSongs}</div>
+                    <div className="label">Songs</div>
+                </div>
+                <div className="stat-card">
+                    <div className="value">{stats.totalVotes}</div>
+                    <div className="label">Total Votes</div>
+                </div>
+                <div className="stat-card">
+                    <div className="value">{stats.uniqueVoters}</div>
+                    <div className="label">Unique Voters</div>
+                </div>
+            </div>
+
+            {/* Admin controls */}
+            <div className="admin-bar">
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <button className={`admin-btn ${isLocked ? 'success' : ''}`} onClick={handleToggleLock}>
+                        {isLocked ? '🔓 Unlock Playlist' : '🔒 Lock Playlist'}
+                    </button>
+                    <button className="admin-btn danger" onClick={handleWipeSession}>
+                        🗑️ Wipe Session
+                    </button>
+                    <button className="admin-btn spotify-green" onClick={handleExportSpotify} disabled={songs.length === 0}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: 6 }}>
+                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                        </svg>
+                        Export to Spotify
+                    </button>
+                </div>
+            </div>
+
+            {/* Messages */}
+            {message && (
+                <div className={`message ${message.type}`}>
+                    {message.type === 'success' ? '✓' : '✕'} {message.text}
+                </div>
+            )}
+
+            {/* Export URL */}
+            {exportUrl && (
+                <div className="message success">
+                    ✓ Playlist created!{' '}
+                    <a href={exportUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 'bold' }}>
+                        Open in Spotify →
+                    </a>
+                </div>
+            )}
+
+            {/* Active Users Section */}
+            <div className="active-users-section">
+                <h3>👥 Active Participants ({activeUsers.length})</h3>
+                {activeUsers.length === 0 ? (
+                    <p className="no-users">No participants yet. Start a session!</p>
+                ) : (
+                    <div className="users-grid">
+                        {activeUsers.map(user => (
+                            <div key={user.visitorId} className={`user-card ${user.isBanned ? 'banned' : ''}`}>
+                                <div className="user-info">
+                                    <span className="user-name">{user.name}</span>
+                                    <span className="user-songs">{user.songsAdded} song{user.songsAdded !== 1 ? 's' : ''}</span>
+                                    {user.karma > 0 && <span className="user-karma">⭐ {user.karma}</span>}
+                                </div>
+                                <div className="user-actions">
+                                    {!user.isBanned && (
+                                        <button
+                                            className="karma-btn"
+                                            onClick={() => handleGrantKarma(user.visitorId, user.name)}
+                                            title="Grant +1 Karma"
+                                        >
+                                            +⭐
+                                        </button>
+                                    )}
+                                    {!user.isBanned ? (
+                                        <button
+                                            className="kick-btn"
+                                            onClick={() => handleBanUserDirect(user.visitorId, user.name)}
+                                            title="Kick user"
+                                        >
+                                            ❌
+                                        </button>
+                                    ) : (
+                                        <span className="banned-label">BANNED</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Admin Song Search */}
+            <div className="admin-search-section">
+                <h3>➕ Add Songs (Unlimited)</h3>
+                <div className="search-compact" style={{ position: 'relative' }}>
+                    <input
+                        type="text"
+                        placeholder="🔍 Search songs to add..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                        onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                        style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            background: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            color: 'var(--text-primary)',
+                            fontSize: '1rem',
+                        }}
+                    />
+                    {isSearching && <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>...</span>}
+
+                    {showSearchResults && searchResults.length > 0 && (
+                        <div className="search-dropdown" style={{
+                            position: 'absolute',
+                            top: 'calc(100% + 6px)',
+                            left: 0,
+                            right: 0,
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                            zIndex: 100,
+                            maxHeight: '300px',
+                            overflowY: 'auto',
+                        }}>
+                            {searchResults.slice(0, 5).map((track) => (
+                                <div key={track.id} style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    padding: '10px 14px',
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid var(--border-color)',
+                                }} onClick={() => handleAdminAddSong(track)}>
+                                    <img src={track.albumArt || '/placeholder.svg'} alt="" style={{ width: 40, height: 40, borderRadius: 4 }} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</div>
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--orange-primary)' }}>{track.artist}</div>
+                                    </div>
+                                    {isSongInPlaylist(track.id) ? (
+                                        <span style={{ color: 'var(--text-muted)' }}>✓</span>
+                                    ) : (
+                                        <span style={{ color: 'var(--success)', fontWeight: 700 }}>+</span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Playlist */}
+            <div className="playlist">
+                <h3>🎵 Playlist ({songs.length} songs)</h3>
+                {songs.length === 0 ? (
+                    <div className="playlist-empty">
+                        <div className="icon">🎶</div>
+                        <p>No songs yet. Start a session and share the link!</p>
+                    </div>
+                ) : (
+                    songs.map((song, index) => (
+                        <div key={song.id} className="song-card">
+                            <div className={`rank ${index < 3 ? 'top-3' : ''}`}>
+                                #{index + 1}
+                            </div>
+                            <img
+                                src={song.albumArt || '/placeholder.svg'}
+                                alt={song.album}
+                                className="album-art"
+                            />
+                            <div className="song-info">
+                                <div className="song-name">{song.name}</div>
+                                <div className="song-artist">{song.artist}</div>
+                                <div className="song-added-by">Added by {song.addedByName || 'Anonymous'}</div>
+                            </div>
+                            <div className="vote-controls">
+                                <button
+                                    className={`vote-btn admin-vote upvote ${adminVotes[song.id] === 1 ? 'active' : ''}`}
+                                    onClick={() => handleAdminVote(song.id, 1)}
+                                    title="Vote up"
+                                >
+                                    ▲
+                                </button>
+                                <span className={`vote-count ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}>
+                                    {song.score > 0 ? '+' : ''}{song.score}
+                                </span>
+                                <button
+                                    className={`vote-btn admin-vote downvote ${adminVotes[song.id] === -1 ? 'active' : ''}`}
+                                    onClick={() => handleAdminVote(song.id, -1)}
+                                    title="Vote down"
+                                >
+                                    ▼
+                                </button>
+                            </div>
+                            <div className="admin-actions">
+                                <button
+                                    className="admin-action-btn delete"
+                                    onClick={() => handleRemoveSong(song.id)}
+                                    title="Remove song"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div >
+    );
+}
