@@ -860,7 +860,7 @@ export default function HomePage() {
                             placeholder="🔍 Add a song..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                            onBlur={() => setTimeout(() => setShowResults(false), 300)}
                             onFocus={() => searchResults.length > 0 && setShowResults(true)}
                         />
                         {isSearching && <span className="search-spinner">...</span>}
@@ -871,7 +871,7 @@ export default function HomePage() {
                                     <div
                                         key={track.id}
                                         className="search-result-row"
-                                        onClick={() => !isSongInPlaylist(track.id) && handleAddSong(track)}
+                                        onMouseDown={() => !isSongInPlaylist(track.id) && handleAddSong(track)}
                                     >
                                         <img src={track.albumArt || '/placeholder.svg'} alt="" />
                                         <div className="result-info">

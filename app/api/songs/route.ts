@@ -51,6 +51,14 @@ export async function GET(request: Request) {
 
 // POST - Add a new song
 export async function POST(request: Request) {
+    // Check Redis configuration first
+    if (!isRedisConfigured()) {
+        return NextResponse.json({
+            error: 'Database not configured',
+            details: 'Redis environment variables are missing.'
+        }, { status: 503 });
+    }
+
     const visitorId = getVisitorIdFromRequest(request);
     const adminKey = request.headers.get('x-admin-key');
     const isAdmin = adminKey && adminKey === process.env.ADMIN_PASSWORD;
