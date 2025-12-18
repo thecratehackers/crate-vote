@@ -20,6 +20,7 @@ const PLAYLIST_TITLE_KEY = 'hackathon:playlistTitle';
 const ACTIVITY_LOG_KEY = 'hackathon:activityLog';
 const USER_KARMA_KEY = 'hackathon:userKarma';
 const TOP3_KARMA_GRANTED_KEY = 'hackathon:top3KarmaGranted';  // Track songs that already gave top 3 karma
+const USER_LAST_ACTIVITY_KEY = 'hackathon:userLastActivity';  // Track when users were last active
 
 // ============ TYPES ============
 export interface Song {
@@ -227,6 +228,9 @@ export async function addSong(
             console.log(`User ${visitorId} spent ${KARMA_COST_PER_EXTRA_SONG} karma on extra song add`);
         }
 
+        // Track user activity for admin panel sorting
+        await updateUserActivity(visitorId);
+
         return { success: true, displaced: displacedSong };
     } catch (error) {
         console.error('Failed to add song:', error);
@@ -354,6 +358,9 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
                 await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: userDownvotes });
             }
         }
+
+        // Track user activity for admin panel sorting
+        await updateUserActivity(visitorId);
 
         return { success: true };
     } catch (error) {
@@ -552,31 +559,47 @@ export async function resetSession(): Promise<void> {
 }
 
 // ============ ACTIVE USERS ============
-export async function getActiveUsers(): Promise<{ visitorId: string; username: string; songCount: number }[]> {
+// Track when user was last active
+export async function updateUserActivity(visitorId: string): Promise<void> {
     try {
-        const counts = await redis.hgetall<Record<string, number>>(USER_SONG_COUNTS_KEY) || {};
-        const songs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+        await redis.hset(USER_LAST_ACTIVITY_KEY, { [visitorId]: Date.now() });
+    } catch (error) {
+        console.error('Failed to update user activity:', error);
+    }
+}
+
+export async function getActiveUsers(): Promise<{ visitorId: string; username: string; songCount: number; lastActivity: number }[]> {
+    try {
+        const [counts, songs, lastActivityMap] = await Promise.all([
+            redis.hgetall<Record<string, number>>(USER_SONG_COUNTS_KEY) || {},
+            redis.hgetall<Record<string, Song>>(SONGS_KEY) || {},
+            redis.hgetall<Record<string, number>>(USER_LAST_ACTIVITY_KEY) || {},
+        ]);
 
         // Build a map of visitorId -> username from their songs
         const usernameMap: Record<string, string> = {};
-        for (const song of Object.values(songs)) {
+        for (const song of Object.values(songs || {})) {
             if (song.addedBy && song.addedByName) {
                 usernameMap[song.addedBy] = song.addedByName;
             }
         }
 
-        return Object.entries(counts)
+        return Object.entries(counts || {})
             .filter(([_, count]) => count > 0)
             .map(([visitorId, songCount]) => ({
                 visitorId,
                 username: usernameMap[visitorId] || 'Anonymous',
                 songCount,
-            }));
+                lastActivity: (lastActivityMap as Record<string, number>)?.[visitorId] || 0,
+            }))
+            // Sort by most recent activity first
+            .sort((a, b) => b.lastActivity - a.lastActivity);
     } catch (error) {
         console.error('Failed to get active users:', error);
         return [];
     }
 }
+
 
 // ============ BAN USER AND DELETE THEIR SONGS ============
 export async function banUserAndDeleteSongs(visitorId: string): Promise<{ deletedSongCount: number }> {

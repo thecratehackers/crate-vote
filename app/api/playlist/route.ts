@@ -37,6 +37,7 @@ export async function GET(request: Request) {
     ]);
 
     // Format active users for frontend (check ban status and karma for each)
+    // Already sorted by most recent activity from getActiveUsers
     const activeUsers = await Promise.all(
         activeUsersRaw.map(async (user) => ({
             visitorId: user.visitorId,
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
             songsAdded: user.songCount,
             isBanned: await isUserBanned(user.visitorId),
             karma: await getUserKarma(user.visitorId),
+            lastActivity: user.lastActivity,
         }))
     );
 

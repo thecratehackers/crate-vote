@@ -3618,6 +3618,43 @@ body::before {
   color: #fbbf24;
 }
 
+/* Recently active user indicator */
+.user-card.recently-active {
+  border-left: 3px solid #22c55e;
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.active-dot {
+  color: #22c55e;
+  margin-right: 4px;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.user-activity {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+}
+
+.user-activity.recent {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
 .user-actions {
   display: flex;
   gap: 8px;

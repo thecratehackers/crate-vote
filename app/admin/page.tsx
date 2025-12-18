@@ -22,6 +22,7 @@ interface ActiveUser {
     songsAdded: number;
     isBanned: boolean;
     karma: number;
+    lastActivity: number;
 }
 
 interface Stats {
@@ -783,37 +784,50 @@ export default function AdminPage() {
                     <p className="no-users">No participants yet. Start a session!</p>
                 ) : (
                     <div className="users-grid">
-                        {activeUsers.map(user => (
-                            <div key={user.visitorId} className={`user-card ${user.isBanned ? 'banned' : ''}`}>
-                                <div className="user-info">
-                                    <span className="user-name">{user.name}</span>
-                                    <span className="user-songs">{user.songsAdded} song{user.songsAdded !== 1 ? 's' : ''}</span>
-                                    {user.karma > 0 && <span className="user-karma">⭐ {user.karma}</span>}
+                        {activeUsers.map(user => {
+                            const minutesAgo = user.lastActivity ? Math.floor((Date.now() - user.lastActivity) / 60000) : null;
+                            const isRecentlyActive = minutesAgo !== null && minutesAgo < 2;
+
+                            return (
+                                <div key={user.visitorId} className={`user-card ${user.isBanned ? 'banned' : ''} ${isRecentlyActive ? 'recently-active' : ''}`}>
+                                    <div className="user-info">
+                                        <span className="user-name">
+                                            {isRecentlyActive && <span className="active-dot">●</span>}
+                                            {user.name}
+                                        </span>
+                                        <span className="user-songs">{user.songsAdded} song{user.songsAdded !== 1 ? 's' : ''}</span>
+                                        {user.karma > 0 && <span className="user-karma">⭐ {user.karma}</span>}
+                                        {minutesAgo !== null && (
+                                            <span className={`user-activity ${isRecentlyActive ? 'recent' : ''}`}>
+                                                {minutesAgo === 0 ? 'just now' : minutesAgo === 1 ? '1m ago' : `${minutesAgo}m ago`}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="user-actions">
+                                        {!user.isBanned && (
+                                            <button
+                                                className="karma-btn"
+                                                onClick={() => handleGrantKarma(user.visitorId, user.name)}
+                                                title="Grant +1 Karma"
+                                            >
+                                                +⭐
+                                            </button>
+                                        )}
+                                        {!user.isBanned ? (
+                                            <button
+                                                className="kick-btn"
+                                                onClick={() => handleBanUserDirect(user.visitorId, user.name)}
+                                                title="Kick user"
+                                            >
+                                                ❌
+                                            </button>
+                                        ) : (
+                                            <span className="banned-label">BANNED</span>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="user-actions">
-                                    {!user.isBanned && (
-                                        <button
-                                            className="karma-btn"
-                                            onClick={() => handleGrantKarma(user.visitorId, user.name)}
-                                            title="Grant +1 Karma"
-                                        >
-                                            +⭐
-                                        </button>
-                                    )}
-                                    {!user.isBanned ? (
-                                        <button
-                                            className="kick-btn"
-                                            onClick={() => handleBanUserDirect(user.visitorId, user.name)}
-                                            title="Kick user"
-                                        >
-                                            ❌
-                                        </button>
-                                    ) : (
-                                        <span className="banned-label">BANNED</span>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
