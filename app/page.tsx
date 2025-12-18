@@ -808,7 +808,7 @@ export default function HomePage() {
                             className="user-pill"
                             onClick={() => { setUsernameInput(username); setShowUsernameModal(true); }}
                         >
-                            👤 {username}
+                            🎧 {username}
                         </button>
                     )}
                     <Link href="/admin" className="admin-gear-right" title="Admin Panel">⚙️</Link>
