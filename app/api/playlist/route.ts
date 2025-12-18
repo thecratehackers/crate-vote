@@ -13,7 +13,8 @@ import {
     getPlaylistTitle,
     setPlaylistTitle,
     addKarma,
-    getUserKarma
+    getUserKarma,
+    getRecentActivity
 } from '@/lib/redis-store';
 
 // GET - Get playlist status and stats
@@ -27,13 +28,14 @@ export async function GET(request: Request) {
         await adminHeartbeat(adminId);
     }
 
-    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle] = await Promise.all([
+    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getStats(),
         getActiveUsers(),
         getActiveAdminCount(),
         getPlaylistTitle(),
+        isAdmin ? getRecentActivity() : Promise.resolve([]),  // Only fetch for admins
     ]);
 
     // Format active users for frontend (check ban status and karma for each)
@@ -56,6 +58,7 @@ export async function GET(request: Request) {
         activeUsers,
         activeAdminCount,
         playlistTitle,
+        recentActivity: isAdmin ? recentActivity : undefined,
     });
 }
 

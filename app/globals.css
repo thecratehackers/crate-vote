@@ -3661,6 +3661,99 @@ body::before {
   align-items: center;
 }
 
+/* Admin Live Activity Feed */
+.live-activity-section {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border-color);
+}
+
+.live-activity-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.activity-log {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.no-activity {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
+.activity-log-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  animation: activity-slide-in 0.3s ease;
+}
+
+@keyframes activity-slide-in {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.activity-log-item.add {
+  border-left: 3px solid var(--orange-primary);
+}
+
+.activity-log-item.upvote {
+  border-left: 3px solid #22c55e;
+}
+
+.activity-log-item.downvote {
+  border-left: 3px solid #ef4444;
+}
+
+.activity-type-icon {
+  font-size: 1.1rem;
+}
+
+.activity-user {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.activity-action {
+  color: var(--text-muted);
+}
+
+.activity-song {
+  color: var(--orange-primary);
+  font-weight: 500;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-time {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
 /* Homepage - Karma status bar */
 .karma-status {
   display: flex;

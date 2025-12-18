@@ -37,6 +37,14 @@ interface TimerStatus {
     remaining: number;
 }
 
+interface ActivityItem {
+    id: string;
+    type: 'add' | 'upvote' | 'downvote';
+    userName: string;
+    songName: string;
+    timestamp: number;
+}
+
 export default function AdminPage() {
     const { data: session } = useSession();
     const [adminPassword, setAdminPassword] = useState('');
@@ -49,6 +57,7 @@ export default function AdminPage() {
     const [exportUrl, setExportUrl] = useState<string | null>(null);
     const [adminVotes, setAdminVotes] = useState<Record<string, 1 | -1>>({});
     const [activeAdminCount, setActiveAdminCount] = useState(0);
+    const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
     // Unique admin ID for this session
     const [adminId] = useState(() => 'admin-' + Math.random().toString(36).substr(2, 9));
@@ -85,6 +94,9 @@ export default function AdminPage() {
             setStats(data.stats);
             setActiveUsers(data.activeUsers || []);
             setActiveAdminCount(data.activeAdminCount || 0);
+            if (data.recentActivity) {
+                setRecentActivity(data.recentActivity);
+            }
             if (data.playlistTitle) {
                 setPlaylistTitle(data.playlistTitle);
                 if (!isEditingTitle) setTitleInput(data.playlistTitle);
@@ -776,6 +788,37 @@ export default function AdminPage() {
                     </a>
                 </div>
             )}
+
+            {/* 📢 LIVE ACTIVITY FEED - For admin commentary */}
+            <div className="live-activity-section">
+                <h3>📢 Live Activity Feed</h3>
+                <div className="activity-log">
+                    {recentActivity.length === 0 ? (
+                        <p className="no-activity">No recent activity. Waiting for users...</p>
+                    ) : (
+                        recentActivity.map(activity => {
+                            const timeAgo = Math.floor((Date.now() - activity.timestamp) / 1000);
+                            const timeStr = timeAgo < 5 ? 'just now' :
+                                timeAgo < 60 ? `${timeAgo}s ago` :
+                                    `${Math.floor(timeAgo / 60)}m ago`;
+
+                            return (
+                                <div key={activity.id} className={`activity-log-item ${activity.type}`}>
+                                    <span className="activity-type-icon">
+                                        {activity.type === 'add' ? '🎵' : activity.type === 'upvote' ? '👍' : '👎'}
+                                    </span>
+                                    <span className="activity-user">{activity.userName}</span>
+                                    <span className="activity-action">
+                                        {activity.type === 'add' ? 'added' : activity.type === 'upvote' ? 'upvoted' : 'downvoted'}
+                                    </span>
+                                    <span className="activity-song">"{activity.songName}"</span>
+                                    <span className="activity-time">{timeStr}</span>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
 
             {/* Active Users Section */}
             <div className="active-users-section">
