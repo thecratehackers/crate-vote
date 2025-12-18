@@ -840,9 +840,34 @@ export function calculateKarmaBonuses(karma: number): KarmaBonuses {
     };
 }
 
+const USER_LAST_PRESENCE_GRANT_KEY = 'hackathon:userLastPresenceGrant';
+
 export async function getKarmaBonuses(visitorId: string): Promise<KarmaBonuses> {
     const karma = await getUserKarma(visitorId);
     return calculateKarmaBonuses(karma);
+}
+
+// Grant karma for staying on page > 5 mins (rate limited to once per 15 mins)
+export async function grantPresenceKarma(visitorId: string): Promise<{ success: boolean; karma: number; error?: string }> {
+    try {
+        const lastGrant = await redis.hget<number>(USER_LAST_PRESENCE_GRANT_KEY, visitorId);
+        const now = Date.now();
+        const cooldown = 15 * 60 * 1000; // 15 minutes
+
+        if (lastGrant && now - lastGrant < cooldown) {
+            return { success: false, karma: await getUserKarma(visitorId), error: 'Too soon' };
+        }
+
+        // Grant 1 karma
+        const newKarma = await addKarma(visitorId, 1);
+        await redis.hset(USER_LAST_PRESENCE_GRANT_KEY, { [visitorId]: now });
+
+        console.log(`Granted +1 presence karma to ${visitorId}`);
+        return { success: true, karma: newKarma };
+    } catch (error) {
+        console.error('Failed to grant presence karma:', error);
+        return { success: false, karma: 0, error: 'Database error' };
+    }
 }
 
 // Check top 3 songs and grant karma to their owners (called periodically)

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { addKarma, getUserKarma, getKarmaBonuses } from '@/lib/redis-store';
+import { addKarma, getUserKarma, getKarmaBonuses, grantPresenceKarma } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 
 // POST - Grant karma for actions
@@ -19,6 +19,15 @@ export async function POST(request: Request) {
             const newKarma = await addKarma(visitorId, 1);
             const bonuses = await getKarmaBonuses(visitorId);
             return NextResponse.json({ success: true, karma: newKarma, bonuses });
+        } else if (action === 'presence') {
+            // Grant 1 karma for staying 5 mins
+            const result = await grantPresenceKarma(visitorId);
+            if (result.success) {
+                const bonuses = await getKarmaBonuses(visitorId);
+                return NextResponse.json({ success: true, karma: result.karma, bonuses });
+            } else {
+                return NextResponse.json({ error: result.error || 'Failed' }, { status: 400 });
+            }
         }
 
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

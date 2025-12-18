@@ -410,6 +410,39 @@ export default function HomePage() {
         return () => clearInterval(shoutoutInterval);
     }, [sortedSongs, timerRunning]);
 
+    // ⏱️ LOYALTY REWARD - Track time on page for karma
+    useEffect(() => {
+        if (!visitorId) return;
+
+        // Set a timer for 5 minutes (300,000 ms)
+        const loyaltyTimer = setTimeout(async () => {
+            try {
+                const res = await fetch('/api/karma', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-visitor-id': visitorId,
+                    },
+                    body: JSON.stringify({ action: 'presence' }),
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    setMessage({ type: 'success', text: 'Thanks for hanging out! +1 Karma' });
+                    setConfettiMessage('🎉 +1 Karma for being active!');
+                    setShowConfetti(true);
+                    setTimeout(() => setShowConfetti(false), 4000);
+                    // Refresh stats
+                    fetchPlaylist();
+                }
+            } catch (err) {
+                // Silent fail
+            }
+        }, 300000); // 5 minutes
+
+        return () => clearTimeout(loyaltyTimer);
+    }, [visitorId, fetchPlaylist]);
+
     // Update timer display every second (local countdown only)
     useEffect(() => {
         if (!timerRunning || !timerEndTime) return;
@@ -709,6 +742,24 @@ export default function HomePage() {
         );
     }
 
+    // Export to Spotify (CSV)
+    const handleExport = async () => {
+        try {
+            const res = await fetch('/api/playlist/export');
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `crate-hackers-playlist-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (error) {
+            console.error('Export failed:', error);
+            setMessage({ type: 'error', text: 'Export failed' });
+        }
+    };
+
     return (
         <div className="stream-layout">
             {/* 🎉 CONFETTI CELEBRATION OVERLAY */}
@@ -723,7 +774,6 @@ export default function HomePage() {
                ═══════════════════════════════════════════════════════════ */}
             <header className="stream-header">
                 <div className="header-left">
-                    <Link href="/admin" className="admin-gear">⚙️</Link>
                     <img src="/logo.png" alt="" className="mini-logo" />
                     <span className="brand-name">Hackathon</span>
                     {/* LIVE badge integrated into header */}
@@ -761,6 +811,7 @@ export default function HomePage() {
                             👤 {username}
                         </button>
                     )}
+                    <Link href="/admin" className="admin-gear-right" title="Admin Panel">⚙️</Link>
                 </div>
             </header>
 
@@ -787,7 +838,22 @@ export default function HomePage() {
             {
                 !timerRunning && !isBanned && (
                     <div className="voting-closed-banner">
-                        🎧 <strong>Voting is closed!</strong> Tune in Tuesdays @ 8 PM Eastern
+                        <div className="closed-message">
+                            🎧 <strong>Voting is closed!</strong> Tune in Tuesdays @ 8 PM Eastern
+                        </div>
+                        <div className="closed-actions">
+                            <a
+                                href="https://www.twitch.tv/thecratehackers"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="action-btn twitch-btn"
+                            >
+                                📺 Watch on Twitch
+                            </a>
+                            <button onClick={handleExport} className="action-btn spotify-btn">
+                                <span className="icon">🟢</span> Export to Spotify
+                            </button>
+                        </div>
                     </div>
                 )
             }
