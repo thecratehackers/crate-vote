@@ -5,6 +5,10 @@ export const metadata: Metadata = {
     title: 'Hackathon - Collaborative Playlist Voting',
     description: 'Vote on songs and build the ultimate playlist together',
     keywords: ['playlist', 'voting', 'spotify', 'music', 'collaborative', 'hackathon'],
+    icons: {
+        icon: '/favicon.png',
+        apple: '/favicon.png',
+    },
 };
 
 export default function RootLayout({
