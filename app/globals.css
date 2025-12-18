@@ -3899,6 +3899,67 @@ body::before {
   }
 }
 
+/* LIVE badge inline in header */
+.live-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: 'Rubik', sans-serif;
+  margin-left: 10px;
+}
+
+.live-badge-inline .live-pulse {
+  width: 6px;
+  height: 6px;
+}
+
+/* Activity ticker below header */
+.activity-ticker {
+  display: flex;
+  gap: 16px;
+  padding: 6px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.ticker-item {
+  white-space: nowrap;
+  animation: ticker-fade 5s ease forwards;
+}
+
+.ticker-item.add {
+  color: var(--orange-primary);
+}
+
+.ticker-item.upvote {
+  color: #22c55e;
+}
+
+.ticker-item.downvote {
+  color: #ef4444;
+}
+
+@keyframes ticker-fade {
+
+  0%,
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.3;
+  }
+}
+
 .notification-toast {
   background: rgba(30, 30, 30, 0.95);
   border: 1px solid var(--border-color);

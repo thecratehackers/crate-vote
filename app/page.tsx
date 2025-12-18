@@ -711,28 +711,6 @@ export default function HomePage() {
 
     return (
         <div className="stream-layout">
-            {/* 🔔 NOTIFICATION CENTER - Top Right, longer duration, slow fade */}
-            <div className="notification-center">
-                {/* LIVE badge + notifications combined */}
-                {timerRunning && (
-                    <div className="live-badge">
-                        <span className="live-pulse"></span>
-                        LIVE • {formatTime(timerRemaining)}
-                    </div>
-                )}
-                {toastQueue.slice(0, 3).map((activity: ActivityItem) => (
-                    <div key={activity.id} className={`notification-toast ${activity.type}`}>
-                        {activity.userName === 'System' ? activity.songName : (
-                            <>
-                                {activity.type === 'add' && `🎵 ${activity.userName} added "${activity.songName}"`}
-                                {activity.type === 'upvote' && `👍 ${activity.userName} upvoted`}
-                                {activity.type === 'downvote' && `👎 ${activity.userName} downvoted`}
-                            </>
-                        )}
-                    </div>
-                ))}
-            </div>
-
             {/* 🎉 CONFETTI CELEBRATION OVERLAY */}
             {showConfetti && (
                 <div className="confetti-overlay">
@@ -748,7 +726,13 @@ export default function HomePage() {
                     <Link href="/admin" className="admin-gear">⚙️</Link>
                     <img src="/logo.png" alt="" className="mini-logo" />
                     <span className="brand-name">Hackathon</span>
-                    <span className="playlist-title">{playlistTitle}</span>
+                    {/* LIVE badge integrated into header */}
+                    {timerRunning && (
+                        <span className="live-badge-inline">
+                            <span className="live-pulse"></span>
+                            LIVE • {formatTime(timerRemaining)}
+                        </span>
+                    )}
                 </div>
                 <div className="header-right">
                     {!isBanned && isSessionActive && (
@@ -780,58 +764,79 @@ export default function HomePage() {
                 </div>
             </header>
 
+            {/* 🔔 ACTIVITY FEED - Below header, in content flow */}
+            {toastQueue.length > 0 && (
+                <div className="activity-ticker">
+                    {toastQueue.slice(0, 2).map((activity: ActivityItem) => (
+                        <span key={activity.id} className={`ticker-item ${activity.type}`}>
+                            {activity.userName === 'System' ? activity.songName : (
+                                <>
+                                    {activity.type === 'add' && `🎵 ${activity.userName} added "${activity.songName}"`}
+                                    {activity.type === 'upvote' && `👍 ${activity.userName} upvoted`}
+                                    {activity.type === 'downvote' && `👎 ${activity.userName} downvoted`}
+                                </>
+                            )}
+                        </span>
+                    ))}
+                </div>
+            )}
+
             {/* ═══════════════════════════════════════════════════════════
                 VOTING CLOSED BANNER (when session not active)
                ═══════════════════════════════════════════════════════════ */}
-            {!timerRunning && !isBanned && (
-                <div className="voting-closed-banner">
-                    🎧 <strong>Voting is closed!</strong> Tune in Tuesdays @ 8 PM Eastern
-                </div>
-            )}
+            {
+                !timerRunning && !isBanned && (
+                    <div className="voting-closed-banner">
+                        🎧 <strong>Voting is closed!</strong> Tune in Tuesdays @ 8 PM Eastern
+                    </div>
+                )
+            }
 
             {isBanned && <div className="banned-banner">🚫 You've been banned from this session</div>}
 
             {/* ═══════════════════════════════════════════════════════════
                 SEARCH BAR - Only when session active
                ═══════════════════════════════════════════════════════════ */}
-            {canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0) && (
-                <div className="search-bar-container">
-                    <input
-                        id="search-input"
-                        type="text"
-                        className="search-input-stream"
-                        placeholder="🔍 Add a song..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onBlur={() => setTimeout(() => setShowResults(false), 200)}
-                        onFocus={() => searchResults.length > 0 && setShowResults(true)}
-                    />
-                    {isSearching && <span className="search-spinner">...</span>}
+            {
+                canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0) && (
+                    <div className="search-bar-container">
+                        <input
+                            id="search-input"
+                            type="text"
+                            className="search-input-stream"
+                            placeholder="🔍 Add a song..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                            onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                        />
+                        {isSearching && <span className="search-spinner">...</span>}
 
-                    {showResults && searchResults.length > 0 && (
-                        <div className="search-dropdown-stream">
-                            {searchResults.slice(0, 5).map((track) => (
-                                <div
-                                    key={track.id}
-                                    className="search-result-row"
-                                    onClick={() => !isSongInPlaylist(track.id) && handleAddSong(track)}
-                                >
-                                    <img src={track.albumArt || '/placeholder.svg'} alt="" />
-                                    <div className="result-info">
-                                        <span className="result-name">{track.name}</span>
-                                        <span className="result-artist">{track.artist}</span>
+                        {showResults && searchResults.length > 0 && (
+                            <div className="search-dropdown-stream">
+                                {searchResults.slice(0, 5).map((track) => (
+                                    <div
+                                        key={track.id}
+                                        className="search-result-row"
+                                        onClick={() => !isSongInPlaylist(track.id) && handleAddSong(track)}
+                                    >
+                                        <img src={track.albumArt || '/placeholder.svg'} alt="" />
+                                        <div className="result-info">
+                                            <span className="result-name">{track.name}</span>
+                                            <span className="result-artist">{track.artist}</span>
+                                        </div>
+                                        {isSongInPlaylist(track.id) ? (
+                                            <span className="already-added">✓</span>
+                                        ) : (
+                                            <span className="add-btn-stream">+</span>
+                                        )}
                                     </div>
-                                    {isSongInPlaylist(track.id) ? (
-                                        <span className="already-added">✓</span>
-                                    ) : (
-                                        <span className="add-btn-stream">+</span>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )
+            }
 
             {/* ═══════════════════════════════════════════════════════════
                 SONG LIST - The main star. Music first!
@@ -894,6 +899,6 @@ export default function HomePage() {
                     })
                 )}
             </div>
-        </div>
+        </div >
     );
 }
