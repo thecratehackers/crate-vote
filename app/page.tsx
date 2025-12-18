@@ -742,22 +742,9 @@ export default function HomePage() {
         );
     }
 
-    // Export to Spotify (CSV)
-    const handleExport = async () => {
-        try {
-            const res = await fetch('/api/playlist/export');
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `crate-hackers-playlist-${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-        } catch (error) {
-            console.error('Export failed:', error);
-            setMessage({ type: 'error', text: 'Export failed' });
-        }
+    // Export to Spotify - redirect to export page for OAuth flow
+    const handleExport = () => {
+        window.location.href = '/export';
     };
 
     return (
