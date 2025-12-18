@@ -24,6 +24,14 @@ export async function GET(request: Request) {
 
 // POST - Admin timer controls
 export async function POST(request: Request) {
+    // Check Redis configuration first
+    if (!isRedisConfigured()) {
+        return NextResponse.json({
+            error: 'Database not configured',
+            details: 'Redis environment variables are missing.'
+        }, { status: 503 });
+    }
+
     const adminKey = request.headers.get('x-admin-key');
     const expectedPassword = process.env.ADMIN_PASSWORD;
 
