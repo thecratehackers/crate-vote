@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getTimerStatus, startTimer, stopTimer, resetTimer, isUserBanned } from '@/lib/redis-store';
+import { getTimerStatus, startTimer, stopTimer, resetTimer, isUserBanned, isRedisConfigured } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 
 // GET - Get timer status (public)
 export async function GET(request: Request) {
+    // Check Redis configuration first
+    if (!isRedisConfigured()) {
+        return NextResponse.json({
+            error: 'Database not configured',
+            details: 'Redis environment variables are missing. Please check Vercel project settings.'
+        }, { status: 503 });
+    }
+
     const visitorId = getVisitorIdFromRequest(request);
     const timer = await getTimerStatus();
     const isBanned = visitorId ? await isUserBanned(visitorId) : false;

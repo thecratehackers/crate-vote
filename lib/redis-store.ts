@@ -1,9 +1,25 @@
 import { Redis } from '@upstash/redis';
 
-// Initialize Redis client - uses UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN from env
+// Validate Redis configuration
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+
+// Export a function to check if Redis is configured
+export function isRedisConfigured(): boolean {
+    return !!(REDIS_URL && REDIS_TOKEN);
+}
+
+if (!REDIS_URL || !REDIS_TOKEN) {
+    console.error('❌ CRITICAL: Redis environment variables are missing!');
+    console.error('   Required: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN');
+    console.error('   Or: KV_REST_API_URL and KV_REST_API_TOKEN (for Vercel KV)');
+    console.error('   Please set these in your Vercel project settings or .env.local');
+}
+
+// Initialize Redis client
 const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '',
-    token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '',
+    url: REDIS_URL || 'https://placeholder.upstash.io', // Fallback to prevent URL parse error
+    token: REDIS_TOKEN || 'placeholder',
 });
 
 // Keys for Redis

@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, getPlaylistStats, autoPruneSongs, checkAndGrantTop3Karma } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, getPlaylistStats, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 
 // GET - Get all songs sorted by score
 export async function GET(request: Request) {
+    // Check Redis configuration first
+    if (!isRedisConfigured()) {
+        return NextResponse.json({
+            error: 'Database not configured',
+            details: 'Redis environment variables are missing. Please check Vercel project settings.'
+        }, { status: 503 });
+    }
+
     const visitorId = getVisitorIdFromRequest(request);
 
     // Background tasks (don't block response)
