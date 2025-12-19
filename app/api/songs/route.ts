@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
+import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
 // ============ THROTTLED BACKGROUND TASKS ============
 // At 1000 users polling every 15s, we get ~67 req/sec
@@ -57,13 +58,14 @@ export async function GET(request: Request) {
     }
 
     // Fetch data in parallel - most of these are cached
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
         getRecentActivity(),
         getActiveViewerCount(),
         getDeleteWindowStatus(),
+        getVersusBattleStatus(visitorId || undefined, false), // Don't include vote counts for users
     ]);
 
     // Check if user can delete during window
@@ -109,6 +111,7 @@ export async function GET(request: Request) {
             remaining: deleteWindowStatus.remaining,
             canDelete: canDeleteInWindow,
         },
+        versusBattle: versusBattleStatus,
     });
 }
 
@@ -127,14 +130,31 @@ export async function POST(request: Request) {
     const isAdmin = adminKey && adminKey === process.env.ADMIN_PASSWORD;
 
     if (!visitorId) {
-        return NextResponse.json({ error: 'Visitor ID required' }, { status: 400 });
+        return NextResponse.json({ error: 'Session expired. Please refresh the page to continue.' }, { status: 400 });
+    }
+
+    // Rate limiting for non-admin requests
+    if (!isAdmin) {
+        const clientId = getClientIdentifier(request);
+        const rateCheck = checkRateLimit(clientId + ':addSong', RATE_LIMITS.addSong);
+        if (!rateCheck.success) {
+            const response = NextResponse.json(
+                { error: 'Too many requests. Please wait a moment before adding more songs.' },
+                { status: 429 }
+            );
+            const headers = getRateLimitHeaders(rateCheck);
+            Object.entries(headers).forEach(([key, value]) => {
+                response.headers.set(key, value);
+            });
+            return response;
+        }
     }
 
     // Check if banned (skip for admins)
     if (!isAdmin) {
         const banned = await isUserBanned(visitorId);
         if (banned) {
-            return NextResponse.json({ error: 'You have been banned from this session' }, { status: 403 });
+            return NextResponse.json({ error: 'Your account has been suspended. Contact the host if you believe this is an error.' }, { status: 403 });
         }
     }
 
@@ -143,7 +163,7 @@ export async function POST(request: Request) {
         const { id, spotifyUri, name, artist, album, albumArt, previewUrl, popularity, bpm, energy, valence, danceability, addedByName, explicit, durationMs } = body;
 
         if (!id || !spotifyUri || !name || !artist) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+            return NextResponse.json({ error: 'Something went wrong with the song data. Please search again and try adding a different track.' }, { status: 400 });
         }
 
         // Note: Explicit songs are allowed - profanity in titles is censored in display
@@ -151,7 +171,7 @@ export async function POST(request: Request) {
         // ⏱️ DURATION LIMIT - Block songs over 8 minutes (skip for admins)
         const MAX_DURATION_MS = 8 * 60 * 1000; // 8 minutes
         if (!isAdmin && durationMs && durationMs > MAX_DURATION_MS) {
-            return NextResponse.json({ error: 'Songs over 8 minutes are not allowed' }, { status: 400 });
+            return NextResponse.json({ error: 'This song is too long! Songs over 8 minutes cannot be added. Try a radio edit or shorter version.' }, { status: 400 });
         }
 
         // 🛡️ RESERVED USERNAMES - Prevent impersonation
@@ -162,7 +182,7 @@ export async function POST(request: Request) {
             reservedWords.some(word => lowerName.includes(word)) ||
             reservedExactNames.includes(lowerName)
         )) {
-            return NextResponse.json({ error: 'This username is reserved' }, { status: 400 });
+            return NextResponse.json({ error: 'That username is reserved. Please choose a different name and try again.' }, { status: 400 });
         }
 
         // Note: Explicit songs are allowed - profanity is censored in display only
@@ -206,6 +226,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Add song error:', error);
-        return NextResponse.json({ error: 'Failed to add song' }, { status: 500 });
+        return NextResponse.json({ error: 'Unable to add song right now. Please wait a moment and try again.' }, { status: 500 });
     }
 }

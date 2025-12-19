@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
     // @ts-expect-error - custom session type
     if (!session?.accessToken) {
-        return NextResponse.json({ error: 'Not authenticated with Spotify' }, { status: 401 });
+        return NextResponse.json({ error: 'Please sign in with Spotify first to export playlists. Click the "Sign in" button above.' }, { status: 401 });
     }
 
     try {
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         }));
 
         if (exportData.length === 0) {
-            return NextResponse.json({ error: 'No qualified songs (score > 0) to export' }, { status: 400 });
+            return NextResponse.json({ error: 'No songs with positive scores to export. Songs need upvotes before they can be saved to Spotify.' }, { status: 400 });
         }
 
         // Create playlist - use the provided name (already cleaned by client)
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('Export error:', error);
-        return NextResponse.json({ error: 'Failed to export playlist' }, { status: 500 });
+        return NextResponse.json({ error: 'Could not export to Spotify. Please try signing in again.' }, { status: 500 });
     }
 }
 

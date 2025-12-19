@@ -7,14 +7,14 @@ export async function POST(request: Request) {
     const visitorId = getVisitorIdFromRequest(request);
 
     if (!visitorId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'Session expired. Please refresh the page to participate in Chaos Mode.' }, { status: 401 });
     }
 
     try {
         const { songId } = await request.json();
 
         if (!songId) {
-            return NextResponse.json({ error: 'Song ID required' }, { status: 400 });
+            return NextResponse.json({ error: 'Please select a song to delete.' }, { status: 400 });
         }
 
         const result = await useWindowDelete(visitorId, songId);
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error('Window delete error:', error);
         return NextResponse.json(
-            { error: 'Failed to delete song' },
+            { error: 'Could not delete song. Please try again quickly before time runs out!' },
             { status: 500 }
         );
     }

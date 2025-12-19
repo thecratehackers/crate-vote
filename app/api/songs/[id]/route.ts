@@ -26,7 +26,7 @@ export async function DELETE(
         return NextResponse.json({ success: true });
     }
 
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'You need to sign in to delete songs. Please refresh and enter your name.' }, { status: 401 });
 }
 
 // POST - Ban the user who added this song (admin only)
@@ -37,7 +37,7 @@ export async function POST(
     const { id } = await params;
     const adminKey = request.headers.get('x-admin-key');
     if (adminKey !== process.env.ADMIN_PASSWORD) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'Admin access required. Please check your admin password and try again.' }, { status: 401 });
     }
 
     try {
@@ -49,8 +49,8 @@ export async function POST(
             return NextResponse.json({ success: true });
         }
 
-        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+        return NextResponse.json({ error: 'Unknown action. Please try again or refresh the page.' }, { status: 400 });
     } catch (error) {
-        return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+        return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 400 });
     }
 }

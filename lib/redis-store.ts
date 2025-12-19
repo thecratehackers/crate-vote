@@ -77,6 +77,12 @@ const USER_LAST_ACTIVITY_KEY = 'hackathon:userLastActivity';  // Track when user
 const DELETE_WINDOW_KEY = 'hackathon:deleteWindow';  // { endTime: timestamp } - when delete window is active
 const DELETE_WINDOW_USED_KEY = 'hackathon:deleteWindowUsed';  // Set of visitorIds who used their delete this window
 
+// VERSUS BATTLE KEYS - Head-to-head song battles
+const VERSUS_BATTLE_KEY = 'hackathon:versusBattle';  // Main battle state
+const VERSUS_VOTES_A_KEY = 'hackathon:versusVotesA';  // Set of visitorIds who voted for Song A
+const VERSUS_VOTES_B_KEY = 'hackathon:versusVotesB';  // Set of visitorIds who voted for Song B
+const ELIMINATED_SONGS_KEY = 'hackathon:eliminatedSongs';  // Set of Spotify IDs eliminated - cannot be re-added
+
 // ATOMIC VOTE KEYS - Using Redis Sets for concurrent vote safety
 // Format: hackathon:song:{songId}:upvotes and hackathon:song:{songId}:downvotes
 function getSongUpvotesKey(songId: string): string {
@@ -301,7 +307,7 @@ export async function shufflePlaylist(): Promise<{ success: boolean; error?: str
         return { success: true, shuffledCount: songList.length };
     } catch (error) {
         console.error('Failed to shuffle playlist:', error);
-        return { success: false, error: 'Database error', shuffledCount: 0 };
+        return { success: false, error: 'Could not shuffle playlist. Please try again.', shuffledCount: 0 };
     }
 }
 
@@ -312,12 +318,12 @@ export async function addSong(
     try {
         const isLocked = await redis.get<boolean>(LOCKED_KEY) || false;
         if (isLocked) {
-            return { success: false, error: 'Playlist is locked' };
+            return { success: false, error: 'The playlist is currently locked. Wait for the host to unlock it.' };
         }
 
         const banned = await redis.sismember(BANNED_KEY, visitorId);
         if (banned) {
-            return { success: false, error: 'You are banned' };
+            return { success: false, error: 'Your account has been suspended from this session.' };
         }
 
         // Check song count - include karma bonuses
@@ -326,13 +332,19 @@ export async function addSong(
         const maxSongs = MAX_SONGS_PER_USER + karmaBonuses.bonusSongAdds;
 
         if (counts >= maxSongs) {
-            return { success: false, error: `Max ${maxSongs} songs reached (${MAX_SONGS_PER_USER} base + ${karmaBonuses.bonusSongAdds} karma)` };
+            return { success: false, error: `You've reached your song limit (${maxSongs}). Earn karma to add more!` };
         }
 
         // Check if song already exists
         const existing = await redis.hget(SONGS_KEY, song.id);
         if (existing) {
-            return { success: false, error: 'Song already in playlist' };
+            return { success: false, error: 'This song is already in the playlist. Try adding something else!' };
+        }
+
+        // Check if song was eliminated in a Versus Battle (cannot be re-added this session)
+        const isEliminated = await isSongEliminated(song.id);
+        if (isEliminated) {
+            return { success: false, error: 'This song was eliminated in a Versus Battle and cannot be re-added this session.' };
         }
 
         // Check playlist size limit
@@ -350,7 +362,7 @@ export async function addSong(
 
             if (sortedSongs.length === 0) {
                 // All songs have positive scores - can't add more
-                return { success: false, error: 'Playlist is full! Vote down songs to make room.' };
+                return { success: false, error: 'Playlist is full! Downvote some songs to make room for new ones.' };
             }
 
             // Remove the lowest-scoring song to make room
@@ -388,7 +400,7 @@ export async function addSong(
         return { success: true, displaced: displacedSong };
     } catch (error) {
         console.error('Failed to add song:', error);
-        return { success: false, error: 'Database error' };
+        return { success: false, error: 'Something went wrong. Please try again in a moment.' };
     }
 }
 
@@ -400,7 +412,7 @@ export async function adminAddSong(
         // Check if song already exists
         const existing = await redis.hget(SONGS_KEY, song.id);
         if (existing) {
-            return { success: false, error: 'Song already in playlist' };
+            return { success: false, error: 'This song is already in the playlist.' };
         }
 
         // Add the song
@@ -416,7 +428,7 @@ export async function adminAddSong(
         return { success: true };
     } catch (error) {
         console.error('Failed to admin add song:', error);
-        return { success: false, error: 'Database error' };
+        return { success: false, error: 'Something went wrong. Please try again.' };
     }
 }
 
@@ -424,17 +436,17 @@ export async function deleteSong(songId: string, visitorId: string): Promise<{ s
     try {
         const song = await redis.hget<Song>(SONGS_KEY, songId);
         if (!song) {
-            return { success: false, error: 'Song not found' };
+            return { success: false, error: 'This song is no longer in the playlist. It may have been removed.' };
         }
 
         // Only the person who added can delete, and only if they have deletes left
         if (song.addedBy !== visitorId) {
-            return { success: false, error: 'You can only delete your own songs' };
+            return { success: false, error: 'You can only delete songs that you added.' };
         }
 
         const deleteCount = await redis.hget<number>(USER_DELETE_COUNTS_KEY, visitorId) || 0;
         if (deleteCount >= MAX_DELETES_PER_USER) {
-            return { success: false, error: 'No deletes remaining' };
+            return { success: false, error: `You've used all your deletes this session.` };
         }
 
         await redis.hdel(SONGS_KEY, songId);
@@ -444,7 +456,7 @@ export async function deleteSong(songId: string, visitorId: string): Promise<{ s
         return { success: true };
     } catch (error) {
         console.error('Failed to delete song:', error);
-        return { success: false, error: 'Database error' };
+        return { success: false, error: 'Could not delete song. Please try again.' };
     }
 }
 
@@ -466,18 +478,18 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
     try {
         const isLocked = await redis.get<boolean>(LOCKED_KEY) || false;
         if (isLocked) {
-            return { success: false, error: 'Voting is locked' };
+            return { success: false, error: 'Voting is currently paused. Wait for the host to unlock the playlist.' };
         }
 
         const banned = await redis.sismember(BANNED_KEY, visitorId);
         if (banned) {
-            return { success: false, error: 'You are banned' };
+            return { success: false, error: 'Your account has been suspended from this session.' };
         }
 
         // Check song exists
         const song = await redis.hget<Song>(SONGS_KEY, songId);
         if (!song) {
-            return { success: false, error: 'Song not found' };
+            return { success: false, error: 'This song was removed from the playlist.' };
         }
 
         // Get user's current vote lists (for limit tracking)
@@ -503,7 +515,7 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
                 const karmaBonuses = await getKarmaBonuses(visitorId);
                 const maxUpvotes = MAX_UPVOTES_PER_USER + karmaBonuses.bonusVotes;
                 if (userUpvotes.length >= maxUpvotes) {
-                    return { success: false, error: `Maximum ${maxUpvotes} upvotes reached` };
+                    return { success: false, error: `You've used all ${maxUpvotes} upvotes. Earn karma for more!` };
                 }
 
                 // Remove any existing downvote on this song first (atomic SREM)
@@ -533,7 +545,7 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
                 const karmaBonuses = await getKarmaBonuses(visitorId);
                 const maxDownvotes = MAX_DOWNVOTES_PER_USER + karmaBonuses.bonusVotes;
                 if (userDownvotes.length >= maxDownvotes) {
-                    return { success: false, error: `Maximum ${maxDownvotes} downvotes reached` };
+                    return { success: false, error: `You've used all ${maxDownvotes} downvotes. Earn karma for more!` };
                 }
 
                 // Remove any existing upvote on this song first (atomic SREM)
@@ -559,7 +571,7 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
         return { success: true };
     } catch (error) {
         console.error('Failed to vote:', error);
-        return { success: false, error: 'Database error' };
+        return { success: false, error: 'Could not record your vote. Please try again.' };
     }
 }
 
@@ -568,7 +580,7 @@ export async function adminVote(songId: string, visitorId: string, direction: 1 
     try {
         const song = await redis.hget<Song>(SONGS_KEY, songId);
         if (!song) {
-            return { success: false, error: 'Song not found' };
+            return { success: false, error: 'This song was removed from the playlist.' };
         }
 
         const upvotesKey = getSongUpvotesKey(songId);
@@ -599,7 +611,7 @@ export async function adminVote(songId: string, visitorId: string, direction: 1 
         return { success: true };
     } catch (error) {
         console.error('Failed to admin vote:', error);
-        return { success: false, error: 'Database error' };
+        return { success: false, error: 'Could not record vote. Please try again.' };
     }
 }
 
@@ -820,13 +832,13 @@ export async function canUserDeleteInWindow(visitorId: string): Promise<{ canDel
     const windowStatus = await getDeleteWindowStatus();
 
     if (!windowStatus.active) {
-        return { canDelete: false, reason: 'Delete window not active' };
+        return { canDelete: false, reason: 'Chaos Mode is not currently active.' };
     }
 
     // Check if user already used their delete this window
     const hasUsed = await redis.sismember(DELETE_WINDOW_USED_KEY, visitorId);
     if (hasUsed) {
-        return { canDelete: false, reason: 'Already used your delete this window' };
+        return { canDelete: false, reason: 'You already used your Chaos Mode delete!' };
     }
 
     return { canDelete: true };
@@ -840,13 +852,21 @@ export async function useWindowDelete(visitorId: string, songId: string): Promis
         return { success: false, error: canDelete.reason };
     }
 
+    // Check if song is in an active Versus Battle - cannot delete battling songs!
+    const battleStatus = await getVersusBattleStatus();
+    if (battleStatus.active && battleStatus.songA && battleStatus.songB) {
+        if (songId === battleStatus.songA.id || songId === battleStatus.songB.id) {
+            return { success: false, error: 'This song is in an active Versus Battle! Wait for the battle to end.' };
+        }
+    }
+
     // Mark user as having used their delete
     await redis.sadd(DELETE_WINDOW_USED_KEY, visitorId);
 
     // Delete the song
     const song = await redis.hget<Song>(SONGS_KEY, songId);
     if (!song) {
-        return { success: false, error: 'Song not found' };
+        return { success: false, error: 'This song was already removed from the playlist.' };
     }
 
     await redis.hdel(SONGS_KEY, songId);
@@ -875,6 +895,11 @@ export async function resetSession(): Promise<void> {
         redis.del(USER_LAST_ACTIVITY_KEY),
         redis.del(DELETE_WINDOW_KEY),
         redis.del(DELETE_WINDOW_USED_KEY),
+        // Versus Battle cleanup
+        redis.del(VERSUS_BATTLE_KEY),
+        redis.del(VERSUS_VOTES_A_KEY),
+        redis.del(VERSUS_VOTES_B_KEY),
+        redis.del(ELIMINATED_SONGS_KEY),
     ]);
 
     console.log('🗑️ WIPE SESSION: Complete!');
@@ -1258,7 +1283,7 @@ export async function removeActivity(activityId: string): Promise<{ success: boo
         }
 
         if (!foundActivity) {
-            return { success: false, error: 'Activity not found' };
+            return { success: false, error: 'This activity has already been removed.' };
         }
 
         // Clear the list and repopulate without the deleted activity
@@ -1270,7 +1295,7 @@ export async function removeActivity(activityId: string): Promise<{ success: boo
         return { success: true };
     } catch (error) {
         console.error('Failed to remove activity:', error);
-        return { success: false, error: 'Database error' };
+        return { success: false, error: 'Could not remove activity. Please try again.' };
     }
 }
 
@@ -1353,7 +1378,7 @@ export async function grantPresenceKarma(visitorId: string): Promise<{ success: 
         const cooldown = 15 * 60 * 1000; // 15 minutes
 
         if (lastGrant && now - lastGrant < cooldown) {
-            return { success: false, karma: await getUserKarma(visitorId), error: 'Too soon' };
+            return { success: false, karma: await getUserKarma(visitorId), error: 'Karma cooldown active. Wait a bit longer!' };
         }
 
         // Grant 1 karma
@@ -1364,7 +1389,7 @@ export async function grantPresenceKarma(visitorId: string): Promise<{ success: 
         return { success: true, karma: newKarma };
     } catch (error) {
         console.error('Failed to grant presence karma:', error);
-        return { success: false, karma: 0, error: 'Database error' };
+        return { success: false, karma: 0, error: 'Could not grant karma. Please try again later.' };
     }
 }
 
@@ -1403,4 +1428,378 @@ export async function checkAndGrantTop3Karma(): Promise<{ rewarded: string[] }> 
         console.error('Failed to check top 3 karma:', error);
         return { rewarded: [] };
     }
+}
+
+// ============ VERSUS BATTLE (1s and 0s) ============
+// Head-to-head song battles - one song stays, one gets eliminated
+
+interface VersusBattleSong {
+    id: string;
+    name: string;
+    artist: string;
+    albumArt: string;
+}
+
+interface VersusBattleData {
+    endTime: number;
+    songA: VersusBattleSong;
+    songB: VersusBattleSong;
+    phase: 'voting' | 'lightning' | 'resolved';
+    isLightningRound: boolean;
+    winner?: 'A' | 'B' | null;
+    startedBy: string;
+}
+
+export interface VersusBattleStatus {
+    active: boolean;
+    songA?: VersusBattleSong;
+    songB?: VersusBattleSong;
+    endTime?: number;
+    remaining?: number;
+    phase?: 'voting' | 'lightning' | 'resolved';
+    isLightningRound?: boolean;
+    votesA?: number;  // Only included for admin or after battle ends
+    votesB?: number;
+    winner?: 'A' | 'B' | null;
+    userVote?: 'A' | 'B' | null;  // Which song the current user voted for
+}
+
+// Check if a song has been eliminated (can't be re-added)
+export async function isSongEliminated(spotifyId: string): Promise<boolean> {
+    try {
+        const result = await redis.sismember(ELIMINATED_SONGS_KEY, spotifyId);
+        return result === 1;
+    } catch (error) {
+        console.error('Failed to check eliminated song:', error);
+        return false;
+    }
+}
+
+// Get eligible songs for battle: score > 0, NOT in top 3
+async function getEligibleBattleSongs(): Promise<(Song & { score: number })[]> {
+    const songs = await getSortedSongs();  // Already sorted by score desc
+
+    // Skip top 3, then filter for score > 0
+    return songs.slice(3).filter(s => s.score > 0);
+}
+
+// Start a new versus battle
+export async function startVersusBattle(): Promise<{
+    success: boolean;
+    error?: string;
+    songA?: VersusBattleSong;
+    songB?: VersusBattleSong;
+    endTime?: number;
+}> {
+    try {
+        // Check if battle already active
+        const existingBattle = await redis.get<VersusBattleData>(VERSUS_BATTLE_KEY);
+        if (existingBattle && existingBattle.phase !== 'resolved' && Date.now() < existingBattle.endTime) {
+            return { success: false, error: 'A battle is already running! Wait for it to finish first.' };
+        }
+
+        // Get eligible songs
+        const eligible = await getEligibleBattleSongs();
+
+        if (eligible.length < 2) {
+            return {
+                success: false,
+                error: `Need at least 2 eligible songs with positive scores (not in top 3). Currently only ${eligible.length} available.`
+            };
+        }
+
+        // Randomly select 2 different songs
+        const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+        const songA = shuffled[0];
+        const songB = shuffled[1];
+
+        const endTime = Date.now() + 30000; // 30 seconds
+
+        const battleData: VersusBattleData = {
+            endTime,
+            songA: { id: songA.id, name: songA.name, artist: songA.artist, albumArt: songA.albumArt },
+            songB: { id: songB.id, name: songB.name, artist: songB.artist, albumArt: songB.albumArt },
+            phase: 'voting',
+            isLightningRound: false,
+            startedBy: 'admin',
+        };
+
+        // Clear previous votes and set new battle
+        await Promise.all([
+            redis.del(VERSUS_VOTES_A_KEY),
+            redis.del(VERSUS_VOTES_B_KEY),
+            redis.set(VERSUS_BATTLE_KEY, battleData),
+        ]);
+
+        console.log(`⚔️ VERSUS BATTLE: Started! "${songA.name}" vs "${songB.name}" - 30 seconds`);
+
+        return {
+            success: true,
+            songA: battleData.songA,
+            songB: battleData.songB,
+            endTime,
+        };
+    } catch (error) {
+        console.error('Failed to start versus battle:', error);
+        return { success: false, error: 'Could not start battle. Please try again.' };
+    }
+}
+
+// Get current battle status
+export async function getVersusBattleStatus(
+    visitorId?: string,
+    includeVoteCounts: boolean = false
+): Promise<VersusBattleStatus> {
+    try {
+        const battle = await redis.get<VersusBattleData>(VERSUS_BATTLE_KEY);
+
+        if (!battle) {
+            return { active: false };
+        }
+
+        const now = Date.now();
+        const remaining = Math.max(0, battle.endTime - now);
+        const isExpired = now >= battle.endTime;
+
+        // If expired and not resolved, it's inactive
+        if (isExpired && battle.phase !== 'resolved') {
+            return { active: false };
+        }
+
+        // Check if user has voted
+        let userVote: 'A' | 'B' | null = null;
+        if (visitorId) {
+            const [votedA, votedB] = await Promise.all([
+                redis.sismember(VERSUS_VOTES_A_KEY, visitorId),
+                redis.sismember(VERSUS_VOTES_B_KEY, visitorId),
+            ]);
+            if (votedA) userVote = 'A';
+            else if (votedB) userVote = 'B';
+        }
+
+        const status: VersusBattleStatus = {
+            active: !isExpired || battle.phase === 'resolved',
+            songA: battle.songA,
+            songB: battle.songB,
+            endTime: battle.endTime,
+            remaining,
+            phase: battle.phase,
+            isLightningRound: battle.isLightningRound,
+            winner: battle.winner,
+            userVote,
+        };
+
+        // Include vote counts for admin or after battle ends
+        if (includeVoteCounts || battle.phase === 'resolved') {
+            const [votesA, votesB] = await Promise.all([
+                redis.scard(VERSUS_VOTES_A_KEY),
+                redis.scard(VERSUS_VOTES_B_KEY),
+            ]);
+            status.votesA = votesA;
+            status.votesB = votesB;
+        }
+
+        return status;
+    } catch (error) {
+        console.error('Failed to get versus battle status:', error);
+        return { active: false };
+    }
+}
+
+// User votes in the battle (one and done)
+export async function voteInVersusBattle(
+    visitorId: string,
+    choice: 'A' | 'B'
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const battle = await redis.get<VersusBattleData>(VERSUS_BATTLE_KEY);
+
+        if (!battle) {
+            return { success: false, error: 'No battle is currently running.' };
+        }
+
+        if (Date.now() >= battle.endTime) {
+            return { success: false, error: 'This battle has ended. Wait for the results!' };
+        }
+
+        if (battle.phase === 'resolved') {
+            return { success: false, error: 'This battle is over. Wait for the next one!' };
+        }
+
+        // Check if user already voted (one and done - cannot change)
+        const [alreadyVotedA, alreadyVotedB] = await Promise.all([
+            redis.sismember(VERSUS_VOTES_A_KEY, visitorId),
+            redis.sismember(VERSUS_VOTES_B_KEY, visitorId),
+        ]);
+
+        if (alreadyVotedA || alreadyVotedB) {
+            return { success: false, error: 'You already voted in this battle! One vote per battle.' };
+        }
+
+        // Cast vote
+        if (choice === 'A') {
+            await redis.sadd(VERSUS_VOTES_A_KEY, visitorId);
+        } else {
+            await redis.sadd(VERSUS_VOTES_B_KEY, visitorId);
+        }
+
+        console.log(`⚔️ VERSUS VOTE: User ${visitorId.slice(0, 8)}... voted for Song ${choice}`);
+
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to vote in versus battle:', error);
+        return { success: false, error: 'Could not record your vote. Please try again quickly!' };
+    }
+}
+
+// Resolve the battle (called when timer ends or admin overrides)
+export async function resolveVersusBattle(
+    adminOverride?: 'A' | 'B'
+): Promise<{
+    success: boolean;
+    error?: string;
+    winner?: 'A' | 'B';
+    loser?: 'A' | 'B';
+    deletedSongId?: string;
+    deletedSongName?: string;
+    isTie?: boolean;
+    votesA?: number;
+    votesB?: number;
+}> {
+    try {
+        const battle = await redis.get<VersusBattleData>(VERSUS_BATTLE_KEY);
+
+        if (!battle) {
+            return { success: false, error: 'No battle to resolve. Start a new one first.' };
+        }
+
+        if (battle.phase === 'resolved') {
+            return { success: false, error: 'This battle was already resolved.' };
+        }
+
+        // Get vote counts
+        const [votesA, votesB] = await Promise.all([
+            redis.scard(VERSUS_VOTES_A_KEY),
+            redis.scard(VERSUS_VOTES_B_KEY),
+        ]);
+
+        let winner: 'A' | 'B';
+
+        if (adminOverride) {
+            // Admin override - their choice wins
+            winner = adminOverride;
+            console.log(`⚔️ VERSUS BATTLE: Admin override! Song ${winner} wins by decree.`);
+        } else if (votesA === votesB) {
+            // TIE! Trigger lightning round if not already in one
+            if (!battle.isLightningRound) {
+                console.log(`⚔️ VERSUS BATTLE: TIE! ${votesA} vs ${votesB} - Starting lightning round!`);
+                return {
+                    success: true,
+                    isTie: true,
+                    votesA,
+                    votesB
+                };
+            }
+            // Already in lightning round and still tied - admin must decide
+            // For now, song A wins by default (first position advantage)
+            winner = 'A';
+            console.log(`⚔️ VERSUS BATTLE: Lightning round tie! Song A wins by position.`);
+        } else {
+            winner = votesA > votesB ? 'A' : 'B';
+        }
+
+        const loser: 'A' | 'B' = winner === 'A' ? 'B' : 'A';
+        const loserSong = winner === 'A' ? battle.songB : battle.songA;
+        const winnerSong = winner === 'A' ? battle.songA : battle.songB;
+
+        // Delete the losing song
+        await adminDeleteSong(loserSong.id);
+
+        // Add to eliminated songs list (prevents re-adding)
+        await redis.sadd(ELIMINATED_SONGS_KEY, loserSong.id);
+
+        // Mark battle as resolved
+        battle.phase = 'resolved';
+        battle.winner = winner;
+        await redis.set(VERSUS_BATTLE_KEY, battle);
+
+        // Invalidate songs cache
+        invalidateSongsCache();
+
+        console.log(`⚔️ VERSUS BATTLE RESOLVED: "${winnerSong.name}" WINS! "${loserSong.name}" ELIMINATED!`);
+        console.log(`   Final votes: A=${votesA}, B=${votesB}`);
+
+        return {
+            success: true,
+            winner,
+            loser,
+            deletedSongId: loserSong.id,
+            deletedSongName: loserSong.name,
+            votesA,
+            votesB,
+        };
+    } catch (error) {
+        console.error('Failed to resolve versus battle:', error);
+        return { success: false, error: 'Could not resolve battle. Please try again.' };
+    }
+}
+
+// Start lightning round (15 seconds, fresh votes)
+export async function startLightningRound(): Promise<{
+    success: boolean;
+    error?: string;
+    endTime?: number;
+}> {
+    try {
+        const battle = await redis.get<VersusBattleData>(VERSUS_BATTLE_KEY);
+
+        if (!battle) {
+            return { success: false, error: 'No active battle to continue.' };
+        }
+
+        if (battle.phase === 'resolved') {
+            return { success: false, error: 'This battle is already over. Start a new one!' };
+        }
+
+        // Clear previous votes for fresh lightning round
+        await Promise.all([
+            redis.del(VERSUS_VOTES_A_KEY),
+            redis.del(VERSUS_VOTES_B_KEY),
+        ]);
+
+        // Update battle state
+        const endTime = Date.now() + 15000; // 15 seconds
+        battle.endTime = endTime;
+        battle.phase = 'lightning';
+        battle.isLightningRound = true;
+        await redis.set(VERSUS_BATTLE_KEY, battle);
+
+        console.log(`⚡ LIGHTNING ROUND: 15 seconds! "${battle.songA.name}" vs "${battle.songB.name}"`);
+
+        return { success: true, endTime };
+    } catch (error) {
+        console.error('Failed to start lightning round:', error);
+        return { success: false, error: 'Could not start lightning round. Please try again.' };
+    }
+}
+
+// Cancel an active battle (admin only)
+export async function cancelVersusBattle(): Promise<{ success: boolean }> {
+    try {
+        await Promise.all([
+            redis.del(VERSUS_BATTLE_KEY),
+            redis.del(VERSUS_VOTES_A_KEY),
+            redis.del(VERSUS_VOTES_B_KEY),
+        ]);
+        console.log('⚔️ VERSUS BATTLE: Cancelled by admin');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to cancel versus battle:', error);
+        return { success: false };
+    }
+}
+
+// Clear eliminated songs list (part of session reset)
+export async function clearEliminatedSongs(): Promise<void> {
+    await redis.del(ELIMINATED_SONGS_KEY);
 }

@@ -1,19 +1,38 @@
 import { NextResponse } from 'next/server';
 import { searchTracks } from '@/lib/spotify';
+import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
 
     if (!query) {
-        return NextResponse.json({ error: 'Query required' }, { status: 400 });
+        return NextResponse.json({ error: 'Please enter a song name or artist to search.' }, { status: 400 });
+    }
+
+    // Rate limiting
+    const clientId = getClientIdentifier(request);
+    const rateCheck = checkRateLimit(clientId + ':search', RATE_LIMITS.search);
+    if (!rateCheck.success) {
+        const response = NextResponse.json(
+            { error: 'Too many searches. Please wait a moment before searching again.' },
+            { status: 429 }
+        );
+        const headers = getRateLimitHeaders(rateCheck);
+        Object.entries(headers).forEach(([key, value]) => {
+            response.headers.set(key, value);
+        });
+        return response;
     }
 
     try {
         const tracks = await searchTracks(query, 10);
         return NextResponse.json({ tracks });
     } catch (error) {
-        console.error('Search error:', error);
-        return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+        // Log in development only
+        if (process.env.NODE_ENV === 'development') {
+            console.error('Search error:', error);
+        }
+        return NextResponse.json({ error: 'Could not search Spotify at this time. Please try again in a moment.' }, { status: 500 });
     }
 }

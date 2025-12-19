@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const expectedPassword = process.env.ADMIN_PASSWORD;
 
     if (!adminKey || adminKey !== expectedPassword) {
-        return NextResponse.json({ error: 'Unauthorized - check admin password' }, { status: 401 });
+        return NextResponse.json({ error: 'Invalid admin password. Please verify your credentials and try again.' }, { status: 401 });
     }
 
     try {
@@ -60,9 +60,9 @@ export async function POST(request: Request) {
                 return NextResponse.json({ success: true, ...timerAfterReset });
 
             default:
-                return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+                return NextResponse.json({ error: 'Unknown timer action. Please refresh and try again.' }, { status: 400 });
         }
     } catch (error) {
-        return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+        return NextResponse.json({ error: 'Could not update timer. Please try again.' }, { status: 400 });
     }
 }

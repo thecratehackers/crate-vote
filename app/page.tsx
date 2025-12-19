@@ -2,6 +2,56 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS } from '@/lib/config';
+import { PlaylistSkeleton } from '@/components/Skeleton';
+import VersusBattle from '@/components/VersusBattle';
+
+// Network resilience - fetch with timeout
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('Request timed out - please check your connection');
+        }
+        throw error;
+    }
+};
+
+// Retry logic for failed requests
+const fetchWithRetry = async (
+    url: string,
+    options: RequestInit = {},
+    maxRetries = 2,
+    timeoutMs = 10000
+): Promise<Response> => {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await fetchWithTimeout(url, options, timeoutMs);
+        } catch (error: any) {
+            lastError = error;
+            // Don't retry on abort or if it's not a network error
+            if (error.name === 'AbortError' || attempt === maxRetries) {
+                throw error;
+            }
+            // Wait before retry (exponential backoff: 500ms, 1000ms)
+            await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt)));
+        }
+    }
+
+    throw lastError || new Error('Request failed after retries');
+};
 
 interface Song {
     id: string;
@@ -85,9 +135,16 @@ export default function HomePage() {
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [playlistTitle, setPlaylistTitle] = useState('Hackathon Playlist');
+    const [playlistTitle, setPlaylistTitle] = useState(`${APP_CONFIG.name} Playlist`);
     const [playlistStats, setPlaylistStats] = useState<{ current: number; max: number; canAdd: boolean }>({ current: 0, max: 100, canAdd: true });
     const [viewerCount, setViewerCount] = useState<number>(0);
+
+    // 🔄 LOADING STATES - Explicit feedback for all actions
+    const [isSavingUsername, setIsSavingUsername] = useState(false);
+    const [isAddingSong, setIsAddingSong] = useState<string | null>(null); // Track which song is being added
+    const [votingInProgress, setVotingInProgress] = useState<Set<string>>(new Set()); // Track songs being voted on
+    const [isExporting, setIsExporting] = useState(false);
+    const [noSearchResults, setNoSearchResults] = useState(false);
 
     // Delete window (chaos mode) state
     const [deleteWindow, setDeleteWindow] = useState<{ active: boolean; endTime: number | null; remaining: number; canDelete: boolean }>({
@@ -96,13 +153,74 @@ export default function HomePage() {
     const [deleteWindowRemaining, setDeleteWindowRemaining] = useState(0);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Sort songs by score (like Reddit) - use useMemo to re-sort whenever scores change
+    // ⚔️ Versus Battle state
+    interface VersusBattleSong {
+        id: string;
+        name: string;
+        artist: string;
+        albumArt: string;
+    }
+    interface VersusBattleState {
+        active: boolean;
+        songA?: VersusBattleSong;
+        songB?: VersusBattleSong;
+        endTime?: number;
+        remaining?: number;
+        phase?: 'voting' | 'lightning' | 'resolved';
+        isLightningRound?: boolean;
+        winner?: 'A' | 'B' | null;
+        userVote?: 'A' | 'B' | null;
+        votesA?: number;
+        votesB?: number;
+    }
+    const [versusBattle, setVersusBattle] = useState<VersusBattleState>({ active: false });
+    const [battleCountdown, setBattleCountdown] = useState(0);
+    const [isVotingInBattle, setIsVotingInBattle] = useState(false);
+
+    // 🔒 UI STABILITY - Prevent song re-ordering during active interaction
+    const [isUserInteracting, setIsUserInteracting] = useState(false);
+    const interactionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastSortedRef = useRef<Song[]>([]);
+
+    // Mark user as interacting (prevents re-sorting for 2 seconds after interaction)
+    const markInteraction = useCallback(() => {
+        setIsUserInteracting(true);
+        if (interactionTimeoutRef.current) {
+            clearTimeout(interactionTimeoutRef.current);
+        }
+        interactionTimeoutRef.current = setTimeout(() => {
+            setIsUserInteracting(false);
+        }, 2000); // Wait 2 seconds after last interaction before allowing re-sort
+    }, []);
+
+    // Sort songs by score - BUT respect interaction lock to prevent jumping
     const sortedSongs = useMemo(() => {
-        return [...songs].sort((a, b) => {
+        const sorted = [...songs].sort((a, b) => {
             if (b.score !== a.score) return b.score - a.score;
             return a.addedAt - b.addedAt; // Older first for ties
         });
-    }, [songs]);
+
+        // If user is actively interacting, keep the previous order to prevent jumping
+        // Only update if order actually changed meaningfully (more than position swap)
+        if (isUserInteracting && lastSortedRef.current.length > 0) {
+            // Check if the song IDs at top 10 positions changed
+            const currentTopIds = sorted.slice(0, 10).map(s => s.id).join(',');
+            const previousTopIds = lastSortedRef.current.slice(0, 10).map(s => s.id).join(',');
+
+            if (currentTopIds !== previousTopIds) {
+                // Order changed during interaction - keep previous order but update scores
+                const scoreMap = new Map(sorted.map(s => [s.id, s]));
+                return lastSortedRef.current
+                    .filter(s => scoreMap.has(s.id)) // Remove deleted songs
+                    .map(s => scoreMap.get(s.id)!) // Update with new scores
+                    .concat(sorted.filter(s => !lastSortedRef.current.find(prev => prev.id === s.id))); // Add new songs
+            }
+        }
+
+        // Update reference for next comparison
+        lastSortedRef.current = sorted;
+        return sorted;
+    }, [songs, isUserInteracting]);
 
     // Username state - simple name entry
     const [username, setUsername] = useState<string | null>(null);
@@ -195,31 +313,32 @@ export default function HomePage() {
         init();
     }, []);
 
-    // Client-side profanity filter for usernames
-    const BLOCKED_WORDS = new Set([
-        'fuck', 'fucking', 'shit', 'ass', 'asshole', 'bitch', 'damn', 'crap',
-        'dick', 'cock', 'pussy', 'cunt', 'whore', 'slut', 'bastard', 'piss',
-        'nigga', 'nigger', 'faggot', 'fag', 'retard', 'retarded'
-    ]);
-
+    // Client-side profanity filter for usernames (uses BLOCKED_WORDS from config)
     const containsBadWord = (text: string): boolean => {
         const words = text.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/);
         return words.some(word => BLOCKED_WORDS.has(word));
     };
 
-    // Save username
-    const handleSetUsername = () => {
+    // Save username with loading feedback
+    const handleSetUsername = async () => {
         const name = usernameInput.trim();
-        if (name.length > 0) {
-            // Check for profanity
-            if (containsBadWord(name)) {
-                alert('Please choose an appropriate username.');
-                return;
-            }
-            setUsername(name);
-            localStorage.setItem('crate-username', name);
-            setShowUsernameModal(false);
+        if (name.length === 0) {
+            setMessage({ type: 'error', text: 'Please enter a name' });
+            return;
         }
+        // Check for profanity
+        if (containsBadWord(name)) {
+            setMessage({ type: 'error', text: 'Please choose an appropriate username' });
+            return;
+        }
+        setIsSavingUsername(true);
+        // Simulate slight delay for feedback
+        await new Promise(resolve => setTimeout(resolve, 200));
+        setUsername(name);
+        localStorage.setItem('crate-username', name);
+        setIsSavingUsername(false);
+        setShowUsernameModal(false);
+        setMessage({ type: 'success', text: `Welcome, ${name}! 🎵` });
     };
 
     // Fetch playlist data with rank tracking for dopamine effects
@@ -234,9 +353,10 @@ export default function HomePage() {
         if (showRefreshIndicator) setIsRefreshing(true);
 
         try {
-            const res = await fetch('/api/songs', {
+            const res = await fetchWithRetry('/api/songs', {
                 headers: { 'x-visitor-id': visitorId },
-            });
+            }, 2, 8000); // 2 retries, 8 second timeout
+
             const data = await res.json();
             const newSongs: Song[] = data.songs;
 
@@ -295,6 +415,26 @@ export default function HomePage() {
                 }
             }
 
+            // ⚔️ Handle Versus Battle data
+            if (data.versusBattle) {
+                // If lightning round started, server resets votes - sync local state
+                const newBattle = data.versusBattle;
+                setVersusBattle(prev => {
+                    // If transitioning to lightning round, clear local vote state
+                    if (newBattle.isLightningRound && !prev.isLightningRound && newBattle.userVote === null) {
+                        return { ...newBattle, userVote: null };
+                    }
+                    // If battle just became inactive (resolved or cancelled), auto-dismiss after 5 seconds
+                    if (!newBattle.active && prev.active) {
+                        setTimeout(() => setVersusBattle({ active: false }), 5000);
+                    }
+                    return newBattle;
+                });
+                if (newBattle.active && newBattle.endTime) {
+                    setBattleCountdown(Math.max(0, newBattle.endTime - Date.now()));
+                }
+            }
+
             // 📢 Process live activity from server
             if (data.recentActivity && Array.isArray(data.recentActivity)) {
                 const newActivities = data.recentActivity.filter(
@@ -313,8 +453,12 @@ export default function HomePage() {
                     setToastQueue(prev => [...newActivities, ...prev].slice(0, 5));
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to fetch playlist:', error);
+            // Show user-friendly error for network issues
+            if (error.message?.includes('timed out') || error.message?.includes('connection')) {
+                setMessage({ type: 'error', text: 'Slow connection - retrying...' });
+            }
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
@@ -324,9 +468,9 @@ export default function HomePage() {
     // Fetch timer status
     const fetchTimer = useCallback(async () => {
         try {
-            const res = await fetch('/api/timer', {
+            const res = await fetchWithTimeout('/api/timer', {
                 headers: visitorId ? { 'x-visitor-id': visitorId } : {},
-            });
+            }, 5000); // 5 second timeout for timer
             const data: TimerStatus = await res.json();
             setTimerRunning(data.running);
             setTimerEndTime(data.endTime);
@@ -337,8 +481,9 @@ export default function HomePage() {
             } else {
                 setTimerRemaining(0);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to fetch timer:', error);
+            // Silent fail for timer - it's not critical
         }
     }, [visitorId]);
 
@@ -363,16 +508,6 @@ export default function HomePage() {
 
     // 💡 Periodic tips in activity feed - engaging, dopamine-inducing hints
     useEffect(() => {
-        const gameTips = [
-            '🏆 Get your song in the Top 3 to earn +5 karma!',
-            '✨ Each karma = +1 song AND +1 upvote AND +1 downvote!',
-            '💣 Watch for DELETE WINDOWS — 30 seconds of chaos!',
-            '👑 The #1 song gets the crown — fight for it!',
-            '🎵 Export to Spotify when voting ends!',
-            '⬆️ Upvote songs you want played, downvote the rest!',
-            '🔥 Songs with negative scores can get bumped!',
-            '⏳ Stay 5 min for +1 karma (loyalty bonus)!',
-        ];
         let tipIndex = 0;
 
         const tipInterval = setInterval(() => {
@@ -380,7 +515,7 @@ export default function HomePage() {
                 id: `tip-${Date.now()}`,
                 type: 'add',
                 userName: 'System',
-                songName: gameTips[tipIndex % gameTips.length],
+                songName: GAME_TIPS[tipIndex % GAME_TIPS.length],
                 timestamp: Date.now(),
             };
             setToastQueue(prev => [tip, ...prev.slice(0, 2)]); // Add tip, keep max 3
@@ -567,6 +702,61 @@ export default function HomePage() {
         }
     };
 
+    // ⚔️ VERSUS BATTLE COUNTDOWN
+    useEffect(() => {
+        if (!versusBattle.active || !versusBattle.endTime) {
+            setBattleCountdown(0);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, versusBattle.endTime! - Date.now());
+            setBattleCountdown(remaining);
+
+            if (remaining <= 0) {
+                // Battle ended - refresh to get results
+                fetchPlaylist();
+            }
+        }, 100);
+
+        return () => clearInterval(interval);
+    }, [versusBattle.active, versusBattle.endTime, fetchPlaylist]);
+
+    // ⚔️ Vote in Versus Battle (one and done)
+    const handleBattleVote = async (choice: 'A' | 'B') => {
+        if (!visitorId || isVotingInBattle || versusBattle.userVote) return;
+
+        setIsVotingInBattle(true);
+
+        // Optimistic update
+        setVersusBattle(prev => ({ ...prev, userVote: choice }));
+
+        try {
+            const res = await fetch('/api/versus-battle/vote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-visitor-id': visitorId,
+                },
+                body: JSON.stringify({ choice }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                // Revert optimistic update
+                setVersusBattle(prev => ({ ...prev, userVote: null }));
+                setMessage({ type: 'error', text: data.error || 'Failed to vote' });
+            } else {
+                setMessage({ type: 'success', text: `⚔️ Voted for Song ${choice}!` });
+            }
+        } catch (error) {
+            setVersusBattle(prev => ({ ...prev, userVote: null }));
+            setMessage({ type: 'error', text: 'Network error' });
+        } finally {
+            setIsVotingInBattle(false);
+        }
+    };
+
     // Format timer display (supports days, hours, minutes, seconds)
     const formatTime = (ms: number) => {
         const totalSeconds = Math.ceil(ms / 1000);
@@ -593,13 +783,21 @@ export default function HomePage() {
 
         const timeout = setTimeout(async () => {
             setIsSearching(true);
+            setNoSearchResults(false);
             try {
                 const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
                 const data = await res.json();
-                setSearchResults(data.tracks || []);
+                const tracks = data.tracks || [];
+                setSearchResults(tracks);
                 setShowResults(true);
+                // Show "no results" feedback if search returned nothing
+                if (tracks.length === 0 && searchQuery.trim().length > 2) {
+                    setNoSearchResults(true);
+                    setMessage({ type: 'error', text: `No songs found for "${searchQuery}"` });
+                }
             } catch (error) {
                 console.error('Search failed:', error);
+                setMessage({ type: 'error', text: 'Search failed - please try again' });
             } finally {
                 setIsSearching(false);
             }
@@ -608,10 +806,17 @@ export default function HomePage() {
         return () => clearTimeout(timeout);
     }, [searchQuery]);
 
-    // Add song
+    // Add song with loading feedback
     const handleAddSong = async (track: SearchResult) => {
-        if (!visitorId || !username) return;
+        if (!visitorId || !username) {
+            setMessage({ type: 'error', text: 'Please enter your name first' });
+            return;
+        }
 
+        // Prevent double-clicks
+        if (isAddingSong === track.id) return;
+
+        setIsAddingSong(track.id);
         try {
             const res = await fetch('/api/songs', {
                 method: 'POST',
@@ -625,22 +830,37 @@ export default function HomePage() {
             const data = await res.json();
 
             if (!res.ok) {
-                setMessage({ type: 'error', text: data.error });
+                setMessage({ type: 'error', text: data.error || 'Failed to add song' });
                 return;
             }
 
-            setMessage({ type: 'success', text: `Added "${track.name}"!` });
+            setMessage({ type: 'success', text: `✓ Added "${track.name}"!` });
             setSearchQuery('');
             setShowResults(false);
+            setNoSearchResults(false);
             fetchPlaylist();
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to add song' });
+            setMessage({ type: 'error', text: 'Network error - please try again' });
+        } finally {
+            setIsAddingSong(null);
         }
     };
 
     // Vote on song - NEW MODEL: user gets ONE upvote and ONE downvote total
     const handleVote = async (songId: string, vote: 1 | -1) => {
-        if (!visitorId || isBanned) return;
+        if (!visitorId || isBanned) {
+            setMessage({ type: 'error', text: isBanned ? 'You are banned from voting' : 'Please wait...' });
+            return;
+        }
+
+        // Prevent double-clicks on same song
+        if (votingInProgress.has(songId)) return;
+
+        // Mark as voting
+        setVotingInProgress(prev => new Set(prev).add(songId));
+
+        // 🔒 Lock UI from re-sorting during interaction
+        markInteraction();
 
         // 🎉 DOPAMINE: Trigger vote animation
         setVoteAnimation({ songId, type: vote === 1 ? 'up' : 'down' });
@@ -751,8 +971,16 @@ export default function HomePage() {
             }
         } catch (error) {
             console.error('Vote failed:', error);
+            setMessage({ type: 'error', text: 'Vote failed - refreshing...' });
             // On network error, refresh to ensure sync
             fetchPlaylist();
+        } finally {
+            // Clear voting state
+            setVotingInProgress(prev => {
+                const next = new Set(prev);
+                next.delete(songId);
+                return next;
+            });
         }
     };
 
@@ -778,13 +1006,25 @@ export default function HomePage() {
     const isSessionActive = timerRunning && timerRemaining > 0;
     const canParticipate = !isBanned && !isLocked && !!username && isSessionActive;
 
-    // Loading state
+    // Loading state - show skeleton UI
     if (isLoading || !visitorId) {
         return (
-            <div className="auth-container">
-                <div className="auth-card">
-                    <div className="spinner" style={{ width: 40, height: 40, margin: '0 auto' }} />
-                    <p style={{ marginTop: 16 }}>Loading...</p>
+            <div className="stream-layout loading-state">
+                <header className="stream-header">
+                    <div className="header-left">
+                        <img src="/logo.png" alt="" className="mini-logo" />
+                        <span className="brand-name">{APP_CONFIG.name}</span>
+                    </div>
+                    <div className="header-right">
+                        <span className="stat-pill capacity">--/100</span>
+                    </div>
+                </header>
+                <div className="main-content">
+                    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                        <div className="spinner" style={{ width: 40, height: 40, margin: '0 auto' }} />
+                        <p style={{ marginTop: 16, color: 'var(--text-secondary)' }}>Loading playlist...</p>
+                    </div>
+                    <PlaylistSkeleton count={8} />
                 </div>
             </div>
         );
@@ -796,30 +1036,46 @@ export default function HomePage() {
             <div className="modal-overlay">
                 <div className="modal-card welcome-modal">
                     <img src="/logo.png" alt="Logo" className="welcome-logo" />
-                    <h2>Welcome to the Hackathon!</h2>
-                    <p>What should we call you?</p>
-                    <input
-                        type="text"
-                        placeholder="Your name"
-                        value={usernameInput}
-                        onChange={(e) => setUsernameInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSetUsername()}
-                        autoFocus
-                        maxLength={20}
-                    />
-                    <button onClick={handleSetUsername} disabled={!usernameInput.trim()}>
-                        Let's Go! 🎵
-                    </button>
+                    <h2>🎵 Collaborative Playlist</h2>
+                    <p className="welcome-subtitle">Add songs, vote for your favorites, build the ultimate playlist together!</p>
 
-                    <Link href="/admin" className="admin-link-modal">
-                        ⚙️ Admin Panel
-                    </Link>
+                    <div className="how-it-works">
+                        <div className="how-step">
+                            <span className="step-icon">🔍</span>
+                            <span className="step-text">Search & add songs</span>
+                        </div>
+                        <div className="how-step">
+                            <span className="step-icon">👍👎</span>
+                            <span className="step-text">Vote songs up or down</span>
+                        </div>
+                        <div className="how-step">
+                            <span className="step-icon">🏆</span>
+                            <span className="step-text">Top songs win!</span>
+                        </div>
+                    </div>
+
+                    <div className="name-input-section">
+                        <label className="name-label">Enter your name to join:</label>
+                        <input
+                            type="text"
+                            placeholder="Your name"
+                            value={usernameInput}
+                            onChange={(e) => setUsernameInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSetUsername()}
+                            autoFocus
+                            maxLength={20}
+                            disabled={isSavingUsername}
+                        />
+                        <button onClick={handleSetUsername} disabled={!usernameInput.trim() || isSavingUsername}>
+                            {isSavingUsername ? '⏳ Joining...' : "Join the Party! 🎉"}
+                        </button>
+                    </div>
 
                     <div className="rules-section">
                         <div className="rules-row">
-                            <span title="Add up to 5 songs">🎵 5 songs</span>
-                            <span title="5 upvotes, 5 downvotes">👍👎 10 votes</span>
-                            <span title="Top 3 songs earn karma">🏆 Earn karma</span>
+                            <span data-tooltip="Add up to 5 songs to the playlist">🎵 5 songs</span>
+                            <span data-tooltip="5 upvotes and 5 downvotes to use">👍👎 10 votes</span>
+                            <span data-tooltip="Get your song in top 3 to earn karma bonuses!">✨ Earn karma</span>
                         </div>
                     </div>
                 </div>
@@ -829,6 +1085,8 @@ export default function HomePage() {
 
     // Export to Spotify - redirect to export page for OAuth flow
     const handleExport = () => {
+        setIsExporting(true);
+        setMessage({ type: 'success', text: 'Redirecting to Spotify...' });
         window.location.href = '/export';
     };
 
@@ -849,7 +1107,7 @@ export default function HomePage() {
                     <Link href="/" className="logo-home-link" title="Go to Home">
                         <img src="/logo.png" alt="" className="mini-logo" />
                     </Link>
-                    <span className="brand-name">Hackathon</span>
+                    <span className="brand-name">{APP_CONFIG.name}</span>
                     {/* LIVE badge integrated into header with viewer count */}
                     {timerRunning && (
                         <span className="live-badge-inline">
@@ -863,26 +1121,26 @@ export default function HomePage() {
                     {!isBanned && isSessionActive && (
                         <div className="action-stats">
                             {/* Songs remaining */}
-                            <span className="stat-counter songs" data-tooltip={`${userStatus.songsRemaining} songs left to add`} tabIndex={0}>
+                            <span className="stat-counter songs" data-tooltip={`You can add ${userStatus.songsRemaining} more song${userStatus.songsRemaining !== 1 ? 's' : ''}`} tabIndex={0}>
                                 💿 {userStatus.songsRemaining}
                             </span>
                             {/* Upvotes remaining */}
-                            <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvotes left`} tabIndex={0}>
+                            <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvote${userStatus.upvotesRemaining !== 1 ? 's' : ''} left — boost songs you like!`} tabIndex={0}>
                                 👍 {userStatus.upvotesRemaining}
                             </span>
                             {/* Downvotes remaining */}
-                            <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvotes left`} tabIndex={0}>
+                            <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvote${userStatus.downvotesRemaining !== 1 ? 's' : ''} left — sink songs you don't want`} tabIndex={0}>
                                 👎 {userStatus.downvotesRemaining}
                             </span>
                             {/* Karma - only show if > 0 */}
                             {karmaBonuses.karma > 0 && (
-                                <span className="stat-counter karma" data-tooltip="Karma: +1 song & +1 each vote" tabIndex={0}>
+                                <span className="stat-counter karma" data-tooltip="Karma points! Each gives +1 song & +1 vote" tabIndex={0}>
                                     ✨ {karmaBonuses.karma}
                                 </span>
                             )}
                         </div>
                     )}
-                    <span className="stat-pill capacity" data-tooltip={`${playlistStats.current} of ${playlistStats.max} songs in playlist`} tabIndex={0}>
+                    <span className="stat-pill capacity" data-tooltip={`Playlist: ${playlistStats.current} of ${playlistStats.max} songs`} tabIndex={0}>
                         {playlistStats.current}/{playlistStats.max}
                     </span>
                     {username && (
@@ -921,13 +1179,20 @@ export default function HomePage() {
                 !timerRunning && !isBanned && (
                     <div className="voting-closed-banner">
                         <div className="closed-message">
-                            ⏳ <strong>Next session coming soon!</strong> Grab the playlist while you wait.
+                            <strong>⏳ Voting session not active</strong>
+                            <p style={{ fontSize: '0.9rem', margin: '8px 0 0', opacity: 0.9 }}>
+                                When a session starts, you'll be able to add songs and vote. Check back soon!
+                            </p>
                         </div>
-                        <div className="closed-actions">
-                            <button onClick={handleExport} className="action-btn spotify-btn">
-                                <img src="/spotify-logo.png" alt="Spotify" className="spotify-logo-icon" /> Export to Spotify
-                            </button>
-                        </div>
+                        {songs.length > 0 && (
+                            <div className="closed-actions">
+                                <p style={{ fontSize: '0.85rem', margin: '0 0 8px', opacity: 0.8 }}>Want the current playlist?</p>
+                                <button onClick={handleExport} className="action-btn spotify-btn" disabled={isExporting}>
+                                    <img src="/spotify-logo.png" alt="Spotify" className="spotify-logo-icon" />
+                                    {isExporting ? 'Redirecting...' : 'Export to Spotify'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )
             }
@@ -938,11 +1203,11 @@ export default function HomePage() {
                 <button
                     className={`export-inline-btn ${timerRunning ? 'locked' : ''}`}
                     onClick={handleExport}
-                    disabled={timerRunning}
+                    disabled={timerRunning || isExporting}
                     title={timerRunning ? 'Available after voting ends' : 'Export playlist to Spotify'}
                 >
                     <img src="/spotify-logo.png" alt="" className="spotify-icon-sm" />
-                    {timerRunning ? 'After voting' : 'Export'}
+                    {isExporting ? '...' : timerRunning ? 'After voting' : 'Export'}
                 </button>
             </div>
 
@@ -958,6 +1223,224 @@ export default function HomePage() {
                         {deleteWindow.canDelete
                             ? '🗑️ You can DELETE one song! Tap the trash icon on any song.'
                             : '✓ You already used your delete this window.'}
+                    </div>
+                </div>
+            )}
+
+            {/* ⚔️ VERSUS BATTLE BANNER - Head-to-head voting */}
+            {versusBattle.active && versusBattle.songA && versusBattle.songB && (
+                <div className="versus-battle-banner" style={{
+                    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                    border: '2px solid #ff6b35',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    marginBottom: '20px',
+                    boxShadow: '0 0 30px rgba(255, 107, 53, 0.4)',
+                    animation: 'pulse-glow 2s infinite',
+                }}>
+                    {/* Header */}
+                    <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                        <h2 style={{
+                            fontSize: '1.25rem',
+                            color: '#ff6b35',
+                            margin: 0,
+                            textTransform: 'uppercase',
+                            letterSpacing: '2px',
+                            textShadow: '0 0 10px rgba(255, 107, 53, 0.5)',
+                        }}>
+                            {versusBattle.phase === 'resolved'
+                                ? '🏆 BATTLE RESULTS 🏆'
+                                : versusBattle.isLightningRound
+                                    ? '⚡ LIGHTNING ROUND ⚡'
+                                    : '⚔️ VERSUS BATTLE ⚔️'}
+                        </h2>
+                        {versusBattle.phase !== 'resolved' && (
+                            <div style={{
+                                fontSize: '2rem',
+                                fontWeight: 'bold',
+                                color: battleCountdown <= 5000 ? '#ff4444' : '#fff',
+                                marginTop: '4px',
+                                fontFamily: 'monospace',
+                            }}>
+                                {Math.ceil(battleCountdown / 1000)}s
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Song Cards */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto 1fr',
+                        gap: '12px',
+                        alignItems: 'center',
+                    }}>
+                        {/* Song A */}
+                        <div
+                            onClick={() => !versusBattle.userVote && versusBattle.phase !== 'resolved' && handleBattleVote('A')}
+                            style={{
+                                background: versusBattle.userVote === 'A'
+                                    ? 'rgba(74, 222, 128, 0.2)'
+                                    : versusBattle.winner === 'A'
+                                        ? 'rgba(74, 222, 128, 0.3)'
+                                        : 'rgba(255,255,255,0.05)',
+                                border: versusBattle.userVote === 'A' || versusBattle.winner === 'A'
+                                    ? '2px solid #4ade80'
+                                    : '2px solid transparent',
+                                borderRadius: '12px',
+                                padding: '12px',
+                                textAlign: 'center',
+                                cursor: versusBattle.userVote || versusBattle.phase === 'resolved' ? 'default' : 'pointer',
+                                transition: 'all 0.2s',
+                                opacity: versusBattle.winner === 'B' ? 0.5 : 1,
+                            }}
+                        >
+                            <img
+                                src={versusBattle.songA.albumArt}
+                                alt=""
+                                style={{ width: '60px', height: '60px', borderRadius: '8px', marginBottom: '8px' }}
+                            />
+                            <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '0.9rem', marginBottom: '2px' }}>
+                                {versusBattle.songA.name.length > 20
+                                    ? versusBattle.songA.name.slice(0, 20) + '...'
+                                    : versusBattle.songA.name}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                                {versusBattle.songA.artist}
+                            </div>
+
+                            {/* Vote button or status */}
+                            {versusBattle.phase === 'resolved' ? (
+                                <div style={{
+                                    marginTop: '8px',
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
+                                    color: versusBattle.winner === 'A' ? '#4ade80' : '#888',
+                                }}>
+                                    {versusBattle.winner === 'A' ? '🏆 WINNER' : '❌ Eliminated'}
+                                    <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                                        {versusBattle.votesA} votes
+                                    </div>
+                                </div>
+                            ) : versusBattle.userVote === 'A' ? (
+                                <div style={{ marginTop: '8px', color: '#4ade80', fontWeight: 'bold' }}>
+                                    ✓ VOTED
+                                </div>
+                            ) : versusBattle.userVote ? (
+                                <div style={{ marginTop: '8px', color: '#888', fontSize: '0.85rem' }}>
+                                    0
+                                </div>
+                            ) : (
+                                <button style={{
+                                    marginTop: '8px',
+                                    background: 'linear-gradient(135deg, #4ade80, #22c55e)',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '8px 16px',
+                                    color: '#000',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                }}>
+                                    1 - PLAY
+                                </button>
+                            )}
+                        </div>
+
+                        {/* VS */}
+                        <div style={{
+                            fontSize: '1.5rem',
+                            fontWeight: 'bold',
+                            color: '#ff6b35',
+                            textShadow: '0 0 15px rgba(255, 107, 53, 0.5)',
+                        }}>
+                            VS
+                        </div>
+
+                        {/* Song B */}
+                        <div
+                            onClick={() => !versusBattle.userVote && versusBattle.phase !== 'resolved' && handleBattleVote('B')}
+                            style={{
+                                background: versusBattle.userVote === 'B'
+                                    ? 'rgba(74, 222, 128, 0.2)'
+                                    : versusBattle.winner === 'B'
+                                        ? 'rgba(74, 222, 128, 0.3)'
+                                        : 'rgba(255,255,255,0.05)',
+                                border: versusBattle.userVote === 'B' || versusBattle.winner === 'B'
+                                    ? '2px solid #4ade80'
+                                    : '2px solid transparent',
+                                borderRadius: '12px',
+                                padding: '12px',
+                                textAlign: 'center',
+                                cursor: versusBattle.userVote || versusBattle.phase === 'resolved' ? 'default' : 'pointer',
+                                transition: 'all 0.2s',
+                                opacity: versusBattle.winner === 'A' ? 0.5 : 1,
+                            }}
+                        >
+                            <img
+                                src={versusBattle.songB.albumArt}
+                                alt=""
+                                style={{ width: '60px', height: '60px', borderRadius: '8px', marginBottom: '8px' }}
+                            />
+                            <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '0.9rem', marginBottom: '2px' }}>
+                                {versusBattle.songB.name.length > 20
+                                    ? versusBattle.songB.name.slice(0, 20) + '...'
+                                    : versusBattle.songB.name}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                                {versusBattle.songB.artist}
+                            </div>
+
+                            {/* Vote button or status */}
+                            {versusBattle.phase === 'resolved' ? (
+                                <div style={{
+                                    marginTop: '8px',
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
+                                    color: versusBattle.winner === 'B' ? '#4ade80' : '#888',
+                                }}>
+                                    {versusBattle.winner === 'B' ? '🏆 WINNER' : '❌ Eliminated'}
+                                    <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                                        {versusBattle.votesB} votes
+                                    </div>
+                                </div>
+                            ) : versusBattle.userVote === 'B' ? (
+                                <div style={{ marginTop: '8px', color: '#4ade80', fontWeight: 'bold' }}>
+                                    ✓ VOTED
+                                </div>
+                            ) : versusBattle.userVote ? (
+                                <div style={{ marginTop: '8px', color: '#888', fontSize: '0.85rem' }}>
+                                    0
+                                </div>
+                            ) : (
+                                <button style={{
+                                    marginTop: '8px',
+                                    background: 'linear-gradient(135deg, #4ade80, #22c55e)',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '8px 16px',
+                                    color: '#000',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                }}>
+                                    1 - PLAY
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Instructions */}
+                    <div style={{
+                        textAlign: 'center',
+                        marginTop: '12px',
+                        fontSize: '0.85rem',
+                        color: 'rgba(255,255,255,0.7)'
+                    }}>
+                        {versusBattle.phase === 'resolved'
+                            ? 'Battle complete! The loser has been removed from the playlist.'
+                            : versusBattle.userVote
+                                ? '⏳ Waiting for results... (votes hidden until battle ends)'
+                                : '🎯 Pick the song you\'d PLAY — one vote, one and done!'}
                     </div>
                 </div>
             )}
@@ -987,15 +1470,17 @@ export default function HomePage() {
                                 {searchResults.slice(0, 5).map((track) => (
                                     <div
                                         key={track.id}
-                                        className="search-result-row"
-                                        onMouseDown={() => !isSongInPlaylist(track.id) && handleAddSong(track)}
+                                        className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''}`}
+                                        onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
                                     >
                                         <img src={track.albumArt || '/placeholder.svg'} alt="" />
                                         <div className="result-info">
                                             <span className="result-name">{track.name}</span>
                                             <span className="result-artist">{track.artist}</span>
                                         </div>
-                                        {isSongInPlaylist(track.id) ? (
+                                        {isAddingSong === track.id ? (
+                                            <span className="adding-spinner">⏳</span>
+                                        ) : isSongInPlaylist(track.id) ? (
                                             <span className="already-added">✓</span>
                                         ) : (
                                             <span className="add-btn-stream">+</span>
@@ -1014,7 +1499,15 @@ export default function HomePage() {
             <div className="song-list-stream" id="song-list">
                 {sortedSongs.length === 0 ? (
                     <div className="empty-state">
-                        {timerRunning ? 'No songs yet! Be the first to add one.' : 'Waiting for next session to start...'}
+                        <div className="empty-icon">🎵</div>
+                        <div className="empty-title">
+                            {timerRunning ? 'No songs yet!' : 'Waiting for session...'}
+                        </div>
+                        <div className="empty-subtitle">
+                            {timerRunning
+                                ? 'Use the search bar above to add the first song and get the party started!'
+                                : 'The admin will start a voting session soon. Hang tight!'}
+                        </div>
                     </div>
                 ) : (
                     sortedSongs.map((song, index) => {
@@ -1027,6 +1520,8 @@ export default function HomePage() {
                             <div
                                 key={song.id}
                                 className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''}`}
+                                onMouseEnter={markInteraction}
+                                onTouchStart={markInteraction}
                             >
                                 {/* Rank */}
                                 <span
@@ -1049,12 +1544,12 @@ export default function HomePage() {
                                 {/* Voting - inline thumbs up/down with score */}
                                 <div className="vote-inline">
                                     <button
-                                        className={`thumb-btn up ${hasUpvoted ? 'active' : ''}`}
+                                        className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
                                         onClick={() => handleVote(song.id, 1)}
-                                        disabled={!canParticipate}
+                                        disabled={!canParticipate || votingInProgress.has(song.id)}
                                         data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote this song'}
                                     >
-                                        👍
+                                        {votingInProgress.has(song.id) ? '⏳' : '👍'}
                                     </button>
                                     <span
                                         className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
@@ -1064,12 +1559,12 @@ export default function HomePage() {
                                         {song.score > 0 ? '+' : ''}{song.score}
                                     </span>
                                     <button
-                                        className={`thumb-btn down ${hasDownvoted ? 'active' : ''}`}
+                                        className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
                                         onClick={() => handleVote(song.id, -1)}
-                                        disabled={!canParticipate}
+                                        disabled={!canParticipate || votingInProgress.has(song.id)}
                                         data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote this song'}
                                     >
-                                        👎
+                                        {votingInProgress.has(song.id) ? '⏳' : '👎'}
                                     </button>
                                 </div>
 

@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const visitorId = getVisitorIdFromRequest(request);
 
     if (!visitorId) {
-        return NextResponse.json({ error: 'Visitor ID required' }, { status: 400 });
+        return NextResponse.json({ error: 'Session expired. Please refresh the page to continue earning karma.' }, { status: 400 });
     }
 
     try {
@@ -30,10 +30,10 @@ export async function POST(request: Request) {
             }
         }
 
-        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+        return NextResponse.json({ error: 'Unknown karma action. Please refresh and try again.' }, { status: 400 });
     } catch (error) {
         console.error('Karma error:', error);
-        return NextResponse.json({ error: 'Failed to grant karma' }, { status: 500 });
+        return NextResponse.json({ error: 'Could not update karma right now. Please try again later.' }, { status: 500 });
     }
 }
 

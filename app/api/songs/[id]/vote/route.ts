@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { vote, adminVote, isPlaylistLocked, addActivity } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
+import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
 // POST - Vote on a song
 export async function POST(
@@ -13,16 +14,31 @@ export async function POST(
     const isAdmin = adminKey && adminKey === process.env.ADMIN_PASSWORD;
 
     if (!visitorId) {
-        console.log('Vote failed: No visitor ID');
-        return NextResponse.json({ error: 'Visitor ID required' }, { status: 400 });
+        return NextResponse.json({ error: 'Session expired. Please refresh the page and enter your name to vote.' }, { status: 400 });
+    }
+
+    // Rate limiting for non-admin requests
+    if (!isAdmin) {
+        const clientId = getClientIdentifier(request);
+        const rateCheck = checkRateLimit(clientId + ':vote', RATE_LIMITS.vote);
+        if (!rateCheck.success) {
+            const response = NextResponse.json(
+                { error: 'Slow down! You\'re voting too fast.' },
+                { status: 429 }
+            );
+            const headers = getRateLimitHeaders(rateCheck);
+            Object.entries(headers).forEach(([key, value]) => {
+                response.headers.set(key, value);
+            });
+            return response;
+        }
     }
 
     // Check if playlist is locked (skip for admins)
     if (!isAdmin) {
         const locked = await isPlaylistLocked();
         if (locked) {
-            console.log('Vote failed: Playlist is locked');
-            return NextResponse.json({ error: 'Playlist is locked' }, { status: 400 });
+            return NextResponse.json({ error: 'Voting is currently paused. Wait for the host to unlock the playlist to continue voting.' }, { status: 400 });
         }
     }
 
@@ -31,8 +47,7 @@ export async function POST(
         const { vote: voteDirection, userName, songName } = body;
 
         if (voteDirection !== 1 && voteDirection !== -1) {
-            console.log('Vote failed: Invalid vote value', voteDirection);
-            return NextResponse.json({ error: 'Vote must be 1 or -1' }, { status: 400 });
+            return NextResponse.json({ error: 'Invalid vote. Please try clicking the vote button again.' }, { status: 400 });
         }
 
         // Use adminVote for admins (unlimited), regular vote for users
@@ -58,6 +73,6 @@ export async function POST(
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Vote error:', error);
-        return NextResponse.json({ error: 'Failed to vote' }, { status: 500 });
+        return NextResponse.json({ error: 'Something went wrong. Please refresh and try voting again.' }, { status: 500 });
     }
 }

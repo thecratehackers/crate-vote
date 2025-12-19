@@ -1,0 +1,256 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   VERSUS BATTLE COMPONENT STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.versus-battle-banner {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 2px solid #ff6b35;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 30px rgba(255, 107, 53, 0.4);
+    animation: pulse-glow 2s infinite;
+}
+
+.versus-battle-banner.lightning {
+    border-color: #ffd700;
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
+    animation: lightning-pulse 0.5s infinite;
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 40px rgba(255, 107, 53, 0.5);
+    }
+}
+
+@keyframes lightning-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 50px rgba(255, 215, 0, 0.7);
+    }
+}
+
+/* Header */
+.battle-header {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.battle-title {
+    font-size: 1.25rem;
+    color: #ff6b35;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+}
+
+.lightning .battle-title {
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.battle-countdown {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #fff;
+    margin-top: 4px;
+    font-family: monospace;
+    transition: color 0.2s;
+}
+
+.battle-countdown.urgent {
+    color: #ff4444;
+    animation: countdown-pulse 0.5s infinite;
+}
+
+@keyframes countdown-pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* Arena Layout */
+.battle-arena {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    align-items: center;
+}
+
+/* Song Cards */
+.battle-song {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.battle-song:hover:not(.voted):not(.winner):not(.loser) {
+    border-color: rgba(255, 107, 53, 0.5);
+    background: rgba(255, 107, 53, 0.1);
+    transform: scale(1.02);
+}
+
+.battle-song:focus {
+    outline: 2px solid #ff6b35;
+    outline-offset: 2px;
+}
+
+.battle-song.voted {
+    background: rgba(74, 222, 128, 0.2);
+    border-color: #4ade80;
+    cursor: default;
+}
+
+.battle-song.winner {
+    background: rgba(74, 222, 128, 0.3);
+    border-color: #4ade80;
+    cursor: default;
+}
+
+.battle-song.loser {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.battle-album-art {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+    margin-bottom: 8px;
+}
+
+.battle-song-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    margin: 0 auto;
+}
+
+.battle-song-artist {
+    font-size: 0.75rem;
+    color: #d3771d;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    margin: 0 auto;
+}
+
+/* Badges */
+.vote-badge,
+.winner-badge,
+.loser-badge,
+.vote-count {
+    position: absolute;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.vote-badge {
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #4ade80;
+    color: #000;
+}
+
+.winner-badge {
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffd700;
+    color: #000;
+}
+
+.loser-badge {
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #666;
+    color: #fff;
+}
+
+.vote-count {
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+}
+
+/* VS Divider */
+.battle-vs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.battle-vs span {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ff6b35;
+    text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+}
+
+/* Instructions */
+.battle-instructions {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.battle-instructions.voted {
+    color: #4ade80;
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+    .versus-battle-banner {
+        padding: 16px;
+    }
+
+    .battle-album-art {
+        width: 60px;
+        height: 60px;
+    }
+
+    .battle-song-name,
+    .battle-song-artist {
+        max-width: 90px;
+    }
+
+    .battle-vs span {
+        font-size: 1.25rem;
+    }
+}

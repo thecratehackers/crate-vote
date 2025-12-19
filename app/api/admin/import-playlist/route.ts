@@ -18,18 +18,18 @@ export async function POST(request: Request) {
 
     if (!adminKey) {
         console.log('Import auth failed - no admin key in request');
-        return NextResponse.json({ error: 'Unauthorized: Missing admin key' }, { status: 401 });
+        return NextResponse.json({ error: 'Admin password is required. Please enter your admin password and try again.' }, { status: 401 });
     }
 
     if (adminKey !== envPassword) {
         console.log('Import auth failed - keys do not match');
-        return NextResponse.json({ error: 'Unauthorized: Invalid admin password' }, { status: 401 });
+        return NextResponse.json({ error: 'Incorrect admin password. Please check your password and try again.' }, { status: 401 });
     }
     try {
         const { playlistUrl } = await request.json();
 
         if (!playlistUrl) {
-            return NextResponse.json({ error: 'Playlist URL required' }, { status: 400 });
+            return NextResponse.json({ error: 'Please paste a Spotify playlist URL to import.' }, { status: 400 });
         }
 
         // Fetch tracks from Spotify (max 100)

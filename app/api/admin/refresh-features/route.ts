@@ -34,7 +34,7 @@ async function getClientToken(): Promise<string> {
 export async function POST(request: Request) {
     const adminKey = request.headers.get('x-admin-key');
     if (adminKey !== process.env.ADMIN_PASSWORD) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'Admin access required. Please check your admin password.' }, { status: 401 });
     }
 
     try {
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         if (!featuresResponse.ok) {
             const error = await featuresResponse.text();
             console.error('Audio features API error:', error);
-            return NextResponse.json({ error: 'Failed to fetch audio features' }, { status: 500 });
+            return NextResponse.json({ error: 'Could not fetch audio features from Spotify. Please try again later.' }, { status: 500 });
         }
 
         const featuresData = await featuresResponse.json();
@@ -85,6 +85,6 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('Refresh features error:', error);
-        return NextResponse.json({ error: 'Failed to refresh features' }, { status: 500 });
+        return NextResponse.json({ error: 'Could not refresh song features. Please try again.' }, { status: 500 });
     }
 }

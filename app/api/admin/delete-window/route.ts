@@ -6,7 +6,7 @@ export async function POST(request: Request) {
     const adminKey = request.headers.get('x-admin-key');
 
     if (adminKey !== process.env.ADMIN_PASSWORD) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'Admin access required. Please check your admin password.' }, { status: 401 });
     }
 
     try {
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error('Start delete window error:', error);
         return NextResponse.json(
-            { error: 'Failed to start delete window' },
+            { error: 'Could not start chaos mode. Please try again.' },
             { status: 500 }
         );
     }

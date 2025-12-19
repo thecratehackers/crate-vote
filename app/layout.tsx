@@ -1,13 +1,25 @@
 import type { Metadata } from 'next';
+import { Providers } from './providers';
+import { APP_CONFIG } from '@/lib/config';
 import './globals.css';
 
 export const metadata: Metadata = {
-    title: 'Hackathon - Collaborative Playlist Voting',
-    description: 'Vote on songs and build the ultimate playlist together',
-    keywords: ['playlist', 'voting', 'spotify', 'music', 'collaborative', 'hackathon'],
+    title: `${APP_CONFIG.name} - ${APP_CONFIG.tagline}`,
+    description: APP_CONFIG.description,
+    keywords: APP_CONFIG.keywords,
     icons: {
         icon: '/favicon.png',
         apple: '/favicon.png',
+    },
+    openGraph: {
+        title: APP_CONFIG.name,
+        description: APP_CONFIG.description,
+        type: 'website',
+    },
+    twitter: {
+        card: 'summary',
+        title: APP_CONFIG.name,
+        description: APP_CONFIG.description,
     },
 };
 
@@ -22,7 +34,11 @@ export default function RootLayout({
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
             </head>
-            <body>{children}</body>
+            <body>
+                <Providers>
+                    {children}
+                </Providers>
+            </body>
         </html>
     );
 }
