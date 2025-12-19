@@ -5,10 +5,17 @@ import { adminAddSong, setPlaylistTitle } from '@/lib/redis-store';
 // POST - Import a Spotify playlist
 export async function POST(request: Request) {
     const adminKey = request.headers.get('x-admin-key');
+    const envPassword = process.env.ADMIN_PASSWORD;
 
-    if (adminKey !== process.env.ADMIN_PASSWORD) {
+    // Debug logging
+    console.log('Import request - Admin key received:', adminKey ? `${adminKey.substring(0, 3)}...` : 'NONE');
+    console.log('Import request - Env password exists:', !!envPassword);
+
+    if (!adminKey || adminKey !== envPassword) {
+        console.log('Import auth failed - keys do not match');
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
 
     try {
         const { playlistUrl } = await request.json();
