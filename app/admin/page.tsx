@@ -842,86 +842,19 @@ export default function AdminPage() {
                 )}
             </div>
 
-            {/* 📥 PRIME THE PUMP - IMPORT SPOTIFY PLAYLIST */}
-            <div className="import-playlist-panel">
-                <div className="import-header">
-                    <h3>🎧 Prime the Pump</h3>
-                    <p className="import-subtitle">Import a Spotify playlist to pre-populate songs before starting a session. Perfect for giving users something to vote on right away!</p>
-                </div>
-
-                <div className="import-row">
-                    <input
-                        type="text"
-                        value={importPlaylistUrl}
-                        onChange={(e) => setImportPlaylistUrl(e.target.value)}
-                        placeholder="Paste Spotify playlist URL (e.g., https://open.spotify.com/playlist/...)"
-                        disabled={isImporting}
-                    />
+            {/* 🔀 SHUFFLE PLAYLIST (if songs exist) */}
+            {songs.length > 1 && (
+                <div className="shuffle-panel">
                     <button
-                        className="admin-btn success import-btn"
-                        onClick={handleImportPlaylist}
-                        disabled={isImporting || !importPlaylistUrl.trim()}
+                        className="admin-btn shuffle-btn"
+                        onClick={handleShufflePlaylist}
+                        disabled={isShuffling}
                     >
-                        {isImporting ? (
-                            <><span className="spinner-small"></span> Importing...</>
-                        ) : (
-                            <>📥 Import Playlist</>
-                        )}
+                        {isShuffling ? '🔄 Shuffling...' : '🔀 Shuffle Playlist Order'}
                     </button>
+                    <span className="shuffle-hint">Randomize the order of all {songs.length} songs</span>
                 </div>
-
-                {/* Progress indicator with animated stages */}
-                {isImporting && importProgress && (
-                    <div className="import-progress active">
-                        <div className="progress-bar-track">
-                            <div className="progress-bar-fill animated" />
-                        </div>
-                        <div className="progress-status">
-                            <span className="progress-stage">{importProgress.stage}</span>
-                        </div>
-                    </div>
-                )}
-
-                {/* Import result summary with actions */}
-                {importResult && !isImporting && (
-                    <div className="import-result-summary">
-                        <div className="result-main">
-                            <span className="result-checkmark">✅</span>
-                            <span className="result-text">
-                                <strong>{importResult.imported}</strong> songs imported from "{importResult.playlistName}"
-                                {importResult.skipped > 0 && <span className="skipped-note"> ({importResult.skipped} duplicates skipped)</span>}
-                            </span>
-                        </div>
-                        <div className="result-actions">
-                            <button
-                                className="admin-btn shuffle-btn"
-                                onClick={handleShufflePlaylist}
-                                disabled={isShuffling || songs.length < 2}
-                            >
-                                {isShuffling ? '🔄 Shuffling...' : '🔀 Shuffle Order'}
-                            </button>
-                            <span className="result-hint">Ready! Start the session when you want users to begin voting.</span>
-                        </div>
-                    </div>
-                )}
-
-                {!importResult && !isImporting && songs.length > 0 && (
-                    <div className="import-existing-hint">
-                        <span>💡 You have {songs.length} songs loaded.</span>
-                        <button
-                            className="admin-btn shuffle-btn small"
-                            onClick={handleShufflePlaylist}
-                            disabled={isShuffling || songs.length < 2}
-                        >
-                            {isShuffling ? '🔄...' : '🔀 Shuffle'}
-                        </button>
-                    </div>
-                )}
-
-                {!importResult && !isImporting && songs.length === 0 && (
-                    <p className="import-hint">📋 Imports up to 100 songs from any public Spotify playlist. Songs will appear below ready for voting.</p>
-                )}
-            </div>
+            )}
 
             {/* Timer Control Panel */}
             <div className="timer-control-panel">

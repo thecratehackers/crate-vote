@@ -3553,6 +3553,26 @@ body::before {
 }
 
 /* Enhanced Import Panel - Prime the Pump */
+/* NOTE: Import feature temporarily disabled due to Spotify API issues (Dec 2024) */
+
+/* Shuffle Panel - Standalone when songs exist */
+.shuffle-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.shuffle-hint {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
 .import-playlist-panel {
   background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 25, 20, 0.95) 100%);
   border: 2px solid rgba(211, 119, 29, 0.3);
