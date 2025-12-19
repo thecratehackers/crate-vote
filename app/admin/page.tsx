@@ -689,7 +689,7 @@ export default function AdminPage() {
     // Start THE PURGE - grants everyone ONE delete for 30 seconds
     const handleStartDeleteWindow = async () => {
         isConfirmDialogOpen.current = true;
-        const confirmed = confirm('� START THE PURGE?\n\nThis grants EVERY USER the ability to PURGE ONE song for 30 seconds.\n\nAll crimes are legal - use wisely!');
+        const confirmed = confirm('💀 START THE PURGE?\n\nThis grants EVERY USER the ability to PURGE ONE song for 30 seconds.\n\nAll crimes are legal - use wisely!');
         isConfirmDialogOpen.current = false;
         if (!confirmed) {
             return;
@@ -706,7 +706,7 @@ export default function AdminPage() {
                 const data = await res.json();
                 setDeleteWindowActive(true);
                 setDeleteWindowEndTime(data.endTime);
-                setMessage({ type: 'success', text: '� THE PURGE HAS BEGUN! Everyone has 30 seconds to purge ONE song!' });
+                setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 30 seconds to purge ONE song!' });
 
                 // Auto-refresh when window ends
                 setTimeout(() => {
@@ -1182,7 +1182,7 @@ export default function AdminPage() {
                         onClick={handleShufflePlaylist}
                         disabled={isShuffling || songs.length < 2}
                     >
-                        {isShuffling ? '� Shuffling...' : '� Shuffle Playlist'}
+                        {isShuffling ? '🔀 Shuffling...' : '🔀 Shuffle Playlist'}
                     </button>
 
                     {/* 2. The Purge */}
