@@ -361,12 +361,17 @@ export default function HomePage() {
         return () => clearTimeout(timeout);
     }, [toastQueue]);
 
-    // 💡 Periodic karma tips in activity feed
+    // 💡 Periodic tips in activity feed - engaging, dopamine-inducing hints
     useEffect(() => {
-        const karmaTips = [
-            '💡 TIP: Get your song in the Top 3 to earn +5 karma!',
-            '✨ TIP: Spend 5 karma to add an extra song!',
-            '🏆 TIP: Click the Karma ring to learn more!',
+        const gameTips = [
+            '🏆 Get your song in the Top 3 to earn +5 karma!',
+            '✨ Each karma = +1 song AND +1 upvote AND +1 downvote!',
+            '💣 Watch for DELETE WINDOWS — 30 seconds of chaos!',
+            '👑 The #1 song gets the crown — fight for it!',
+            '🎵 Export to Spotify when voting ends!',
+            '⬆️ Upvote songs you want played, downvote the rest!',
+            '🔥 Songs with negative scores can get bumped!',
+            '⏳ Stay 5 min for +1 karma (loyalty bonus)!',
         ];
         let tipIndex = 0;
 
@@ -375,7 +380,7 @@ export default function HomePage() {
                 id: `tip-${Date.now()}`,
                 type: 'add',
                 userName: 'System',
-                songName: karmaTips[tipIndex % karmaTips.length],
+                songName: gameTips[tipIndex % gameTips.length],
                 timestamp: Date.now(),
             };
             setToastQueue(prev => [tip, ...prev.slice(0, 2)]); // Add tip, keep max 3
@@ -930,6 +935,15 @@ export default function HomePage() {
             {/* 🎵 PLAYLIST TITLE BAR - Always visible, below closed banner */}
             <div className="playlist-title-bar">
                 <span className="playlist-title-text">🎵 {playlistTitle}</span>
+                <button
+                    className={`export-inline-btn ${timerRunning ? 'locked' : ''}`}
+                    onClick={handleExport}
+                    disabled={timerRunning}
+                    title={timerRunning ? 'Available after voting ends' : 'Export playlist to Spotify'}
+                >
+                    <img src="/spotify-logo.png" alt="" className="spotify-icon-sm" />
+                    {timerRunning ? 'After voting' : 'Export'}
+                </button>
             </div>
 
             {/* 🔥 CHAOS MODE BANNER - Delete window active */}

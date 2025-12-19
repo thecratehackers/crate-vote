@@ -4603,7 +4603,7 @@ body::before {
 .playlist-title-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   padding: 8px 16px;
   background: linear-gradient(135deg, rgba(211, 119, 29, 0.1), rgba(224, 159, 36, 0.05));
   border-bottom: 1px solid rgba(211, 119, 29, 0.2);
@@ -4614,7 +4614,39 @@ body::before {
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--orange-primary);
-  text-align: center;
+}
+
+/* Inline export button - subtle, next to title */
+.export-inline-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #1DB954;
+  border: none;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-inline-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.4);
+}
+
+.export-inline-btn.locked {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spotify-icon-sm {
+  width: 14px;
+  height: 14px;
 }
 
 /* Activity ticker below header */
