@@ -83,6 +83,11 @@ export default function AdminPage() {
     // Shuffle state
     const [isShuffling, setIsShuffling] = useState(false);
 
+    // Delete window (chaos mode) state
+    const [isStartingDeleteWindow, setIsStartingDeleteWindow] = useState(false);
+    const [deleteWindowActive, setDeleteWindowActive] = useState(false);
+    const [deleteWindowEndTime, setDeleteWindowEndTime] = useState<number | null>(null);
+
     // Fetch playlist data (with admin heartbeat)
     const fetchPlaylist = useCallback(async () => {
         try {
@@ -591,6 +596,42 @@ export default function AdminPage() {
         }
     };
 
+    // Start delete window - grants everyone ONE delete for 30 seconds
+    const handleStartDeleteWindow = async () => {
+        if (!confirm('🗑️ START DELETE WINDOW?\n\nThis grants EVERY USER the ability to delete ONE song for 30 seconds.\n\nThis could cause chaos - use wisely!')) {
+            return;
+        }
+
+        setIsStartingDeleteWindow(true);
+        try {
+            const res = await adminFetch('/api/admin/delete-window', {
+                method: 'POST',
+                body: JSON.stringify({ duration: 30 }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setDeleteWindowActive(true);
+                setDeleteWindowEndTime(data.endTime);
+                setMessage({ type: 'success', text: '🔥 DELETE WINDOW STARTED! Everyone has 30 seconds to delete ONE song!' });
+
+                // Auto-refresh when window ends
+                setTimeout(() => {
+                    setDeleteWindowActive(false);
+                    setDeleteWindowEndTime(null);
+                    fetchPlaylist();
+                }, 30000);
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.error || 'Failed to start delete window' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to start delete window - network error' });
+        } finally {
+            setIsStartingDeleteWindow(false);
+        }
+    };
+
     // Toggle lock
     const handleToggleLock = async () => {
         try {
@@ -868,6 +909,13 @@ export default function AdminPage() {
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <button className={`admin-btn ${isLocked ? 'success' : ''}`} onClick={handleToggleLock}>
                         {isLocked ? '🔓 Unlock Playlist' : '🔒 Lock Playlist'}
+                    </button>
+                    <button
+                        className="admin-btn chaos-btn"
+                        onClick={handleStartDeleteWindow}
+                        disabled={isStartingDeleteWindow || deleteWindowActive || songs.length === 0}
+                    >
+                        {deleteWindowActive ? '🔥 DELETE WINDOW ACTIVE!' : isStartingDeleteWindow ? '⏳ Starting...' : '💣 Grant Delete Power'}
                     </button>
                     <button className="admin-btn danger" onClick={handleWipeSession}>
                         🗑️ Wipe Session

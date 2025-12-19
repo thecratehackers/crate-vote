@@ -74,6 +74,8 @@ const ACTIVITY_LOG_KEY = 'hackathon:activityLog';
 const USER_KARMA_KEY = 'hackathon:userKarma';
 const TOP3_KARMA_GRANTED_KEY = 'hackathon:top3KarmaGranted';  // Track songs that already gave top 3 karma
 const USER_LAST_ACTIVITY_KEY = 'hackathon:userLastActivity';  // Track when users were last active
+const DELETE_WINDOW_KEY = 'hackathon:deleteWindow';  // { endTime: timestamp } - when delete window is active
+const DELETE_WINDOW_USED_KEY = 'hackathon:deleteWindowUsed';  // Set of visitorIds who used their delete this window
 
 // ATOMIC VOTE KEYS - Using Redis Sets for concurrent vote safety
 // Format: hackathon:song:{songId}:upvotes and hackathon:song:{songId}:downvotes
@@ -771,6 +773,90 @@ export async function getTimerStatus(): Promise<{ endTime: number | null; runnin
     return result;
 }
 
+// ============ DELETE WINDOW (Chaos Mode) ============
+// Admin can grant everyone ONE delete for 30 seconds
+
+interface DeleteWindowData {
+    endTime: number;
+    startedBy: string;
+}
+
+// Start a new delete window (admin only)
+export async function startDeleteWindow(durationSeconds: number = 30): Promise<{ success: boolean; endTime: number }> {
+    const endTime = Date.now() + (durationSeconds * 1000);
+
+    // Clear previous window's used list and set new window
+    await redis.del(DELETE_WINDOW_USED_KEY);
+    await redis.set(DELETE_WINDOW_KEY, { endTime, startedBy: 'admin' } as DeleteWindowData);
+
+    console.log(`🗑️ DELETE WINDOW: Started ${durationSeconds}s window, ends at ${new Date(endTime).toISOString()}`);
+
+    return { success: true, endTime };
+}
+
+// Get delete window status
+export async function getDeleteWindowStatus(): Promise<{ active: boolean; endTime: number | null; remaining: number }> {
+    const window = await redis.get<DeleteWindowData>(DELETE_WINDOW_KEY);
+
+    if (!window) {
+        return { active: false, endTime: null, remaining: 0 };
+    }
+
+    const now = Date.now();
+    if (now >= window.endTime) {
+        // Window expired
+        return { active: false, endTime: null, remaining: 0 };
+    }
+
+    return {
+        active: true,
+        endTime: window.endTime,
+        remaining: window.endTime - now,
+    };
+}
+
+// Check if user can delete during window
+export async function canUserDeleteInWindow(visitorId: string): Promise<{ canDelete: boolean; reason?: string }> {
+    const windowStatus = await getDeleteWindowStatus();
+
+    if (!windowStatus.active) {
+        return { canDelete: false, reason: 'Delete window not active' };
+    }
+
+    // Check if user already used their delete this window
+    const hasUsed = await redis.sismember(DELETE_WINDOW_USED_KEY, visitorId);
+    if (hasUsed) {
+        return { canDelete: false, reason: 'Already used your delete this window' };
+    }
+
+    return { canDelete: true };
+}
+
+// User uses their delete during window
+export async function useWindowDelete(visitorId: string, songId: string): Promise<{ success: boolean; error?: string }> {
+    // Verify window is still active and user hasn't used their delete
+    const canDelete = await canUserDeleteInWindow(visitorId);
+    if (!canDelete.canDelete) {
+        return { success: false, error: canDelete.reason };
+    }
+
+    // Mark user as having used their delete
+    await redis.sadd(DELETE_WINDOW_USED_KEY, visitorId);
+
+    // Delete the song
+    const song = await redis.hget<Song>(SONGS_KEY, songId);
+    if (!song) {
+        return { success: false, error: 'Song not found' };
+    }
+
+    await redis.hdel(SONGS_KEY, songId);
+    invalidateSongsCache();
+
+    console.log(`🗑️ WINDOW DELETE: User ${visitorId} deleted "${song.name}"`);
+
+    return { success: true };
+}
+
 // ============ RESET SESSION ============
 export async function resetSession(): Promise<void> {
     console.log('🗑️ WIPE SESSION: Clearing all data from Redis...');
@@ -787,6 +873,8 @@ export async function resetSession(): Promise<void> {
         redis.del(ACTIVITY_LOG_KEY),
         redis.del(TOP3_KARMA_GRANTED_KEY),
         redis.del(USER_LAST_ACTIVITY_KEY),
+        redis.del(DELETE_WINDOW_KEY),
+        redis.del(DELETE_WINDOW_USED_KEY),
     ]);
 
     console.log('🗑️ WIPE SESSION: Complete!');

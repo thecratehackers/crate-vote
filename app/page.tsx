@@ -89,6 +89,13 @@ export default function HomePage() {
     const [playlistStats, setPlaylistStats] = useState<{ current: number; max: number; canAdd: boolean }>({ current: 0, max: 100, canAdd: true });
     const [viewerCount, setViewerCount] = useState<number>(0);
 
+    // Delete window (chaos mode) state
+    const [deleteWindow, setDeleteWindow] = useState<{ active: boolean; endTime: number | null; remaining: number; canDelete: boolean }>({
+        active: false, endTime: null, remaining: 0, canDelete: false
+    });
+    const [deleteWindowRemaining, setDeleteWindowRemaining] = useState(0);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     // Sort songs by score (like Reddit) - use useMemo to re-sort whenever scores change
     const sortedSongs = useMemo(() => {
         return [...songs].sort((a, b) => {
@@ -281,6 +288,12 @@ export default function HomePage() {
             if (data.karmaBonuses) setKarmaBonuses(data.karmaBonuses);
             if (data.playlistStats) setPlaylistStats(data.playlistStats);
             if (data.viewerCount !== undefined) setViewerCount(data.viewerCount);
+            if (data.deleteWindow) {
+                setDeleteWindow(data.deleteWindow);
+                if (data.deleteWindow.active && data.deleteWindow.remaining > 0) {
+                    setDeleteWindowRemaining(data.deleteWindow.remaining);
+                }
+            }
 
             // 📢 Process live activity from server
             if (data.recentActivity && Array.isArray(data.recentActivity)) {
@@ -498,6 +511,56 @@ export default function HomePage() {
 
         return () => clearInterval(interval);
     }, [timerRunning, timerEndTime]);
+
+    // 🔥 DELETE WINDOW COUNTDOWN - local countdown for chaos mode
+    useEffect(() => {
+        if (!deleteWindow.active || !deleteWindow.endTime) {
+            setDeleteWindowRemaining(0);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, deleteWindow.endTime! - Date.now());
+            setDeleteWindowRemaining(remaining);
+
+            if (remaining <= 0) {
+                setDeleteWindow(prev => ({ ...prev, active: false, canDelete: false }));
+                fetchPlaylist(); // Refresh when window ends
+            }
+        }, 100); // Update frequently for smooth countdown
+
+        return () => clearInterval(interval);
+    }, [deleteWindow.active, deleteWindow.endTime, fetchPlaylist]);
+
+    // 🗑️ Handle window delete (chaos mode delete)
+    const handleWindowDelete = async (songId: string) => {
+        if (!visitorId || !deleteWindow.canDelete || isDeleting) return;
+
+        setIsDeleting(true);
+        try {
+            const res = await fetch('/api/songs/window-delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-visitor-id': visitorId,
+                },
+                body: JSON.stringify({ songId }),
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '💥 Song deleted!' });
+                setDeleteWindow(prev => ({ ...prev, canDelete: false }));
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to delete' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Network error' });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     // Format timer display (supports days, hours, minutes, seconds)
     const formatTime = (ms: number) => {
@@ -910,6 +973,22 @@ export default function HomePage() {
                 <span className="playlist-title-text">🎵 {playlistTitle}</span>
             </div>
 
+            {/* 🔥 CHAOS MODE BANNER - Delete window active */}
+            {deleteWindow.active && (
+                <div className="chaos-banner">
+                    <div className="chaos-content">
+                        <span className="chaos-icon">💣</span>
+                        <span className="chaos-title">DELETE WINDOW OPEN!</span>
+                        <span className="chaos-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</span>
+                    </div>
+                    <div className="chaos-message">
+                        {deleteWindow.canDelete
+                            ? '🗑️ You can DELETE one song! Tap the trash icon on any song.'
+                            : '✓ You already used your delete this window.'}
+                    </div>
+                </div>
+            )}
+
             {isBanned && <div className="banned-banner">🚫 You've been banned from this session</div>}
 
             {/* ═══════════════════════════════════════════════════════════
@@ -1012,6 +1091,18 @@ export default function HomePage() {
                                         👎
                                     </button>
                                 </div>
+
+                                {/* 🔥 CHAOS DELETE - Only visible during delete window */}
+                                {deleteWindow.active && deleteWindow.canDelete && (
+                                    <button
+                                        className="chaos-delete-btn"
+                                        onClick={() => handleWindowDelete(song.id)}
+                                        disabled={isDeleting}
+                                        title="DELETE this song!"
+                                    >
+                                        🗑️
+                                    </button>
+                                )}
                             </div>
                         );
                     })

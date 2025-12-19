@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 
 // ============ THROTTLED BACKGROUND TASKS ============
@@ -57,13 +57,21 @@ export async function GET(request: Request) {
     }
 
     // Fetch data in parallel - most of these are cached
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
         getRecentActivity(),
         getActiveViewerCount(),
+        getDeleteWindowStatus(),
     ]);
+
+    // Check if user can delete during window
+    let canDeleteInWindow = false;
+    if (visitorId && deleteWindowStatus.active) {
+        const deleteCheck = await canUserDeleteInWindow(visitorId);
+        canDeleteInWindow = deleteCheck.canDelete;
+    }
 
     // Compute playlist stats from songs we already have (avoid extra Redis call)
     const songCount = songs.length;
@@ -95,6 +103,12 @@ export async function GET(request: Request) {
         karmaBonuses,
         playlistStats,
         viewerCount,
+        deleteWindow: {
+            active: deleteWindowStatus.active,
+            endTime: deleteWindowStatus.endTime,
+            remaining: deleteWindowStatus.remaining,
+            canDelete: canDeleteInWindow,
+        },
     });
 }
 
