@@ -83,6 +83,9 @@ export default function AdminPage() {
     // Playlist import state
     const [importPlaylistUrl, setImportPlaylistUrl] = useState('');
     const [isImporting, setIsImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState<{ total: number; current: number; stage: string } | null>(null);
+    const [importResult, setImportResult] = useState<{ imported: number; skipped: number; playlistName: string } | null>(null);
+    const [isShuffling, setIsShuffling] = useState(false);
 
     // Fetch playlist data (with admin heartbeat)
     const fetchPlaylist = useCallback(async () => {
@@ -565,7 +568,7 @@ export default function AdminPage() {
         }
     };
 
-    // Import Spotify playlist to prime the pump
+    // Import Spotify playlist
     const handleImportPlaylist = async () => {
         if (!importPlaylistUrl.trim()) {
             setMessage({ type: 'error', text: 'Please enter a Spotify playlist URL' });
@@ -573,14 +576,35 @@ export default function AdminPage() {
         }
 
         setIsImporting(true);
+        setImportResult(null);
+
+        // Animated progress stages
+        setImportProgress({ total: 0, current: 0, stage: '🔗 Connecting to Spotify...' });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setImportProgress({ total: 0, current: 0, stage: '📋 Fetching playlist info...' });
+        await new Promise(resolve => setTimeout(resolve, 300));
+
         try {
             const res = await adminFetch('/api/admin/import-playlist', {
                 method: 'POST',
                 body: JSON.stringify({ playlistUrl: importPlaylistUrl.trim() }),
             });
+
+            setImportProgress({ total: 0, current: 0, stage: '🎵 Adding songs to your playlist...' });
             const data = await res.json();
 
             if (res.ok) {
+                setImportProgress({
+                    total: data.imported + data.skipped,
+                    current: data.imported + data.skipped,
+                    stage: `✅ Done! ${data.imported} songs imported`
+                });
+
+                setImportResult({
+                    imported: data.imported,
+                    skipped: data.skipped,
+                    playlistName: data.playlistName
+                });
                 setMessage({
                     type: 'success',
                     text: `✅ Imported ${data.imported} songs from "${data.playlistName}"${data.skipped > 0 ? ` (${data.skipped} duplicates skipped)` : ''}`
@@ -589,12 +613,44 @@ export default function AdminPage() {
                 setPlaylistTitle(data.playlistName);
                 fetchPlaylist();
             } else {
+                setImportProgress({ total: 0, current: 0, stage: '❌ ' + (data.error || 'Import failed') });
                 setMessage({ type: 'error', text: data.error || 'Failed to import playlist' });
             }
         } catch (error) {
+            setImportProgress({ total: 0, current: 0, stage: '❌ Network error' });
             setMessage({ type: 'error', text: 'Failed to import playlist - network error' });
         } finally {
+            // Keep the final status visible briefly
+            await new Promise(resolve => setTimeout(resolve, 1500));
             setIsImporting(false);
+            setImportProgress(null);
+        }
+    };
+
+    // Shuffle all songs in the playlist
+    const handleShufflePlaylist = async () => {
+        if (songs.length < 2) {
+            setMessage({ type: 'error', text: 'Need at least 2 songs to shuffle!' });
+            return;
+        }
+
+        setIsShuffling(true);
+        try {
+            const res = await adminFetch('/api/admin/shuffle-playlist', {
+                method: 'POST',
+            });
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: '🔀 Playlist shuffled! Songs randomized.' });
+                fetchPlaylist();
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.error || 'Failed to shuffle' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to shuffle - network error' });
+        } finally {
+            setIsShuffling(false);
         }
     };
 
@@ -786,9 +842,13 @@ export default function AdminPage() {
                 )}
             </div>
 
-            {/* 📥 IMPORT SPOTIFY PLAYLIST */}
+            {/* 📥 PRIME THE PUMP - IMPORT SPOTIFY PLAYLIST */}
             <div className="import-playlist-panel">
-                <label>📥 Import Spotify Playlist (prime the pump with songs):</label>
+                <div className="import-header">
+                    <h3>🎧 Prime the Pump</h3>
+                    <p className="import-subtitle">Import a Spotify playlist to pre-populate songs before starting a session. Perfect for giving users something to vote on right away!</p>
+                </div>
+
                 <div className="import-row">
                     <input
                         type="text"
@@ -798,14 +858,69 @@ export default function AdminPage() {
                         disabled={isImporting}
                     />
                     <button
-                        className="admin-btn success"
+                        className="admin-btn success import-btn"
                         onClick={handleImportPlaylist}
                         disabled={isImporting || !importPlaylistUrl.trim()}
                     >
-                        {isImporting ? '⏳ Importing...' : '📥 Import'}
+                        {isImporting ? (
+                            <><span className="spinner-small"></span> Importing...</>
+                        ) : (
+                            <>📥 Import Playlist</>
+                        )}
                     </button>
                 </div>
-                <p className="import-hint">Imports up to 100 songs from a public Spotify playlist. Perfect for starting a session with seed tracks!</p>
+
+                {/* Progress indicator with animated stages */}
+                {isImporting && importProgress && (
+                    <div className="import-progress active">
+                        <div className="progress-bar-track">
+                            <div className="progress-bar-fill animated" />
+                        </div>
+                        <div className="progress-status">
+                            <span className="progress-stage">{importProgress.stage}</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Import result summary with actions */}
+                {importResult && !isImporting && (
+                    <div className="import-result-summary">
+                        <div className="result-main">
+                            <span className="result-checkmark">✅</span>
+                            <span className="result-text">
+                                <strong>{importResult.imported}</strong> songs imported from "{importResult.playlistName}"
+                                {importResult.skipped > 0 && <span className="skipped-note"> ({importResult.skipped} duplicates skipped)</span>}
+                            </span>
+                        </div>
+                        <div className="result-actions">
+                            <button
+                                className="admin-btn shuffle-btn"
+                                onClick={handleShufflePlaylist}
+                                disabled={isShuffling || songs.length < 2}
+                            >
+                                {isShuffling ? '🔄 Shuffling...' : '🔀 Shuffle Order'}
+                            </button>
+                            <span className="result-hint">Ready! Start the session when you want users to begin voting.</span>
+                        </div>
+                    </div>
+                )}
+
+                {!importResult && !isImporting && songs.length > 0 && (
+                    <div className="import-existing-hint">
+                        <span>💡 You have {songs.length} songs loaded.</span>
+                        <button
+                            className="admin-btn shuffle-btn small"
+                            onClick={handleShufflePlaylist}
+                            disabled={isShuffling || songs.length < 2}
+                        >
+                            {isShuffling ? '🔄...' : '🔀 Shuffle'}
+                        </button>
+                    </div>
+                )}
+
+                {!importResult && !isImporting && songs.length === 0 && (
+                    <p className="import-hint">📋 Imports up to 100 songs from any public Spotify playlist. Songs will appear below ready for voting.</p>
+                )}
             </div>
 
             {/* Timer Control Panel */}

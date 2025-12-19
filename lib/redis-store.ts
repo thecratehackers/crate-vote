@@ -265,6 +265,44 @@ export async function getPlaylistStats(): Promise<{ current: number; max: number
     }
 }
 
+// Shuffle playlist - randomize the order by giving each song a random addedAt timestamp
+// This effectively randomizes the order when songs are sorted by addedAt (secondary sort after score)
+export async function shufflePlaylist(): Promise<{ success: boolean; error?: string; shuffledCount: number }> {
+    try {
+        const allSongs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+        const songList = Object.values(allSongs);
+
+        if (songList.length < 2) {
+            return { success: false, error: 'Need at least 2 songs to shuffle', shuffledCount: 0 };
+        }
+
+        // Generate random timestamps for each song within a small window
+        // This ensures the shuffle is randomized but all songs are "added" at roughly the same time
+        const baseTime = Date.now();
+        const shuffledSongs = songList.map(song => ({
+            ...song,
+            addedAt: baseTime + Math.floor(Math.random() * 10000), // Random within 10 seconds
+        }));
+
+        // Update all songs in Redis
+        const updates: Record<string, Song> = {};
+        for (const song of shuffledSongs) {
+            updates[song.id] = song;
+        }
+
+        await redis.hset(SONGS_KEY, updates);
+
+        // Invalidate cache
+        invalidateSongsCache();
+
+        console.log(`🔀 Shuffled ${songList.length} songs`);
+        return { success: true, shuffledCount: songList.length };
+    } catch (error) {
+        console.error('Failed to shuffle playlist:', error);
+        return { success: false, error: 'Database error', shuffledCount: 0 };
+    }
+}
+
 export async function addSong(
     song: Omit<Song, 'upvotes' | 'downvotes' | 'addedAt'>,
     visitorId: string

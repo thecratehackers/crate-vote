@@ -3465,6 +3465,77 @@ body::before {
   margin-bottom: 0;
 }
 
+/* Import progress bar */
+.import-progress {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-bar-track {
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--orange-primary), var(--gold));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-bar-fill.indeterminate {
+  width: 30%;
+  animation: indeterminateProgress 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminateProgress {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  50% {
+    transform: translateX(200%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.progress-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Import result summary */
+.import-result-summary {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  color: #22c55e;
+}
+
+.import-result-summary strong {
+  color: #22c55e;
+}
+
+.import-result-summary .skipped-note {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.import-result-summary .result-hint {
+  color: var(--orange-primary);
+  font-weight: 500;
+}
+
 @media (max-width: 768px) {
   .import-row {
     flex-direction: column;
@@ -3478,6 +3549,281 @@ body::before {
 
   .import-row button {
     width: 100%;
+  }
+}
+
+/* Enhanced Import Panel - Prime the Pump */
+.import-playlist-panel {
+  background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 25, 20, 0.95) 100%);
+  border: 2px solid rgba(211, 119, 29, 0.3);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.import-playlist-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--orange-primary), var(--gold), var(--orange-primary));
+  animation: importGradient 3s linear infinite;
+}
+
+@keyframes importGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.import-header {
+  margin-bottom: 16px;
+}
+
+.import-header h3 {
+  font-family: 'Rubik', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--orange-primary);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.import-row input {
+  flex: 1;
+  min-width: 300px;
+  padding: 14px 18px;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.import-row input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+  box-shadow: 0 0 0 3px rgba(211, 119, 29, 0.15);
+}
+
+.import-row input::placeholder {
+  color: var(--text-muted);
+}
+
+.import-btn {
+  padding: 14px 24px !important;
+  font-size: 0.95rem !important;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Progress with animation */
+.import-progress.active {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(211, 119, 29, 0.2);
+}
+
+.import-progress .progress-bar-track {
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-bar-fill.animated {
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, var(--orange-primary), var(--gold), var(--orange-primary));
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: progressSlide 1.5s ease-in-out infinite;
+}
+
+@keyframes progressSlide {
+  0% {
+    transform: translateX(-100%);
+    width: 30%;
+  }
+
+  50% {
+    transform: translateX(200%);
+    width: 30%;
+  }
+
+  100% {
+    transform: translateX(-100%);
+    width: 30%;
+  }
+}
+
+.progress-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-stage {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Import result with actions */
+.import-result-summary {
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: var(--radius-lg);
+}
+
+.import-result-summary .result-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.result-checkmark {
+  font-size: 1.3rem;
+}
+
+.result-text {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.result-text strong {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.result-text .skipped-note {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.shuffle-btn {
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.2) 0%, rgba(224, 159, 36, 0.2) 100%) !important;
+  border: 1px solid var(--orange-primary) !important;
+  color: var(--orange-primary) !important;
+  padding: 8px 16px !important;
+  font-size: 0.85rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.shuffle-btn:hover:not(:disabled) {
+  background: var(--orange-primary) !important;
+  color: white !important;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(211, 119, 29, 0.3);
+}
+
+.shuffle-btn.small {
+  padding: 6px 12px !important;
+  font-size: 0.8rem !important;
+}
+
+.result-actions .result-hint {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+/* Existing songs hint */
+.import-existing-hint {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(211, 119, 29, 0.08);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(211, 119, 29, 0.15);
+}
+
+.import-existing-hint span:first-child {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.import-hint {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .import-playlist-panel {
+    padding: 16px;
+  }
+
+  .import-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .import-row input {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .import-btn {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .result-actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
