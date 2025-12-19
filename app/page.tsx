@@ -1206,51 +1206,31 @@ export default function HomePage() {
                 </div>
             </header>
 
-            {/* 🔔 ACTIVITY FEED - Below header, in content flow */}
-            {toastQueue.length > 0 && (
-                <div className="activity-ticker">
-                    {toastQueue.slice(0, 2).map((activity: ActivityItem) => (
-                        <span key={activity.id} className={`ticker-item ${activity.type}`}>
-                            {activity.userName === 'System' ? activity.songName : (
+            {/* 📦 PLAYLIST HEADER - Title + Activity ticker in fixed-height banner */}
+            <div className="playlist-header-bar">
+                <div className="playlist-header-left">
+                    <span className="playlist-title-text">📦 {playlistTitle}</span>
+                </div>
+
+                {/* 🔔 ACTIVITY TICKER - Middle area, fixed height, doesn't push content */}
+                <div className="activity-ticker-inline">
+                    {toastQueue.length > 0 ? (
+                        <span className={`ticker-item-inline ${toastQueue[0].type}`}>
+                            {toastQueue[0].userName === 'System' ? toastQueue[0].songName : (
                                 <>
-                                    {activity.type === 'add' && `💿 ${activity.userName} added "${activity.songName}"`}
-                                    {activity.type === 'upvote' && `👍 ${activity.userName} upvoted`}
-                                    {activity.type === 'downvote' && `👎 ${activity.userName} downvoted`}
+                                    {toastQueue[0].type === 'add' && `💿 ${toastQueue[0].userName} added "${toastQueue[0].songName.length > 18 ? toastQueue[0].songName.slice(0, 18) + '…' : toastQueue[0].songName}"`}
+                                    {toastQueue[0].type === 'upvote' && `👍 ${toastQueue[0].userName} upvoted`}
+                                    {toastQueue[0].type === 'downvote' && `👎 ${toastQueue[0].userName} downvoted`}
                                 </>
                             )}
                         </span>
-                    ))}
+                    ) : (
+                        <span className="ticker-placeholder">
+                            {timerRunning ? currentShoutout || '🎵 Vote for your favorites!' : 'Waiting for session...'}
+                        </span>
+                    )}
                 </div>
-            )}
 
-            {/* ═══════════════════════════════════════════════════════════
-                VOTING CLOSED BANNER (when session not active)
-               ═══════════════════════════════════════════════════════════ */}
-            {
-                !timerRunning && !isBanned && (
-                    <div className="voting-closed-banner">
-                        <div className="closed-message">
-                            <strong>⏳ Voting session not active</strong>
-                            <p style={{ fontSize: '0.9rem', margin: '8px 0 0', opacity: 0.9 }}>
-                                When a session starts, you'll be able to add songs and vote. Check back soon!
-                            </p>
-                        </div>
-                        {songs.length > 0 && (
-                            <div className="closed-actions">
-                                <p style={{ fontSize: '0.85rem', margin: '0 0 8px', opacity: 0.8 }}>Want the current playlist?</p>
-                                <button onClick={handleExport} className="action-btn spotify-btn" disabled={isExporting}>
-                                    <img src="/spotify-logo.png" alt="Spotify" className="spotify-logo-icon" />
-                                    {isExporting ? 'Redirecting...' : 'Export to Spotify'}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )
-            }
-
-            {/* 📦 PLAYLIST TITLE BAR - Always visible, below closed banner */}
-            <div className="playlist-title-bar">
-                <span className="playlist-title-text">📦 {playlistTitle}</span>
                 <button
                     className={`export-inline-btn ${timerRunning ? 'locked' : ''}`}
                     onClick={handleExport}
@@ -1258,7 +1238,7 @@ export default function HomePage() {
                     title={timerRunning ? 'Available after voting ends' : 'Export playlist to Spotify'}
                 >
                     <img src="/spotify-logo.png" alt="" className="spotify-icon-sm" />
-                    {isExporting ? '...' : timerRunning ? 'After voting' : 'Export'}
+                    {isExporting ? '...' : timerRunning ? 'After' : 'Export'}
                 </button>
             </div>
 
@@ -1301,10 +1281,13 @@ export default function HomePage() {
 
                         {showResults && searchResults.length > 0 && (
                             <div className="search-dropdown-stream">
+                                <div className="search-results-header">
+                                    🔍 SEARCH RESULTS <span className="header-hint">Tap to add →</span>
+                                </div>
                                 {searchResults.slice(0, 5).map((track) => (
                                     <div
                                         key={track.id}
-                                        className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''}`}
+                                        className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
                                         onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
                                     >
                                         <img src={track.albumArt || '/placeholder.svg'} alt="" />
@@ -1315,9 +1298,9 @@ export default function HomePage() {
                                         {isAddingSong === track.id ? (
                                             <span className="adding-spinner">⏳</span>
                                         ) : isSongInPlaylist(track.id) ? (
-                                            <span className="already-added">✓</span>
+                                            <span className="already-added">✓ Added</span>
                                         ) : (
-                                            <span className="add-btn-stream">+</span>
+                                            <span className="add-btn-stream">+ ADD</span>
                                         )}
                                     </div>
                                 ))}

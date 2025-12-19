@@ -47,9 +47,15 @@ interface ActivityItem {
     timestamp: number;
 }
 
+// Tab type for admin panel navigation
+type AdminTab = 'activity' | 'users' | 'playlist' | 'tools';
+
 export default function AdminPage() {
     const { data: session } = useSession();
     const [adminPassword, setAdminPassword] = useState('');
+
+    // Tab navigation state - default to activity for live monitoring
+    const [activeTab, setActiveTab] = useState<AdminTab>('activity');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [songs, setSongs] = useState<Song[]>([]);
     const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
@@ -1195,65 +1201,37 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="stats-panel">
-                <div className="stat-card">
-                    <div className="value">{stats.totalSongs}</div>
-                    <div className="label">Songs</div>
+            {/* Compact Stats Bar - Always visible */}
+            <div className="admin-stats-bar">
+                <div className="stat-mini" data-tooltip="Total tracks in playlist">
+                    <span className="stat-value">{stats.totalSongs}</span>
+                    <span className="stat-label">🎵</span>
                 </div>
-                <div className="stat-card">
-                    <div className="value">{stats.totalVotes}</div>
-                    <div className="label">Total Votes</div>
+                <div className="stat-mini" data-tooltip="Total votes cast">
+                    <span className="stat-value">{stats.totalVotes}</span>
+                    <span className="stat-label">🗳️</span>
                 </div>
-                <div className="stat-card">
-                    <div className="value">{stats.uniqueVoters}</div>
-                    <div className="label">Unique Voters</div>
+                <div className="stat-mini" data-tooltip="Unique participants">
+                    <span className="stat-value">{stats.uniqueVoters}</span>
+                    <span className="stat-label">👥</span>
                 </div>
-            </div>
-
-            {/* Admin controls */}
-            <div className="admin-bar">
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    {/* 1. Shuffle Playlist */}
-                    <button
-                        className="admin-btn shuffle-btn"
-                        onClick={handleShufflePlaylist}
-                        disabled={isShuffling || songs.length < 2}
-                    >
-                        {isShuffling ? '🔀 Shuffling...' : '🔀 Shuffle Playlist'}
-                    </button>
-
-                    {/* 2. The Purge */}
-                    <button
-                        className="admin-btn chaos-btn"
-                        onClick={handleStartDeleteWindow}
-                        disabled={isStartingDeleteWindow || deleteWindowActive || songs.length === 0}
-                    >
-                        {deleteWindowActive ? '💀 THE PURGE ACTIVE!' : isStartingDeleteWindow ? '⏳ Starting...' : '💀 The Purge'}
-                    </button>
-
-                    {/* 3. Wipe Session */}
-                    <button className="admin-btn danger" onClick={handleWipeSession} disabled={isWiping}>
-                        {isWiping ? '⏳ Wiping...' : '🗑️ Wipe Session'}
-                    </button>
-
-                    {/* 5. Lock Playlist */}
-                    <button className={`admin-btn ${isLocked ? 'success' : ''}`} onClick={handleToggleLock} disabled={isTogglingLock}>
-                        {isTogglingLock ? '⏳...' : isLocked ? '🔓 Unlock Playlist' : '🔒 Lock Playlist'}
-                    </button>
-
-                    {/* 6. Export to Spotify */}
-                    <button className="admin-btn spotify-green" onClick={handleExportSpotify} disabled={songs.length === 0 || isExportingSpotify}>
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: 6 }}>
-                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                        </svg>
-                        {isExportingSpotify ? 'Exporting...' : 'Export to Spotify'}
-                    </button>
+                <div className="stat-mini" data-tooltip="Active users now">
+                    <span className="stat-value">{activeUsers.length}</span>
+                    <span className="stat-label">🟢</span>
                 </div>
             </div>
 
+            {/* Quick Actions - Always visible, most used features */}
+            <div className="admin-quick-actions">
+                <button className={`quick-action-btn ${isLocked ? 'locked' : ''}`} onClick={handleToggleLock} disabled={isTogglingLock}>
+                    {isTogglingLock ? '⏳' : isLocked ? '🔓' : '🔒'}
+                </button>
+                <button className="quick-action-btn spotify" onClick={handleExportSpotify} disabled={songs.length === 0 || isExportingSpotify} title="Export to Spotify">
+                    {isExportingSpotify ? '⏳' : '🎶'}
+                </button>
+            </div>
 
-            {/* 🔒 CONFIRMATION MODAL - Custom modal that won't flicker */}
+            {/* 🔒 CONFIRMATION MODAL */}
             {confirmModal.isOpen && (
                 <div className="modal-overlay" style={{
                     position: 'fixed',
@@ -1277,42 +1255,21 @@ export default function AdminPage() {
                         textAlign: 'center',
                         boxShadow: '0 0 40px rgba(255, 107, 53, 0.4)',
                     }}>
-                        <h2 style={{
-                            fontSize: '1.5rem',
-                            color: '#fff',
-                            marginBottom: '16px',
-                        }}>
+                        <h2 style={{ fontSize: '1.5rem', color: '#fff', marginBottom: '16px' }}>
                             {confirmModal.title}
                         </h2>
-                        <p style={{
-                            color: 'rgba(255,255,255,0.8)',
-                            marginBottom: '24px',
-                            whiteSpace: 'pre-line',
-                            lineHeight: 1.5,
-                        }}>
+                        <p style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '24px', whiteSpace: 'pre-line', lineHeight: 1.5 }}>
                             {confirmModal.message}
                         </p>
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                            <button
-                                className="admin-btn"
-                                onClick={closeConfirmModal}
-                                style={{ minWidth: '100px' }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="admin-btn danger"
-                                onClick={handleConfirmAction}
-                                style={{ minWidth: '120px' }}
-                            >
-                                {confirmModal.confirmText}
-                            </button>
+                            <button className="admin-btn" onClick={closeConfirmModal} style={{ minWidth: '100px' }}>Cancel</button>
+                            <button className="admin-btn danger" onClick={handleConfirmAction} style={{ minWidth: '120px' }}>{confirmModal.confirmText}</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Messages */}
+            {/* Messages - Always visible */}
             {message && (
                 <div className={`message ${message.type}`}>
                     {message.type === 'success' ? '✓' : '✕'} {message.text}
@@ -1322,255 +1279,210 @@ export default function AdminPage() {
             {/* Export URL */}
             {exportUrl && (
                 <div className="message success">
-                    ✓ Playlist created!{' '}
-                    <a href={exportUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 'bold' }}>
-                        Open in Spotify →
-                    </a>
+                    ✓ Created! <a href={exportUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 'bold' }}>Open →</a>
                 </div>
             )}
 
-            {/* 📢 LIVE ACTIVITY FEED - For admin commentary */}
-            <div className="live-activity-section">
-                <h3>📢 Live Activity Feed</h3>
-                <div className="activity-log">
-                    {recentActivity.length === 0 ? (
-                        <p className="no-activity">No recent activity. Waiting for users...</p>
-                    ) : (
-                        recentActivity.map(activity => {
-                            const timeAgo = Math.floor((Date.now() - activity.timestamp) / 1000);
-                            const timeStr = timeAgo < 5 ? 'just now' :
-                                timeAgo < 60 ? `${timeAgo}s ago` :
-                                    `${Math.floor(timeAgo / 60)}m ago`;
-
-                            return (
-                                <div key={activity.id} className={`activity-log-item ${activity.type}`}>
-                                    <span className="activity-type-icon">
-                                        {activity.type === 'add' ? '💿' : activity.type === 'upvote' ? '👍' : '👎'}
-                                    </span>
-                                    <span className="activity-user">{activity.userName}</span>
-                                    <span className="activity-action">
-                                        {activity.type === 'add' ? 'added' : activity.type === 'upvote' ? 'upvoted' : 'downvoted'}
-                                    </span>
-                                    <span className="activity-song">"{activity.songName}"</span>
-                                    <span className="activity-time">{timeStr}</span>
-                                    {/* Activity action buttons - appear on hover */}
-                                    <div className="activity-actions">
-                                        {/* Delete just this activity */}
-                                        <button
-                                            className="delete-activity-btn"
-                                            onClick={() => handleDeleteActivity(activity.id, activity.songName)}
-                                            title="Remove from activity feed"
-                                        >
-                                            🗑️
-                                        </button>
-                                        {/* Quick ban button - hidden for admins */}
-                                        {!activity.userName.toLowerCase().includes('admin') && (
-                                            <button
-                                                className="quick-ban-btn"
-                                                onClick={() => handleQuickBan(activity.visitorId, activity.userName)}
-                                                title={`Ban ${activity.userName} instantly`}
-                                            >
-                                                ❌
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
+            {/* TAB NAVIGATION - Mobile-first tabs */}
+            <div className="admin-tabs">
+                <button
+                    className={`admin-tab ${activeTab === 'activity' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('activity')}
+                >
+                    <span className="tab-icon">📢</span>
+                    <span className="tab-label">Live</span>
+                    {recentActivity.length > 0 && <span className="tab-badge">{recentActivity.length}</span>}
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'users' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('users')}
+                >
+                    <span className="tab-icon">👥</span>
+                    <span className="tab-label">Users</span>
+                    {activeUsers.length > 0 && <span className="tab-badge">{activeUsers.length}</span>}
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'playlist' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('playlist')}
+                >
+                    <span className="tab-icon">🎵</span>
+                    <span className="tab-label">Playlist</span>
+                    {songs.length > 0 && <span className="tab-badge">{songs.length}</span>}
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'tools' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('tools')}
+                >
+                    <span className="tab-icon">⚙️</span>
+                    <span className="tab-label">Tools</span>
+                </button>
             </div>
 
-            {/* Active Users Section */}
-            <div className="active-users-section">
-                <h3>👥 Active Participants ({activeUsers.length})</h3>
-                {activeUsers.length === 0 ? (
-                    <p className="no-users">No participants yet. Start a session!</p>
-                ) : (
-                    <div className="users-grid">
-                        {activeUsers.map(user => {
-                            const minutesAgo = user.lastActivity ? Math.floor((Date.now() - user.lastActivity) / 60000) : null;
-                            const isRecentlyActive = minutesAgo !== null && minutesAgo < 2;
+            {/* TAB CONTENT */}
+            <div className="admin-tab-content">
 
-                            return (
-                                <div key={user.visitorId} className={`user-card ${user.isBanned ? 'banned' : ''} ${isRecentlyActive ? 'recently-active' : ''}`}>
-                                    <div className="user-info">
-                                        <span className="user-name">
-                                            {isRecentlyActive && <span className="active-dot">●</span>}
-                                            {user.name}
-                                            {user.name.toLowerCase().includes('admin') && <span className="admin-badge">ADMIN</span>}
-                                        </span>
-                                        <span className="user-songs">{user.songsAdded} song{user.songsAdded !== 1 ? 's' : ''}</span>
-                                        {user.karma > 0 && <span className="user-karma">⭐ {user.karma}</span>}
-                                        {minutesAgo !== null && (
-                                            <span className={`user-activity ${isRecentlyActive ? 'recent' : ''}`}>
-                                                {minutesAgo === 0 ? 'just now' : minutesAgo === 1 ? '1m ago' : `${minutesAgo}m ago`}
+                {/* ACTIVITY TAB */}
+                {activeTab === 'activity' && (
+                    <div className="tab-panel activity-panel">
+                        <div className="activity-log compact">
+                            {recentActivity.length === 0 ? (
+                                <p className="no-activity">Waiting for activity...</p>
+                            ) : (
+                                recentActivity.map(activity => {
+                                    const timeAgo = Math.floor((Date.now() - activity.timestamp) / 1000);
+                                    const timeStr = timeAgo < 5 ? 'now' : timeAgo < 60 ? `${timeAgo}s` : `${Math.floor(timeAgo / 60)}m`;
+                                    return (
+                                        <div key={activity.id} className={`activity-log-item ${activity.type}`}>
+                                            <span className="activity-type-icon">
+                                                {activity.type === 'add' ? '💿' : activity.type === 'upvote' ? '👍' : '👎'}
                                             </span>
-                                        )}
-                                    </div>
-                                    <div className="user-actions">
-                                        {!user.isBanned && (
-                                            <div className="karma-dropdown-wrapper">
-                                                <select
-                                                    className="karma-select"
-                                                    defaultValue=""
-                                                    onChange={(e) => {
-                                                        if (e.target.value) {
-                                                            handleGrantKarma(user.visitorId, user.name, Number(e.target.value));
-                                                            e.target.value = '';
-                                                        }
-                                                    }}
-                                                    title="Grant Karma"
-                                                >
-                                                    <option value="" disabled>+⭐</option>
-                                                    <option value="5">+5 (1 song)</option>
-                                                    <option value="10">+10 (2 songs)</option>
-                                                    <option value="25">+25 (5 songs)</option>
-                                                    <option value="50">+50 (10 songs)</option>
-                                                </select>
+                                            <span className="activity-user">{activity.userName}</span>
+                                            <span className="activity-song">"{activity.songName.length > 20 ? activity.songName.slice(0, 20) + '…' : activity.songName}"</span>
+                                            <span className="activity-time">{timeStr}</span>
+                                            <div className="activity-actions">
+                                                <button className="delete-activity-btn" onClick={() => handleDeleteActivity(activity.id, activity.songName)} title="Remove">🗑️</button>
+                                                {!activity.userName.toLowerCase().includes('admin') && (
+                                                    <button className="quick-ban-btn" onClick={() => handleQuickBan(activity.visitorId, activity.userName)} title="Ban">❌</button>
+                                                )}
                                             </div>
-                                        )}
-                                        {!user.isBanned ? (
-                                            <button
-                                                className="kick-btn"
-                                                onClick={() => handleBanUserDirect(user.visitorId, user.name)}
-                                                title="Kick user"
-                                            >
-                                                ❌
-                                            </button>
-                                        ) : (
-                                            <span className="banned-label">BANNED</span>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
                 )}
-            </div>
 
-            {/* Admin Song Search */}
-            <div className="admin-search-section">
-                <h3>➕ Add Songs (Unlimited)</h3>
-                <div className="search-compact" style={{ position: 'relative' }}>
-                    <input
-                        type="text"
-                        placeholder="🔍 Search songs to add..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
-                        onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
-                        style={{
-                            width: '100%',
-                            padding: '12px 16px',
-                            background: 'var(--bg-tertiary)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '8px',
-                            color: 'var(--text-primary)',
-                            fontSize: '1rem',
-                        }}
-                    />
-                    {isSearching && <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>...</span>}
-
-                    {showSearchResults && searchResults.length > 0 && (
-                        <div className="search-dropdown" style={{
-                            position: 'absolute',
-                            top: 'calc(100% + 6px)',
-                            left: 0,
-                            right: 0,
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                            zIndex: 100,
-                            maxHeight: '300px',
-                            overflowY: 'auto',
-                        }}>
-                            {searchResults.slice(0, 5).map((track) => (
-                                <div key={track.id} style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '12px',
-                                    padding: '10px 14px',
-                                    cursor: 'pointer',
-                                    borderBottom: '1px solid var(--border-color)',
-                                }} onClick={() => handleAdminAddSong(track)}>
-                                    <img src={track.albumArt || '/placeholder.svg'} alt="" style={{ width: 40, height: 40, borderRadius: 4 }} />
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</div>
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--orange-primary)' }}>{track.artist}</div>
-                                    </div>
-                                    {isSongInPlaylist(track.id) ? (
-                                        <span style={{ color: 'var(--text-muted)' }}>✓</span>
-                                    ) : (
-                                        <span style={{ color: 'var(--success)', fontWeight: 700 }}>+</span>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Playlist - Admin GOD MODE */}
-            <div className="admin-playlist">
-                <h3>📦 Playlist ({songs.length} tracks)</h3>
-                {songs.length === 0 ? (
-                    <div className="playlist-empty">
-                        <div className="icon">�</div>
-                        <p>No songs yet. Use the search above to add songs!</p>
-                    </div>
-                ) : (
-                    <div className="song-list-admin">
-                        {songs.map((song, index) => (
-                            <div key={song.id} className={`song-row-admin ${index < 3 ? 'top-song' : ''}`}>
-                                {/* Rank */}
-                                <span className={`rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}>
-                                    {index === 0 ? '👑' : `#${index + 1}`}
-                                </span>
-
-                                {/* Album Art */}
-                                <img src={song.albumArt || '/placeholder.svg'} alt={song.album} className="album-thumb" />
-
-                                {/* Song Info */}
-                                <div className="song-info-admin">
-                                    <span className="song-title">{song.name}</span>
-                                    <span className="song-artist">{song.artist}</span>
-                                    <span className="song-added-by">Added by {song.addedByName || 'Anonymous'}</span>
-                                </div>
-
-                                {/* Voting - matching homepage green/red style */}
-                                <div className="vote-inline admin-votes">
-                                    <button
-                                        className={`thumb-btn up ${adminVotes[song.id] === 1 ? 'active' : ''}`}
-                                        onClick={() => handleAdminVote(song.id, 1)}
-                                        title="Upvote (admin)"
-                                    >
-                                        👍
-                                    </button>
-                                    <span className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}>
-                                        {song.score > 0 ? '+' : ''}{song.score}
-                                    </span>
-                                    <button
-                                        className={`thumb-btn down ${adminVotes[song.id] === -1 ? 'active' : ''}`}
-                                        onClick={() => handleAdminVote(song.id, -1)}
-                                        title="Downvote (admin)"
-                                    >
-                                        👎
-                                    </button>
-                                </div>
-
-                                {/* DELETE - Admin only, always visible */}
-                                <button
-                                    className={`admin-delete-btn ${isDeletingSong === song.id ? 'deleting' : ''}`}
-                                    onClick={() => handleRemoveSong(song.id)}
-                                    title="Delete song permanently"
-                                    disabled={isDeletingSong === song.id}
-                                >
-                                    {isDeletingSong === song.id ? '⏳' : '🗑️'}
-                                </button>
+                {/* USERS TAB */}
+                {activeTab === 'users' && (
+                    <div className="tab-panel users-panel">
+                        {activeUsers.length === 0 ? (
+                            <p className="no-users">No participants yet</p>
+                        ) : (
+                            <div className="users-grid compact">
+                                {activeUsers.map(user => {
+                                    const minutesAgo = user.lastActivity ? Math.floor((Date.now() - user.lastActivity) / 60000) : null;
+                                    const isRecentlyActive = minutesAgo !== null && minutesAgo < 2;
+                                    return (
+                                        <div key={user.visitorId} className={`user-card-mini ${user.isBanned ? 'banned' : ''} ${isRecentlyActive ? 'active' : ''}`}>
+                                            <div className="user-main">
+                                                {isRecentlyActive && <span className="pulse-dot">●</span>}
+                                                <span className="user-name">{user.name}</span>
+                                                {user.karma > 0 && <span className="karma-badge">⭐{user.karma}</span>}
+                                            </div>
+                                            <div className="user-meta">
+                                                <span>{user.songsAdded}🎵</span>
+                                                {minutesAgo !== null && <span className="time-ago">{minutesAgo === 0 ? 'now' : `${minutesAgo}m`}</span>}
+                                            </div>
+                                            <div className="user-actions-mini">
+                                                {!user.isBanned && (
+                                                    <>
+                                                        <select
+                                                            className="karma-select-mini"
+                                                            defaultValue=""
+                                                            onChange={(e) => { if (e.target.value) { handleGrantKarma(user.visitorId, user.name, Number(e.target.value)); e.target.value = ''; } }}
+                                                        >
+                                                            <option value="" disabled>+⭐</option>
+                                                            <option value="5">+5</option>
+                                                            <option value="10">+10</option>
+                                                            <option value="25">+25</option>
+                                                        </select>
+                                                        <button className="kick-btn-mini" onClick={() => handleBanUserDirect(user.visitorId, user.name)}>❌</button>
+                                                    </>
+                                                )}
+                                                {user.isBanned && <span className="banned-tag">BANNED</span>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        ))}
+                        )}
+                    </div>
+                )}
+
+                {/* PLAYLIST TAB */}
+                {activeTab === 'playlist' && (
+                    <div className="tab-panel playlist-panel">
+                        {/* Add Song Search - Compact */}
+                        <div className="search-inline" style={{ position: 'relative', marginBottom: '12px' }}>
+                            <input
+                                type="text"
+                                placeholder="🔍 Add song..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                                onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                                className="search-input-compact"
+                            />
+                            {isSearching && <span className="search-spinner">...</span>}
+                            {showSearchResults && searchResults.length > 0 && (
+                                <div className="search-dropdown-compact">
+                                    <div className="search-results-header-compact">
+                                        🔍 SPOTIFY RESULTS <span className="header-hint">Click to add →</span>
+                                    </div>
+                                    {searchResults.slice(0, 5).map((track) => (
+                                        <div key={track.id} className={`search-result-compact ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`} onClick={() => handleAdminAddSong(track)}>
+                                            <img src={track.albumArt || '/placeholder.svg'} alt="" className="result-thumb" />
+                                            <div className="result-info">
+                                                <span className="result-name">{track.name}</span>
+                                                <span className="result-artist">{track.artist}</span>
+                                            </div>
+                                            {isSongInPlaylist(track.id) ? <span className="in-list">✓ Added</span> : <span className="add-icon">+ ADD</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Song List - Compact */}
+                        {songs.length === 0 ? (
+                            <div className="empty-state">📦 No songs yet</div>
+                        ) : (
+                            <div className="song-list-compact">
+                                {songs.map((song, index) => (
+                                    <div key={song.id} className={`song-row-compact ${index < 3 ? 'top' : ''}`}>
+                                        <span className="rank-mini">{index === 0 ? '👑' : `#${index + 1}`}</span>
+                                        <img src={song.albumArt || '/placeholder.svg'} alt="" className="thumb-mini" />
+                                        <div className="song-info-mini">
+                                            <span className="song-name">{song.name.length > 25 ? song.name.slice(0, 25) + '…' : song.name}</span>
+                                            <span className="song-artist">{song.artist}</span>
+                                        </div>
+                                        <div className="vote-controls-mini">
+                                            <button className={`vote-mini up ${adminVotes[song.id] === 1 ? 'active' : ''}`} onClick={() => handleAdminVote(song.id, 1)}>👍</button>
+                                            <span className={`score-mini ${song.score > 0 ? 'pos' : song.score < 0 ? 'neg' : ''}`}>{song.score > 0 ? '+' : ''}{song.score}</span>
+                                            <button className={`vote-mini down ${adminVotes[song.id] === -1 ? 'active' : ''}`} onClick={() => handleAdminVote(song.id, -1)}>👎</button>
+                                        </div>
+                                        <button className="delete-mini" onClick={() => handleRemoveSong(song.id)} disabled={isDeletingSong === song.id}>
+                                            {isDeletingSong === song.id ? '⏳' : '🗑️'}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* TOOLS TAB */}
+                {activeTab === 'tools' && (
+                    <div className="tab-panel tools-panel">
+                        <div className="tools-grid">
+                            <button className="tool-btn shuffle" onClick={handleShufflePlaylist} disabled={isShuffling || songs.length < 2}>
+                                <span className="tool-icon">🔀</span>
+                                <span className="tool-name">{isShuffling ? 'Shuffling...' : 'Shuffle'}</span>
+                            </button>
+                            <button className="tool-btn purge" onClick={handleStartDeleteWindow} disabled={isStartingDeleteWindow || deleteWindowActive || songs.length === 0}>
+                                <span className="tool-icon">💀</span>
+                                <span className="tool-name">{deleteWindowActive ? 'PURGE ON!' : 'The Purge'}</span>
+                            </button>
+                            <button className="tool-btn danger" onClick={handleWipeSession} disabled={isWiping}>
+                                <span className="tool-icon">🗑️</span>
+                                <span className="tool-name">{isWiping ? 'Wiping...' : 'Wipe All'}</span>
+                            </button>
+                            <button className="tool-btn export" onClick={handleExportJSON} disabled={isExportingJSON}>
+                                <span className="tool-icon">📁</span>
+                                <span className="tool-name">Export JSON</span>
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
