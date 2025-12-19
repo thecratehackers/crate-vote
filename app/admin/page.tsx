@@ -103,6 +103,37 @@ export default function AdminPage() {
     const [deleteWindowActive, setDeleteWindowActive] = useState(false);
     const [deleteWindowEndTime, setDeleteWindowEndTime] = useState<number | null>(null);
 
+    // Custom confirmation modal state (replaces native confirm() which flickers)
+    interface ConfirmModalState {
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText: string;
+        onConfirm: (() => void) | null;
+    }
+    const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmText: 'Confirm',
+        onConfirm: null,
+    });
+
+    const showConfirmModal = (title: string, message: string, onConfirm: () => void, confirmText = 'Confirm') => {
+        setConfirmModal({ isOpen: true, title, message, confirmText, onConfirm });
+    };
+
+    const closeConfirmModal = () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false, onConfirm: null }));
+    };
+
+    const handleConfirmAction = () => {
+        if (confirmModal.onConfirm) {
+            confirmModal.onConfirm();
+        }
+        closeConfirmModal();
+    };
+
     // Versus Battle state
     interface VersusBattleSong {
         id: string;
@@ -476,32 +507,36 @@ export default function AdminPage() {
     };
 
     // Ban user directly from users list
-    const handleBanUserDirect = async (visitorId: string, userName: string) => {
+    const handleBanUserDirect = (visitorId: string, userName: string) => {
         if (isBanningUser === visitorId) return;
-        isConfirmDialogOpen.current = true;
-        const confirmed = confirm(`Ban ${userName}? This will remove them AND all their songs.`);
-        isConfirmDialogOpen.current = false;
-        if (!confirmed) return;
 
-        setIsBanningUser(visitorId);
-        try {
-            const res = await adminFetch('/api/playlist', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'ban', visitorId }),
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setMessage({ type: 'success', text: `✓ ${userName} banned! ${data.deletedSongs || 0} song(s) removed.` });
-                fetchPlaylist();
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Failed to ban user' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to ban user - network error' });
-        } finally {
-            setIsBanningUser(null);
-        }
+        showConfirmModal(
+            '🚫 Ban User?',
+            `Ban ${userName}? This will remove them AND all their songs.`,
+            async () => {
+                setIsBanningUser(visitorId);
+                try {
+                    const res = await adminFetch('/api/playlist', {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'ban', visitorId }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        setMessage({ type: 'success', text: `✓ ${userName} banned! ${data.deletedSongs || 0} song(s) removed.` });
+                        fetchPlaylist();
+                    } else {
+                        setMessage({ type: 'error', text: data.error || 'Failed to ban user' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to ban user - network error' });
+                } finally {
+                    setIsBanningUser(null);
+                }
+            },
+            'Ban User'
+        );
     };
+
 
     // Quick ban from activity feed - instant action, no confirmation
     const handleQuickBan = async (visitorId: string, userName: string) => {
@@ -602,43 +637,45 @@ export default function AdminPage() {
     };
 
     // Wipe session (full reset)
-    const handleWipeSession = async () => {
-        isConfirmDialogOpen.current = true;
-        const confirmed = confirm('⚠️ WIPE ENTIRE SESSION?\n\nThis will delete ALL songs, reset the timer, and unban all users.\n\nThis cannot be undone!');
-        isConfirmDialogOpen.current = false;
-        if (!confirmed) {
-            return;
-        }
-        setIsWiping(true);
-        try {
-            const res = await adminFetch('/api/playlist', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'reset' }),
-            });
-            if (res.ok) {
-                // Also reset timer
-                await adminFetch('/api/timer', {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'reset' }),
-                });
-                setMessage({ type: 'success', text: '✓ Session wiped! Fresh start.' });
-                setTimerRunning(false);
-                setTimerEndTime(null);
-                setExportUrl(null);
-                setSongs([]);  // Clear local state immediately
-                setActiveUsers([]);  // Clear users too
-                setStats({ totalSongs: 0, totalVotes: 0, uniqueVoters: 0 });
-                fetchPlaylist();
-            } else {
-                const data = await res.json().catch(() => ({}));
-                setMessage({ type: 'error', text: data.error || 'Failed to wipe session - check admin password' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to wipe session - network error' });
-        } finally {
-            setIsWiping(false);
-        }
+    const handleWipeSession = () => {
+        showConfirmModal(
+            '⚠️ WIPE ENTIRE SESSION?',
+            'This will delete ALL songs, reset the timer, and unban all users.\n\nThis cannot be undone!',
+            async () => {
+                setIsWiping(true);
+                try {
+                    const res = await adminFetch('/api/playlist', {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'reset' }),
+                    });
+                    if (res.ok) {
+                        // Also reset timer
+                        await adminFetch('/api/timer', {
+                            method: 'POST',
+                            body: JSON.stringify({ action: 'reset' }),
+                        });
+                        setMessage({ type: 'success', text: '✓ Session wiped! Fresh start.' });
+                        setTimerRunning(false);
+                        setTimerEndTime(null);
+                        setExportUrl(null);
+                        setSongs([]);  // Clear local state immediately
+                        setActiveUsers([]);  // Clear users too
+                        setStats({ totalSongs: 0, totalVotes: 0, uniqueVoters: 0 });
+                        fetchPlaylist();
+                    } else {
+                        const data = await res.json().catch(() => ({}));
+                        setMessage({ type: 'error', text: data.error || 'Failed to wipe session - check admin password' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to wipe session - network error' });
+                } finally {
+                    setIsWiping(false);
+                }
+            },
+            'Wipe Everything'
+        );
     };
+
 
     // Refresh audio features for all songs
     const handleRefreshFeatures = async () => {
@@ -687,43 +724,44 @@ export default function AdminPage() {
     };
 
     // Start THE PURGE - grants everyone ONE delete for 30 seconds
-    const handleStartDeleteWindow = async () => {
-        isConfirmDialogOpen.current = true;
-        const confirmed = confirm('💀 START THE PURGE?\n\nThis grants EVERY USER the ability to PURGE ONE song for 30 seconds.\n\nAll crimes are legal - use wisely!');
-        isConfirmDialogOpen.current = false;
-        if (!confirmed) {
-            return;
-        }
+    const handleStartDeleteWindow = () => {
+        showConfirmModal(
+            '💀 START THE PURGE?',
+            'This grants EVERY USER the ability to PURGE ONE song for 30 seconds.\n\nAll crimes are legal - use wisely!',
+            async () => {
+                setIsStartingDeleteWindow(true);
+                try {
+                    const res = await adminFetch('/api/admin/delete-window', {
+                        method: 'POST',
+                        body: JSON.stringify({ duration: 30 }),
+                    });
 
-        setIsStartingDeleteWindow(true);
-        try {
-            const res = await adminFetch('/api/admin/delete-window', {
-                method: 'POST',
-                body: JSON.stringify({ duration: 30 }),
-            });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setDeleteWindowActive(true);
+                        setDeleteWindowEndTime(data.endTime);
+                        setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 30 seconds to purge ONE song!' });
 
-            if (res.ok) {
-                const data = await res.json();
-                setDeleteWindowActive(true);
-                setDeleteWindowEndTime(data.endTime);
-                setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 30 seconds to purge ONE song!' });
-
-                // Auto-refresh when window ends
-                setTimeout(() => {
-                    setDeleteWindowActive(false);
-                    setDeleteWindowEndTime(null);
-                    fetchPlaylist();
-                }, 30000);
-            } else {
-                const data = await res.json();
-                setMessage({ type: 'error', text: data.error || 'Failed to start The Purge' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to start The Purge - network error' });
-        } finally {
-            setIsStartingDeleteWindow(false);
-        }
+                        // Auto-refresh when window ends
+                        setTimeout(() => {
+                            setDeleteWindowActive(false);
+                            setDeleteWindowEndTime(null);
+                            fetchPlaylist();
+                        }, 30000);
+                    } else {
+                        const data = await res.json();
+                        setMessage({ type: 'error', text: data.error || 'Failed to start The Purge' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to start The Purge - network error' });
+                } finally {
+                    setIsStartingDeleteWindow(false);
+                }
+            },
+            'Start The Purge'
+        );
     };
+
 
     // ============ VERSUS BATTLE HANDLERS ============
 
@@ -1214,6 +1252,65 @@ export default function AdminPage() {
                 </div>
             </div>
 
+
+            {/* 🔒 CONFIRMATION MODAL - Custom modal that won't flicker */}
+            {confirmModal.isOpen && (
+                <div className="modal-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.85)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                }}>
+                    <div className="confirm-modal" style={{
+                        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                        border: '2px solid var(--orange-primary)',
+                        borderRadius: '16px',
+                        padding: '32px',
+                        maxWidth: '400px',
+                        width: '90%',
+                        textAlign: 'center',
+                        boxShadow: '0 0 40px rgba(255, 107, 53, 0.4)',
+                    }}>
+                        <h2 style={{
+                            fontSize: '1.5rem',
+                            color: '#fff',
+                            marginBottom: '16px',
+                        }}>
+                            {confirmModal.title}
+                        </h2>
+                        <p style={{
+                            color: 'rgba(255,255,255,0.8)',
+                            marginBottom: '24px',
+                            whiteSpace: 'pre-line',
+                            lineHeight: 1.5,
+                        }}>
+                            {confirmModal.message}
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                            <button
+                                className="admin-btn"
+                                onClick={closeConfirmModal}
+                                style={{ minWidth: '100px' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="admin-btn danger"
+                                onClick={handleConfirmAction}
+                                style={{ minWidth: '120px' }}
+                            >
+                                {confirmModal.confirmText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Messages */}
             {message && (
