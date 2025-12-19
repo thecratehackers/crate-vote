@@ -47,7 +47,9 @@ async function getClientToken(): Promise<string> {
         throw new Error('Missing Spotify credentials');
     }
 
-    console.log('Getting fresh Spotify token...');
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Getting fresh Spotify token...');
+    }
 
     const response = await fetch(SPOTIFY_AUTH_URL, {
         method: 'POST',
@@ -66,7 +68,9 @@ async function getClientToken(): Promise<string> {
     }
 
     const data = await response.json();
-    console.log('Got Spotify token, expires in', data.expires_in, 'seconds');
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Got Spotify token, expires in', data.expires_in, 'seconds');
+    }
 
     return data.access_token;
 }
@@ -132,7 +136,9 @@ export async function searchTracks(query: string, limit = 10): Promise<{
 }[]> {
     const token = await getClientToken();
 
-    console.log('Searching Spotify for:', query);
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Searching Spotify for:', query);
+    }
 
     const response = await fetch(
         `${SPOTIFY_API_BASE}/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`,
@@ -290,7 +296,9 @@ export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): P
 
     const token = await getClientToken();
 
-    console.log('Fetching Spotify playlist:', playlistId);
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Fetching Spotify playlist:', playlistId);
+    }
 
     // Get playlist info first
     // Note: Market parameter is required as a workaround for Spotify API bug (Dec 2024)

@@ -6,6 +6,7 @@ import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS } from '@/lib/config';
 import { PlaylistSkeleton } from '@/components/Skeleton';
 import VersusBattle from '@/components/VersusBattle';
 import VideoPreview from '@/components/VideoPreview';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Network resilience - fetch with timeout
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response> => {
@@ -234,10 +235,15 @@ export default function HomePage() {
         return sorted;
     }, [songs, isUserInteracting]);
 
-    // Username state - simple name entry
+    // Pre-selected avatar emojis - music/DJ themed, clean and minimal
+    const AVATAR_OPTIONS = ['🎧', '🎤', '🎵', '💿', '🎹', '🎸', '🎺', '🔊', '🎙️', '📻'];
+
+    // Username and avatar state - profile entry
     const [username, setUsername] = useState<string | null>(null);
     const [usernameInput, setUsernameInput] = useState('');
     const [showUsernameModal, setShowUsernameModal] = useState(false);
+    const [userAvatar, setUserAvatar] = useState<string>('🎧'); // Default avatar
+    const [avatarInput, setAvatarInput] = useState<string>('🎧');
 
     // Audio preview state
     const [playingSongId, setPlayingSongId] = useState<string | null>(null);
@@ -275,7 +281,10 @@ export default function HomePage() {
     // 📢 AUTO SHOUT-OUTS - Rotating encouragement messages
     const [currentShoutout, setCurrentShoutout] = useState<string | null>(null);
 
-    // Toggle audio preview
+    // 🔄 Debounce for refresh button
+    const [isRefreshCooldown, setIsRefreshCooldown] = useState(false);
+
+    // Toggle audio preview - with error handling
     const togglePreview = (songId: string, previewUrl: string | null) => {
         if (!previewUrl) {
             setMessage({ type: 'error', text: 'No preview available for this track' });
@@ -293,7 +302,15 @@ export default function HomePage() {
             }
             audioRef.current = new Audio(previewUrl);
             audioRef.current.volume = 0.5;
-            audioRef.current.play();
+            audioRef.current.play().catch(() => {
+                // Handle autoplay restrictions or failed playback
+                setMessage({ type: 'error', text: 'Could not play preview - try again' });
+                setPlayingSongId(null);
+            });
+            audioRef.current.onerror = () => {
+                setMessage({ type: 'error', text: 'Preview unavailable' });
+                setPlayingSongId(null);
+            };
             audioRef.current.onended = () => setPlayingSongId(null);
             setPlayingSongId(songId);
         }
@@ -314,11 +331,17 @@ export default function HomePage() {
             const id = await getVisitorId();
             setVisitorId(id);
 
-            // Load saved username from localStorage
+            // Load saved username and avatar from localStorage
             const savedName = localStorage.getItem('crate-username');
+            const savedAvatar = localStorage.getItem('crate-avatar');
             if (savedName) {
                 setUsername(savedName);
-            } else {
+            }
+            if (savedAvatar) {
+                setUserAvatar(savedAvatar);
+                setAvatarInput(savedAvatar);
+            }
+            if (!savedName) {
                 setShowUsernameModal(true);
             }
         }
@@ -347,7 +370,16 @@ export default function HomePage() {
         // Simulate slight delay for feedback
         await new Promise(resolve => setTimeout(resolve, 200));
         setUsername(name);
-        localStorage.setItem('crate-username', name);
+        try {
+            localStorage.setItem('crate-username', name);
+            if (avatarInput) {
+                localStorage.setItem('crate-avatar', avatarInput);
+                setUserAvatar(avatarInput);
+            }
+        } catch (e) {
+            // localStorage full or disabled - continue anyway, just won't persist
+            console.warn('Could not save to localStorage:', e);
+        }
         setIsSavingUsername(false);
         setShowUsernameModal(false);
         setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
@@ -640,7 +672,8 @@ export default function HomePage() {
                     fetchPlaylist();
                 }
             } catch (err) {
-                // Silent fail
+                // Show subtle feedback on error (non-blocking)
+                console.warn('Karma presence check failed:', err);
             }
         }, 300000); // 5 minutes
 
@@ -741,6 +774,7 @@ export default function HomePage() {
         setIsVotingInBattle(true);
 
         // Optimistic update
+        const previousVote = versusBattle.userVote;
         setVersusBattle(prev => ({ ...prev, userVote: choice }));
 
         try {
@@ -755,15 +789,16 @@ export default function HomePage() {
 
             const data = await res.json();
             if (!res.ok) {
-                // Revert optimistic update
-                setVersusBattle(prev => ({ ...prev, userVote: null }));
+                // Revert optimistic update to previous state
+                setVersusBattle(prev => ({ ...prev, userVote: previousVote }));
                 setMessage({ type: 'error', text: data.error || 'Failed to vote' });
             } else {
                 setMessage({ type: 'success', text: `⚔️ Voted for Song ${choice}!` });
             }
         } catch (error) {
-            setVersusBattle(prev => ({ ...prev, userVote: null }));
-            setMessage({ type: 'error', text: 'Network error' });
+            // Revert optimistic update on network error
+            setVersusBattle(prev => ({ ...prev, userVote: previousVote }));
+            setMessage({ type: 'error', text: 'Network error - try again quickly!' });
         } finally {
             setIsVotingInBattle(false);
         }
@@ -892,6 +927,7 @@ export default function HomePage() {
             }
         } catch (error) {
             console.error('Failed to load video:', error);
+            setMessage({ type: 'error', text: 'Failed to load video preview' });
         } finally {
             setIsLoadingVideo(null);
         }
@@ -1035,10 +1071,14 @@ export default function HomePage() {
         }
     };
 
-    // Manual refresh
+    // Manual refresh - debounced to prevent spam
     const handleRefresh = () => {
+        if (isRefreshCooldown) return;
+        setIsRefreshCooldown(true);
         fetchPlaylist(true);
         fetchTimer();
+        // 2 second cooldown between manual refreshes
+        setTimeout(() => setIsRefreshCooldown(false), 2000);
     };
 
     // Auto-hide message
@@ -1104,9 +1144,25 @@ export default function HomePage() {
                             <span className="step-text">Top songs win!</span>
                         </div>
                     </div>
-
+                    {/* Compact name + avatar input */}
                     <div className="name-input-section">
-                        <label className="name-label">Enter your name to join:</label>
+                        <label className="name-label">Pick an avatar & enter your name:</label>
+                        <div className="name-avatar-row">
+                            {/* Compact avatar picker - small inline circles */}
+                            <div className="avatar-mini-picker">
+                                {AVATAR_OPTIONS.map((emoji) => (
+                                    <span
+                                        key={emoji}
+                                        className={`avatar-mini ${avatarInput === emoji ? 'selected' : ''}`}
+                                        onClick={() => setAvatarInput(emoji)}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
+                                        {emoji}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
                         <input
                             type="text"
                             placeholder="Your name"
@@ -1201,10 +1257,15 @@ export default function HomePage() {
                     {username && (
                         <button
                             className="user-pill"
-                            onClick={() => { setUsernameInput(username); setShowUsernameModal(true); }}
-                            data-tooltip="Tap to edit name or see rules"
+                            onClick={() => {
+                                setUsernameInput(username);
+                                setAvatarInput(userAvatar);
+                                setShowUsernameModal(true);
+                            }}
+                            data-tooltip="Tap to edit profile"
                         >
-                            🎧 {username} <span className="edit-hint">✏️</span>
+                            <span className="user-pill-avatar">{userAvatar}</span>
+                            {username} <span className="edit-hint">✏️</span>
                         </button>
                     )}
                 </div>
@@ -1262,6 +1323,17 @@ export default function HomePage() {
                 </div>
             )}
 
+            {/* ⚔️ VERSUS BATTLE COMPONENT - Show when battle is active */}
+            {versusBattle.active && versusBattle.songA && versusBattle.songB && (
+                <ErrorBoundary fallback={<div className="battle-error">⚔️ Battle error - refreshing...</div>}>
+                    <VersusBattle
+                        battle={versusBattle}
+                        visitorId={visitorId || ''}
+                        onVote={handleBattleVote}
+                        isVoting={isVotingInBattle}
+                    />
+                </ErrorBoundary>
+            )}
 
             {isBanned && <div className="banned-banner">🚫 You've been banned from this session</div>}
 

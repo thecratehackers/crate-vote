@@ -38,7 +38,7 @@ export async function POST(
     if (!isAdmin) {
         const locked = await isPlaylistLocked();
         if (locked) {
-            return NextResponse.json({ error: 'Voting is currently paused. Wait for the host to unlock the playlist to continue voting.' }, { status: 400 });
+            return NextResponse.json({ error: 'Voting is currently paused. Wait for the host to unlock the playlist.' }, { status: 400 });
         }
     }
 

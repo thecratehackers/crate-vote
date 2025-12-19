@@ -10,6 +10,9 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Please enter a song name or artist to search.' }, { status: 400 });
     }
 
+    // Sanitize query for safe display in error messages (prevent XSS)
+    const safeQuery = query.slice(0, 50).replace(/[<>"'&]/g, '');
+
     // Rate limiting
     const clientId = getClientIdentifier(request);
     const rateCheck = checkRateLimit(clientId + ':search', RATE_LIMITS.search);

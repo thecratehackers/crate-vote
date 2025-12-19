@@ -194,6 +194,7 @@ export default function AdminPage() {
             }
         } catch (error) {
             console.error('Failed to fetch playlist:', error);
+            setMessage({ type: 'error', text: 'Failed to load playlist - check your connection' });
         }
     }, [isAuthenticated, adminPassword, adminId, isEditingTitle]);
 
@@ -214,6 +215,10 @@ export default function AdminPage() {
             }
         } catch (error) {
             console.error('Failed to fetch timer:', error);
+            // Show error only occasionally to avoid spam
+            if (Math.random() < 0.1) {
+                setMessage({ type: 'error', text: 'Timer sync failed - retrying...' });
+            }
         }
     }, []);
 
@@ -290,6 +295,7 @@ export default function AdminPage() {
                 setShowSearchResults(true);
             } catch (error) {
                 console.error('Search failed:', error);
+                setMessage({ type: 'error', text: 'Search failed - check your connection' });
             } finally {
                 setIsSearching(false);
             }
@@ -783,6 +789,7 @@ export default function AdminPage() {
             }
         } catch (error) {
             console.error('Failed to fetch versus battle:', error);
+            // Non-blocking - battle will just use stale data briefly
         }
     }, [isAuthenticated, adminPassword, adminId]);
 
@@ -869,6 +876,7 @@ export default function AdminPage() {
             }
         } catch (error) {
             console.error('Failed to resolve battle:', error);
+            setMessage({ type: 'error', text: 'Failed to resolve battle - try again' });
         } finally {
             isResolvingBattle.current = false;
         }
@@ -1037,11 +1045,34 @@ export default function AdminPage() {
         }
     };
 
-    // Password login
-    const handlePasswordLogin = (e: React.FormEvent) => {
+    // Password login - verify with server before proceeding
+    const handlePasswordLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (adminPassword.trim()) {
-            setIsAuthenticated(true);
+        if (!adminPassword.trim() || isLoggingIn) return;
+
+        setIsLoggingIn(true);
+        setLoginError(null);
+
+        try {
+            // Verify password by making a test request
+            const res = await fetch('/api/playlist', {
+                headers: {
+                    'x-admin-key': adminPassword,
+                    'x-admin-id': adminId,
+                },
+            });
+
+            if (res.ok) {
+                setIsAuthenticated(true);
+            } else if (res.status === 401) {
+                setLoginError('Invalid password');
+            } else {
+                setLoginError('Server error - please try again');
+            }
+        } catch (error) {
+            setLoginError('Connection failed - check your network');
+        } finally {
+            setIsLoggingIn(false);
         }
     };
 

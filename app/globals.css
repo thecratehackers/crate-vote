@@ -2250,12 +2250,88 @@ body::before {
   text-align: center;
 }
 
+/* Profile section - avatar + name together */
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+/* Avatar picker section - emoji selection */
+.avatar-picker-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.avatar-picker-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Compact inline avatar row */
+.name-avatar-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.avatar-mini-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.avatar-mini {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--bg-tertiary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.avatar-mini:hover {
+  border-color: var(--orange-primary);
+  transform: scale(1.1);
+}
+
+.avatar-mini.selected {
+  border-color: var(--orange-primary);
+  background: rgba(211, 119, 29, 0.2);
+  box-shadow: 0 0 8px rgba(211, 119, 29, 0.5);
+  transform: scale(1.15);
+}
+
+/* User pill avatar in header - emoji style */
+.user-pill-avatar {
+  font-size: 1rem;
+  margin-right: 4px;
+}
+
+.user-pill-icon {
+  margin-right: 4px;
+}
+
 /* Name input section */
 .name-input-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 16px;
+  width: 100%;
 }
 
 .name-label {
@@ -6149,6 +6225,18 @@ body::before {
 /* ============================================= */
 /* VERSUS BATTLE RESPONSIVE STYLES */
 /* ============================================= */
+
+/* Battle error fallback (when ErrorBoundary catches a crash) */
+.battle-error {
+  padding: 20px;
+  margin: 8px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  text-align: center;
+  color: #ef5050;
+  font-weight: 500;
+}
 
 @media (max-width: 640px) {
   .versus-battle-banner {
