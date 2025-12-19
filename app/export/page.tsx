@@ -243,14 +243,18 @@ export default function ExportPage() {
                     }
                     .back-link {
                         display: inline-block;
-                        color: var(--text-muted);
+                        color: var(--text-secondary);
                         text-decoration: none;
-                        font-size: 0.9rem;
-                        padding: 8px 16px;
-                        transition: color 0.2s;
+                        font-size: 1.1rem;
+                        font-weight: 500;
+                        padding: 12px 24px;
+                        margin-top: 8px;
+                        transition: all 0.2s;
+                        border-radius: 8px;
                     }
                     .back-link:hover {
                         color: var(--text-primary);
+                        background: rgba(255, 255, 255, 0.05);
                     }
                 `}</style>
             </div>
