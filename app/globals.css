@@ -5464,3 +5464,157 @@ body::before {
     font-size: 0.75rem;
   }
 }
+
+/* ============================================
+   🎵 ADMIN PLAYLIST - GOD MODE
+   ============================================ */
+
+.admin-playlist {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.admin-playlist h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.god-mode-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border-radius: 20px;
+  animation: godModePulse 2s ease-in-out infinite;
+}
+
+@keyframes godModePulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.7);
+  }
+}
+
+.song-list-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.song-row-admin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.song-row-admin:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-color);
+}
+
+.song-row-admin.top-song {
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.08) 0%, rgba(224, 159, 36, 0.05) 100%);
+  border-color: rgba(211, 119, 29, 0.2);
+}
+
+.song-info-admin {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.song-info-admin .song-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-info-admin .song-artist {
+  font-size: 0.8rem;
+  color: var(--orange-primary);
+}
+
+.song-info-admin .song-added-by {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Admin votes - use homepage thumb-btn styles */
+.admin-votes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Admin delete button - prominent and dangerous */
+.admin-delete-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  color: #ef4444;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.admin-delete-btn:hover {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.admin-delete-btn:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  .song-row-admin {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .song-info-admin {
+    width: calc(100% - 100px);
+  }
+
+  .admin-votes {
+    margin-left: auto;
+  }
+
+  .admin-delete-btn {
+    width: 32px;
+    height: 32px;
+  }
+}

@@ -1081,60 +1081,65 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* Playlist */}
-            <div className="playlist">
-                <h3>🎵 Playlist ({songs.length} songs)</h3>
+            {/* Playlist - Admin GOD MODE */}
+            <div className="admin-playlist">
+                <h3>🎵 Playlist ({songs.length} songs) <span className="god-mode-badge">GOD MODE</span></h3>
                 {songs.length === 0 ? (
                     <div className="playlist-empty">
                         <div className="icon">🎶</div>
-                        <p>No songs yet. Start a session and share the link!</p>
+                        <p>No songs yet. Use the search above to add songs!</p>
                     </div>
                 ) : (
-                    songs.map((song, index) => (
-                        <div key={song.id} className="song-card">
-                            <div className={`rank ${index < 3 ? 'top-3' : ''}`}>
-                                #{index + 1}
-                            </div>
-                            <img
-                                src={song.albumArt || '/placeholder.svg'}
-                                alt={song.album}
-                                className="album-art"
-                            />
-                            <div className="song-info">
-                                <div className="song-name">{song.name}</div>
-                                <div className="song-artist">{song.artist}</div>
-                                <div className="song-added-by">Added by {song.addedByName || 'Anonymous'}</div>
-                            </div>
-                            <div className="vote-controls">
-                                <button
-                                    className={`vote-btn admin-vote upvote ${adminVotes[song.id] === 1 ? 'active' : ''}`}
-                                    onClick={() => handleAdminVote(song.id, 1)}
-                                    title="Vote up"
-                                >
-                                    👍
-                                </button>
-                                <span className={`vote-count ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}>
-                                    {song.score > 0 ? '+' : ''}{song.score}
+                    <div className="song-list-admin">
+                        {songs.map((song, index) => (
+                            <div key={song.id} className={`song-row-admin ${index < 3 ? 'top-song' : ''}`}>
+                                {/* Rank */}
+                                <span className={`rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}>
+                                    {index === 0 ? '👑' : `#${index + 1}`}
                                 </span>
+
+                                {/* Album Art */}
+                                <img src={song.albumArt || '/placeholder.svg'} alt={song.album} className="album-thumb" />
+
+                                {/* Song Info */}
+                                <div className="song-info-admin">
+                                    <span className="song-title">{song.name}</span>
+                                    <span className="song-artist">{song.artist}</span>
+                                    <span className="song-added-by">Added by {song.addedByName || 'Anonymous'}</span>
+                                </div>
+
+                                {/* Voting - matching homepage green/red style */}
+                                <div className="vote-inline admin-votes">
+                                    <button
+                                        className={`thumb-btn up ${adminVotes[song.id] === 1 ? 'active' : ''}`}
+                                        onClick={() => handleAdminVote(song.id, 1)}
+                                        title="Upvote (admin)"
+                                    >
+                                        👍
+                                    </button>
+                                    <span className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}>
+                                        {song.score > 0 ? '+' : ''}{song.score}
+                                    </span>
+                                    <button
+                                        className={`thumb-btn down ${adminVotes[song.id] === -1 ? 'active' : ''}`}
+                                        onClick={() => handleAdminVote(song.id, -1)}
+                                        title="Downvote (admin)"
+                                    >
+                                        👎
+                                    </button>
+                                </div>
+
+                                {/* DELETE - Admin only, always visible */}
                                 <button
-                                    className={`vote-btn admin-vote downvote ${adminVotes[song.id] === -1 ? 'active' : ''}`}
-                                    onClick={() => handleAdminVote(song.id, -1)}
-                                    title="Vote down"
-                                >
-                                    👎
-                                </button>
-                            </div>
-                            <div className="admin-actions">
-                                <button
-                                    className="admin-action-btn delete"
+                                    className="admin-delete-btn"
                                     onClick={() => handleRemoveSong(song.id)}
-                                    title="Remove song"
+                                    title="Delete song permanently"
                                 >
-                                    ✕
+                                    🗑️
                                 </button>
                             </div>
-                        </div>
-                    ))
+                        ))}
+                    </div>
                 )}
             </div>
         </div >
