@@ -5005,9 +5005,9 @@ body::before {
   background-clip: text;
 }
 
-/* Subtle admin link - hidden until hovered */
+/* Subtle admin link - visible but discrete */
 .admin-link-subtle {
-  opacity: 0.3;
+  opacity: 0.6;
   font-size: 0.9rem;
   margin-left: 6px;
   transition: opacity 0.2s, transform 0.2s;
