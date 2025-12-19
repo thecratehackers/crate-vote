@@ -280,8 +280,12 @@ export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): P
     }[];
 }> {
     const playlistId = extractPlaylistId(playlistUrl);
+
+    console.log('Playlist import - URL received:', playlistUrl);
+    console.log('Playlist import - Extracted ID:', playlistId);
+
     if (!playlistId) {
-        throw new Error('Invalid Spotify playlist URL');
+        throw new Error(`Invalid Spotify playlist URL. Expected format: https://open.spotify.com/playlist/ABC123 - Received: ${playlistUrl.slice(0, 80)}`);
     }
 
     const token = await getClientToken();
@@ -300,7 +304,15 @@ export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): P
     if (!playlistResponse.ok) {
         const errorText = await playlistResponse.text();
         console.error('Spotify playlist error:', playlistResponse.status, errorText);
-        throw new Error(`Failed to fetch playlist: ${playlistResponse.status}`);
+
+        if (playlistResponse.status === 404) {
+            throw new Error('Playlist not found. Make sure the playlist exists and is PUBLIC (not private or collaborative-only).');
+        } else if (playlistResponse.status === 401) {
+            throw new Error('Spotify authentication failed. Please try again.');
+        } else if (playlistResponse.status === 403) {
+            throw new Error('Access denied. The playlist may be private.');
+        }
+        throw new Error(`Spotify API error: ${playlistResponse.status} - ${errorText.slice(0, 100)}`);
     }
 
     const playlistInfo = await playlistResponse.json();
