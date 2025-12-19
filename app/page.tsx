@@ -863,33 +863,33 @@ export default function HomePage() {
                     {!isBanned && isSessionActive && (
                         <div className="action-stats">
                             {/* Songs remaining */}
-                            <span className="stat-counter songs" title={`${userStatus.songsRemaining} songs left to add`}>
+                            <span className="stat-counter songs" data-tooltip={`${userStatus.songsRemaining} songs left to add`} tabIndex={0}>
                                 💿 {userStatus.songsRemaining}
                             </span>
                             {/* Upvotes remaining */}
-                            <span className="stat-counter upvotes" title={`${userStatus.upvotesRemaining} upvotes left`}>
+                            <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvotes left`} tabIndex={0}>
                                 👍 {userStatus.upvotesRemaining}
                             </span>
                             {/* Downvotes remaining */}
-                            <span className="stat-counter downvotes" title={`${userStatus.downvotesRemaining} downvotes left`}>
+                            <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvotes left`} tabIndex={0}>
                                 👎 {userStatus.downvotesRemaining}
                             </span>
                             {/* Karma - only show if > 0 */}
                             {karmaBonuses.karma > 0 && (
-                                <span className="stat-counter karma" title="Your karma">
+                                <span className="stat-counter karma" data-tooltip="Karma: +1 song & +1 each vote" tabIndex={0}>
                                     ✨ {karmaBonuses.karma}
                                 </span>
                             )}
                         </div>
                     )}
-                    <span className="stat-pill capacity">
+                    <span className="stat-pill capacity" data-tooltip={`${playlistStats.current} of ${playlistStats.max} songs in playlist`} tabIndex={0}>
                         {playlistStats.current}/{playlistStats.max}
                     </span>
                     {username && (
                         <button
                             className="user-pill"
                             onClick={() => { setUsernameInput(username); setShowUsernameModal(true); }}
-                            title="Click to edit your name or see rules"
+                            data-tooltip="Tap to edit name or see rules"
                         >
                             🎧 {username} <span className="edit-hint">✏️</span>
                         </button>
@@ -1029,7 +1029,11 @@ export default function HomePage() {
                                 className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''}`}
                             >
                                 {/* Rank */}
-                                <span className={`rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}>
+                                <span
+                                    className={`rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}
+                                    data-tooltip={index < 3 ? `Top 3 = +5 karma reward!` : `Rank #${index + 1}`}
+                                    tabIndex={0}
+                                >
                                     {index === 0 ? '👑' : `#${index + 1}`}
                                 </span>
 
@@ -1048,18 +1052,22 @@ export default function HomePage() {
                                         className={`thumb-btn up ${hasUpvoted ? 'active' : ''}`}
                                         onClick={() => handleVote(song.id, 1)}
                                         disabled={!canParticipate}
-                                        title="Upvote"
+                                        data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote this song'}
                                     >
                                         👍
                                     </button>
-                                    <span className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}>
+                                    <span
+                                        className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
+                                        data-tooltip={`Net score: ${song.score > 0 ? '+' : ''}${song.score}`}
+                                        tabIndex={0}
+                                    >
                                         {song.score > 0 ? '+' : ''}{song.score}
                                     </span>
                                     <button
                                         className={`thumb-btn down ${hasDownvoted ? 'active' : ''}`}
                                         onClick={() => handleVote(song.id, -1)}
                                         disabled={!canParticipate}
-                                        title="Downvote"
+                                        data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote this song'}
                                     >
                                         👎
                                     </button>
