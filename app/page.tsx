@@ -87,6 +87,7 @@ export default function HomePage() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [playlistTitle, setPlaylistTitle] = useState('Hackathon Playlist');
     const [playlistStats, setPlaylistStats] = useState<{ current: number; max: number; canAdd: boolean }>({ current: 0, max: 100, canAdd: true });
+    const [viewerCount, setViewerCount] = useState<number>(0);
 
     // Sort songs by score (like Reddit) - use useMemo to re-sort whenever scores change
     const sortedSongs = useMemo(() => {
@@ -187,10 +188,27 @@ export default function HomePage() {
         init();
     }, []);
 
+    // Client-side profanity filter for usernames
+    const BLOCKED_WORDS = new Set([
+        'fuck', 'fucking', 'shit', 'ass', 'asshole', 'bitch', 'damn', 'crap',
+        'dick', 'cock', 'pussy', 'cunt', 'whore', 'slut', 'bastard', 'piss',
+        'nigga', 'nigger', 'faggot', 'fag', 'retard', 'retarded'
+    ]);
+
+    const containsBadWord = (text: string): boolean => {
+        const words = text.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/);
+        return words.some(word => BLOCKED_WORDS.has(word));
+    };
+
     // Save username
     const handleSetUsername = () => {
         const name = usernameInput.trim();
         if (name.length > 0) {
+            // Check for profanity
+            if (containsBadWord(name)) {
+                alert('Please choose an appropriate username.');
+                return;
+            }
             setUsername(name);
             localStorage.setItem('crate-username', name);
             setShowUsernameModal(false);
@@ -198,6 +216,12 @@ export default function HomePage() {
     };
 
     // Fetch playlist data with rank tracking for dopamine effects
+    // Use refs to avoid stale closures in the callback dependencies
+    const previousRanksRef = useRef(previousRanks);
+    previousRanksRef.current = previousRanks;
+    const seenActivityIdsRef = useRef(seenActivityIds);
+    seenActivityIdsRef.current = seenActivityIds;
+
     const fetchPlaylist = useCallback(async (showRefreshIndicator = false) => {
         if (!visitorId) return;
         if (showRefreshIndicator) setIsRefreshing(true);
@@ -223,7 +247,7 @@ export default function HomePage() {
                 const rank = index + 1;
                 newRanks[song.id] = rank;
 
-                const prevRank = previousRanks[song.id];
+                const prevRank = previousRanksRef.current[song.id];
                 if (prevRank === undefined) {
                     // New song added!
                     rankChanges[song.id] = 'new';
@@ -256,11 +280,12 @@ export default function HomePage() {
             if (data.playlistTitle) setPlaylistTitle(data.playlistTitle);
             if (data.karmaBonuses) setKarmaBonuses(data.karmaBonuses);
             if (data.playlistStats) setPlaylistStats(data.playlistStats);
+            if (data.viewerCount !== undefined) setViewerCount(data.viewerCount);
 
             // 📢 Process live activity from server
             if (data.recentActivity && Array.isArray(data.recentActivity)) {
                 const newActivities = data.recentActivity.filter(
-                    (activity: ActivityItem) => !seenActivityIds.has(activity.id)
+                    (activity: ActivityItem) => !seenActivityIdsRef.current.has(activity.id)
                 );
 
                 if (newActivities.length > 0) {
@@ -281,7 +306,7 @@ export default function HomePage() {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, [visitorId, previousRanks, songs.length, seenActivityIds]);
+    }, [visitorId]);
 
     // Fetch timer status
     const fetchTimer = useCallback(async () => {
@@ -347,16 +372,30 @@ export default function HomePage() {
         return () => clearInterval(tipInterval);
     }, []);
 
-    // REAL-TIME POLLING - sync with admin panel every 5 seconds
+    // REAL-TIME POLLING - optimized for 1000+ concurrent users
+    // Uses 15s base interval + random jitter to prevent thundering herd
     useEffect(() => {
         if (!visitorId) return;
 
-        const interval = setInterval(() => {
+        // Add random jitter (0-5 seconds) to spread out requests
+        const jitter = Math.random() * 5000;
+        const baseInterval = 15000; // 15 seconds base
+
+        const poll = () => {
             fetchPlaylist();
             fetchTimer();
-        }, 5000);
+        };
 
-        return () => clearInterval(interval);
+        // Initial delayed start with jitter
+        const initialTimeout = setTimeout(poll, jitter);
+
+        // Subsequent polls at regular interval
+        const interval = setInterval(poll, baseInterval);
+
+        return () => {
+            clearTimeout(initialTimeout);
+            clearInterval(interval);
+        };
     }, [visitorId, fetchPlaylist, fetchTimer]);
 
     // 📢 AUTO SHOUT-OUTS - Generate encouraging messages
@@ -701,8 +740,12 @@ export default function HomePage() {
                         maxLength={20}
                     />
                     <button onClick={handleSetUsername} disabled={!usernameInput.trim()}>
-                        Let's Go!
+                        Let's start hacking!
                     </button>
+
+                    <Link href="/admin" className="admin-link-modal">
+                        ⚙️ Admin Panel
+                    </Link>
 
                     <div className="rules-section">
                         <h3>How It Works</h3>
@@ -731,8 +774,8 @@ export default function HomePage() {
                             <div className="rule-item">
                                 <span className="rule-icon">✨</span>
                                 <div className="rule-text">
-                                    <strong>Spend Karma</strong>
-                                    <span>5 karma = 1 extra song add</span>
+                                    <strong>Karma Bonus</strong>
+                                    <span>Each karma = +1 song & +1 vote each</span>
                                 </div>
                             </div>
                         </div>
@@ -761,31 +804,56 @@ export default function HomePage() {
                ═══════════════════════════════════════════════════════════ */}
             <header className="stream-header">
                 <div className="header-left">
-                    <img src="/logo.png" alt="" className="mini-logo" />
+                    <Link href="/" className="logo-home-link" title="Go to Home">
+                        <img src="/logo.png" alt="" className="mini-logo" />
+                    </Link>
                     <span className="brand-name">Hackathon</span>
-                    {/* LIVE badge integrated into header */}
+                    {/* LIVE badge integrated into header with viewer count */}
                     {timerRunning && (
                         <span className="live-badge-inline">
                             <span className="live-pulse"></span>
                             LIVE • {formatTime(timerRemaining)}
+                            {viewerCount > 0 && <span className="viewer-count">• 👁 {viewerCount}</span>}
                         </span>
                     )}
                 </div>
                 <div className="header-right">
                     {!isBanned && isSessionActive && (
-                        <>
-                            <span className="stat-pill adds" title="Songs you can add">
-                                🎵 {userStatus.songsRemaining}
-                            </span>
-                            <span className="stat-pill votes" title="Votes remaining">
-                                👍 {userStatus.upvotesRemaining} 👎 {userStatus.downvotesRemaining}
-                            </span>
+                        <div className="action-bars">
+                            {/* Songs progress bar */}
+                            <div className="action-bar" title={`Songs: ${userStatus.songsAdded}/${userStatus.songsAdded + userStatus.songsRemaining} used`}>
+                                <span className="bar-icon">💿</span>
+                                <div className="bar-track songs">
+                                    {[...Array(userStatus.songsAdded + userStatus.songsRemaining)].map((_, i) => (
+                                        <div key={i} className={`bar-segment ${i < userStatus.songsAdded ? 'filled' : 'empty'}`} />
+                                    ))}
+                                </div>
+                            </div>
+                            {/* Upvotes progress bar */}
+                            <div className="action-bar" title={`Upvotes: ${userStatus.upvotesUsed}/${userStatus.upvotesUsed + userStatus.upvotesRemaining} used`}>
+                                <span className="bar-icon">👍</span>
+                                <div className="bar-track upvotes">
+                                    {[...Array(userStatus.upvotesUsed + userStatus.upvotesRemaining)].map((_, i) => (
+                                        <div key={i} className={`bar-segment ${i < userStatus.upvotesUsed ? 'filled' : 'empty'}`} />
+                                    ))}
+                                </div>
+                            </div>
+                            {/* Downvotes progress bar */}
+                            <div className="action-bar" title={`Downvotes: ${userStatus.downvotesUsed}/${userStatus.downvotesUsed + userStatus.downvotesRemaining} used`}>
+                                <span className="bar-icon">👎</span>
+                                <div className="bar-track downvotes">
+                                    {[...Array(userStatus.downvotesUsed + userStatus.downvotesRemaining)].map((_, i) => (
+                                        <div key={i} className={`bar-segment ${i < userStatus.downvotesUsed ? 'filled' : 'empty'}`} />
+                                    ))}
+                                </div>
+                            </div>
+                            {/* Karma - only show if > 0 */}
                             {karmaBonuses.karma > 0 && (
                                 <span className="stat-pill karma" title="Your karma">
                                     ✨ {karmaBonuses.karma}
                                 </span>
                             )}
-                        </>
+                        </div>
                     )}
                     <span className="stat-pill capacity">
                         {playlistStats.current}/{playlistStats.max}
@@ -794,11 +862,11 @@ export default function HomePage() {
                         <button
                             className="user-pill"
                             onClick={() => { setUsernameInput(username); setShowUsernameModal(true); }}
+                            title="Click to edit your name or see rules"
                         >
-                            🎧 {username}
+                            🎧 {username} <span className="edit-hint">✏️</span>
                         </button>
                     )}
-                    <Link href="/admin" className="admin-gear-right" title="Admin Panel">⚙️</Link>
                 </div>
             </header>
 
@@ -826,24 +894,21 @@ export default function HomePage() {
                 !timerRunning && !isBanned && (
                     <div className="voting-closed-banner">
                         <div className="closed-message">
-                            🎧 <strong>Voting is closed!</strong> Tune in Tuesdays @ 8 PM Eastern
+                            🎧 <strong>Voting is closed!</strong> Check back when the next session starts.
                         </div>
                         <div className="closed-actions">
-                            <a
-                                href="https://www.twitch.tv/thecratehackers"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="action-btn twitch-btn"
-                            >
-                                📺 Watch on Twitch
-                            </a>
                             <button onClick={handleExport} className="action-btn spotify-btn">
-                                <span className="icon">🟢</span> Export to Spotify
+                                <img src="/spotify-logo.png" alt="Spotify" className="spotify-logo-icon" /> Export to Spotify
                             </button>
                         </div>
                     </div>
                 )
             }
+
+            {/* 🎵 PLAYLIST TITLE BAR - Always visible, below closed banner */}
+            <div className="playlist-title-bar">
+                <span className="playlist-title-text">🎵 {playlistTitle}</span>
+            </div>
 
             {isBanned && <div className="banned-banner">🚫 You've been banned from this session</div>}
 
@@ -952,6 +1017,6 @@ export default function HomePage() {
                     })
                 )}
             </div>
-        </div >
+        </div>
     );
 }

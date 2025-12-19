@@ -16,19 +16,41 @@ interface ExportTrack {
 export default function ExportPage() {
     const { data: session, status } = useSession();
     const [tracks, setTracks] = useState<ExportTrack[]>([]);
+    const [playlistTitle, setPlaylistTitle] = useState('Hackathon Playlist');
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [playlistUrl, setPlaylistUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [hasAttemptedExport, setHasAttemptedExport] = useState(false);
 
-    // Fetch the current playlist
+    // Strip emojis from text for Spotify playlist names
+    const stripEmojis = (text: string): string => {
+        // Remove common emoji characters using surrogate pairs
+        return text
+            .split('')
+            .filter(char => {
+                const code = char.charCodeAt(0);
+                // Filter out emoji ranges (high surrogates for emojis and standalone emoji chars)
+                return !(code >= 0x1F300 && code <= 0x1F9FF) &&
+                    !(code >= 0x2600 && code <= 0x26FF) &&
+                    !(code >= 0x2700 && code <= 0x27BF) &&
+                    !(code >= 0xD83C && code <= 0xD83E);
+            })
+            .join('')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
+
+    // Fetch the current playlist and title
     useEffect(() => {
         async function fetchPlaylist() {
             try {
                 const res = await fetch('/api/playlist/export');
                 const data = await res.json();
                 setTracks(data.tracks || []);
+                if (data.playlistTitle) {
+                    setPlaylistTitle(data.playlistTitle);
+                }
             } catch (err) {
                 setError('Failed to load playlist');
             } finally {
@@ -66,12 +88,13 @@ export default function ExportPage() {
         setError(null);
 
         try {
+            const cleanTitle = stripEmojis(playlistTitle);
             const res = await fetch('/api/playlist/export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: `Crate Hackers - ${new Date().toLocaleDateString()}`,
-                    description: 'Collaborative playlist created with Crate Hackers',
+                    name: cleanTitle,
+                    description: `Collaborative playlist created with Crate Hackers | ${tracks.length} songs`,
                 }),
             });
 
@@ -134,8 +157,12 @@ export default function ExportPage() {
     return (
         <div className="export-page">
             <header className="export-header">
-                <Link href="/" className="back-arrow">←</Link>
-                <img src="/logo.png" alt="Hackathon" className="export-logo" />
+                <Link href="/" className="back-btn" title="Back to Voting">
+                    ← Back
+                </Link>
+                <Link href="/" className="logo-link">
+                    <img src="/logo.png" alt="Hackathon" className="export-logo" />
+                </Link>
                 <h1>Export to Spotify</h1>
             </header>
 
@@ -165,7 +192,7 @@ export default function ExportPage() {
                 {status === 'authenticated' && session?.user ? (
                     <div className="auth-info">
                         <div className="logged-in-as">
-                            <span className="spotify-icon">🎵</span>
+                            <img src="/spotify-logo.png" alt="Spotify" style={{ height: 20, width: 'auto' }} />
                             <span>Logged in as <strong>{session.user.name || session.user.email}</strong></span>
                             <button onClick={() => signOut()} className="signout-btn">Switch Account</button>
                         </div>
@@ -199,10 +226,27 @@ export default function ExportPage() {
                     gap: 12px;
                     margin-bottom: 24px;
                 }
-                .back-arrow {
-                    font-size: 1.5rem;
-                    text-decoration: none;
+                .back-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 8px 14px;
+                    background: var(--bg-tertiary);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
                     color: var(--text-secondary);
+                    font-size: 0.9rem;
+                    text-decoration: none;
+                    transition: all 0.2s;
+                    font-weight: 500;
+                }
+                .back-btn:hover {
+                    background: var(--bg-secondary);
+                    color: var(--text-primary);
+                    border-color: var(--orange-primary);
+                }
+                .logo-link {
+                    display: flex;
+                    align-items: center;
                 }
                 .export-header h1 {
                     font-size: 1.5rem;
@@ -212,6 +256,10 @@ export default function ExportPage() {
                     width: 40px;
                     height: 40px;
                     object-fit: contain;
+                    transition: transform 0.2s;
+                }
+                .logo-link:hover .export-logo {
+                    transform: scale(1.1);
                 }
                 .loading {
                     text-align: center;

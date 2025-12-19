@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getSortedSongs } from '@/lib/redis-store';
+import { getSortedSongs, getPlaylistTitle } from '@/lib/redis-store';
 import { createPlaylist, getCurrentUser } from '@/lib/spotify';
 
 // POST - Export playlist to Spotify
@@ -42,12 +42,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No qualified songs (score > 0) to export' }, { status: 400 });
         }
 
-        // Create playlist
+        // Create playlist - use the provided name (already cleaned by client)
         const trackUris = exportData.map((s) => s.spotifyUri);
         const result = await createPlaylist(
             accessToken,
             user.id,
-            name || `Hackathon - ${new Date().toLocaleDateString()}`,
+            name || 'Hackathon Playlist',
             description || 'Created with Hackathon',
             trackUris
         );
@@ -69,7 +69,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format');
 
-    const songs = await getSortedSongs();
+    const [songs, playlistTitle] = await Promise.all([
+        getSortedSongs(),
+        getPlaylistTitle(),
+    ]);
 
     // Filter: Only export songs with positive score
     const validSongs = songs.filter(s => s.score > 0);
@@ -87,12 +90,12 @@ export async function GET(request: Request) {
         return new NextResponse(header + rows, {
             headers: {
                 'Content-Type': 'text/csv',
-                'Content-Disposition': `attachment; filename="crate-hackers-playlist-${new Date().toISOString().split('T')[0]}.csv"`,
+                'Content-Disposition': `attachment; filename="${playlistTitle}-${new Date().toISOString().split('T')[0]}.csv"`,
             },
         });
     }
 
-    // JSON format for preview page
+    // JSON format for preview page - includes playlist title
     const exportData = validSongs.map(s => ({
         id: s.id,
         spotifyUri: s.spotifyUri,
@@ -104,6 +107,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
         tracks: exportData,
+        playlistTitle,
         exportedAt: new Date().toISOString(),
     });
 }

@@ -41,6 +41,7 @@ interface ActivityItem {
     id: string;
     type: 'add' | 'upvote' | 'downvote';
     userName: string;
+    visitorId: string;
     songName: string;
     timestamp: number;
 }
@@ -417,16 +418,64 @@ export default function AdminPage() {
         }
     };
 
-    // Grant karma to user
-    const handleGrantKarma = async (visitorId: string, userName: string) => {
+    // Quick ban from activity feed - instant action, no confirmation
+    const handleQuickBan = async (visitorId: string, userName: string) => {
+        // Skip banning admins
+        if (userName.toLowerCase().includes('admin')) {
+            setMessage({ type: 'error', text: 'Cannot ban admin users' });
+            return;
+        }
+
         try {
             const res = await adminFetch('/api/playlist', {
                 method: 'POST',
-                body: JSON.stringify({ action: 'grantKarma', visitorId, points: 1 }),
+                body: JSON.stringify({ action: 'ban', visitorId }),
             });
             const data = await res.json();
             if (res.ok) {
-                setMessage({ type: 'success', text: `⭐ +1 Karma to ${userName}! (Now: ${data.karma})` });
+                setMessage({ type: 'success', text: `🚫 ${userName} banned instantly! ${data.deletedSongs || 0} song(s) removed.` });
+                // Remove from activity feed immediately
+                setRecentActivity(prev => prev.filter(a => a.visitorId !== visitorId));
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to ban user' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to ban user' });
+        }
+    };
+
+    // Delete a specific activity from the feed (without banning the user)
+    const handleDeleteActivity = async (activityId: string, songName: string) => {
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'deleteActivity', activityId }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: `🗑️ Removed "${songName}" from activity feed` });
+                // Remove from local state immediately
+                setRecentActivity(prev => prev.filter(a => a.id !== activityId));
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to delete activity' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to delete activity' });
+        }
+    };
+
+    // Grant karma to user - with selectable amount
+    const handleGrantKarma = async (visitorId: string, userName: string, karmaAmount: number) => {
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'grantKarma', visitorId, points: karmaAmount }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                // 1 karma = +1 song, +1 upvote, +1 downvote
+                setMessage({ type: 'success', text: `⭐ +${karmaAmount} Karma to ${userName}! (Total: ${data.karma}) → +${karmaAmount} songs & votes!` });
                 fetchPlaylist();
             } else {
                 setMessage({ type: 'error', text: data.error || 'Failed to grant karma' });
@@ -537,11 +586,25 @@ export default function AdminPage() {
         }
 
         try {
+            // Strip emojis from playlist title for Spotify
+            const cleanTitle = playlistTitle
+                .split('')
+                .filter(char => {
+                    const code = char.charCodeAt(0);
+                    return !(code >= 0x1F300 && code <= 0x1F9FF) &&
+                        !(code >= 0x2600 && code <= 0x26FF) &&
+                        !(code >= 0x2700 && code <= 0x27BF) &&
+                        !(code >= 0xD83C && code <= 0xD83E);
+                })
+                .join('')
+                .replace(/\s+/g, ' ')
+                .trim();
+
             const res = await fetch('/api/playlist/export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: `Hackathon - ${new Date().toLocaleDateString()}`,
+                    name: cleanTitle || 'Hackathon Playlist',
                     description: `Created with Hackathon | ${stats.totalSongs} songs | ${stats.uniqueVoters} voters`,
                 }),
             });
@@ -634,7 +697,9 @@ export default function AdminPage() {
 
             <header className="header">
                 <div className="logo-header-admin">
-                    <img src="/logo.png" alt="Hackathon" className="header-logo-admin" />
+                    <Link href="/" title="Go to Voting Page">
+                        <img src="/logo.png" alt="Hackathon" className="header-logo-admin clickable-logo" />
+                    </Link>
                     <div>
                         <h1>
                             <span className="logo-text">Hackathon</span>
@@ -813,6 +878,27 @@ export default function AdminPage() {
                                     </span>
                                     <span className="activity-song">"{activity.songName}"</span>
                                     <span className="activity-time">{timeStr}</span>
+                                    {/* Activity action buttons - appear on hover */}
+                                    <div className="activity-actions">
+                                        {/* Delete just this activity */}
+                                        <button
+                                            className="delete-activity-btn"
+                                            onClick={() => handleDeleteActivity(activity.id, activity.songName)}
+                                            title="Remove from activity feed"
+                                        >
+                                            🗑️
+                                        </button>
+                                        {/* Quick ban button - hidden for admins */}
+                                        {!activity.userName.toLowerCase().includes('admin') && (
+                                            <button
+                                                className="quick-ban-btn"
+                                                onClick={() => handleQuickBan(activity.visitorId, activity.userName)}
+                                                title={`Ban ${activity.userName} instantly`}
+                                            >
+                                                ❌
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })
@@ -837,6 +923,7 @@ export default function AdminPage() {
                                         <span className="user-name">
                                             {isRecentlyActive && <span className="active-dot">●</span>}
                                             {user.name}
+                                            {user.name.toLowerCase().includes('admin') && <span className="admin-badge">ADMIN</span>}
                                         </span>
                                         <span className="user-songs">{user.songsAdded} song{user.songsAdded !== 1 ? 's' : ''}</span>
                                         {user.karma > 0 && <span className="user-karma">⭐ {user.karma}</span>}
@@ -848,13 +935,25 @@ export default function AdminPage() {
                                     </div>
                                     <div className="user-actions">
                                         {!user.isBanned && (
-                                            <button
-                                                className="karma-btn"
-                                                onClick={() => handleGrantKarma(user.visitorId, user.name)}
-                                                title="Grant +1 Karma"
-                                            >
-                                                +⭐
-                                            </button>
+                                            <div className="karma-dropdown-wrapper">
+                                                <select
+                                                    className="karma-select"
+                                                    defaultValue=""
+                                                    onChange={(e) => {
+                                                        if (e.target.value) {
+                                                            handleGrantKarma(user.visitorId, user.name, Number(e.target.value));
+                                                            e.target.value = '';
+                                                        }
+                                                    }}
+                                                    title="Grant Karma"
+                                                >
+                                                    <option value="" disabled>+⭐</option>
+                                                    <option value="5">+5 (1 song)</option>
+                                                    <option value="10">+10 (2 songs)</option>
+                                                    <option value="25">+25 (5 songs)</option>
+                                                    <option value="50">+50 (10 songs)</option>
+                                                </select>
+                                            </div>
                                         )}
                                         {!user.isBanned ? (
                                             <button
@@ -968,7 +1067,7 @@ export default function AdminPage() {
                                     onClick={() => handleAdminVote(song.id, 1)}
                                     title="Vote up"
                                 >
-                                    ▲
+                                    👍
                                 </button>
                                 <span className={`vote-count ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}>
                                     {song.score > 0 ? '+' : ''}{song.score}
@@ -978,7 +1077,7 @@ export default function AdminPage() {
                                     onClick={() => handleAdminVote(song.id, -1)}
                                     title="Vote down"
                                 >
-                                    ▼
+                                    👎
                                 </button>
                             </div>
                             <div className="admin-actions">

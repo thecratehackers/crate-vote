@@ -22,6 +22,43 @@ const redis = new Redis({
     token: REDIS_TOKEN || 'placeholder',
 });
 
+// ============ IN-MEMORY CACHE FOR HIGH VOLUME ============
+// At 1000 users polling every 15s, we get ~67 requests/second
+// Caching reduces Redis calls dramatically
+interface CacheEntry<T> {
+    data: T;
+    expiresAt: number;
+}
+
+const cache = new Map<string, CacheEntry<unknown>>();
+
+function getCached<T>(key: string): T | null {
+    const entry = cache.get(key) as CacheEntry<T> | undefined;
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+        cache.delete(key);
+        return null;
+    }
+    return entry.data;
+}
+
+function setCache<T>(key: string, data: T, ttlMs: number): void {
+    cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+function invalidateCache(key: string): void {
+    cache.delete(key);
+}
+
+// Cache TTLs (in ms) - shorter = fresher data, longer = less Redis load
+const CACHE_TTL = {
+    SONGS: 2000,        // 2 seconds - songs update frequently but can tolerate slight delay
+    TIMER: 5000,        // 5 seconds - timer is read-heavy, rarely changes mid-session
+    LOCKED: 5000,       // 5 seconds - locked state rarely changes
+    VIEWER_COUNT: 10000, // 10 seconds - approximate count is fine
+    PLAYLIST_TITLE: 30000, // 30 seconds - rarely changes
+};
+
 // Keys for Redis
 const SONGS_KEY = 'hackathon:songs';
 const BANNED_KEY = 'hackathon:banned';
@@ -37,6 +74,15 @@ const ACTIVITY_LOG_KEY = 'hackathon:activityLog';
 const USER_KARMA_KEY = 'hackathon:userKarma';
 const TOP3_KARMA_GRANTED_KEY = 'hackathon:top3KarmaGranted';  // Track songs that already gave top 3 karma
 const USER_LAST_ACTIVITY_KEY = 'hackathon:userLastActivity';  // Track when users were last active
+
+// ATOMIC VOTE KEYS - Using Redis Sets for concurrent vote safety
+// Format: hackathon:song:{songId}:upvotes and hackathon:song:{songId}:downvotes
+function getSongUpvotesKey(songId: string): string {
+    return `hackathon:song:${songId}:upvotes`;
+}
+function getSongDownvotesKey(songId: string): string {
+    return `hackathon:song:${songId}:downvotes`;
+}
 
 // ============ TYPES ============
 export interface Song {
@@ -74,28 +120,77 @@ const MAX_PLAYLIST_SIZE = 100;  // Hard cap on total songs
 const AUTO_PRUNE_THRESHOLD = -2;  // Songs at this score or below get pruned
 
 // ============ HELPER FUNCTIONS ============
+// Calculate score from vote arrays (for compatibility with old Song interface)
 function calculateScore(song: Song): number {
     return song.upvotes.length - song.downvotes.length;
 }
 
+// Get vote counts for a song using atomic Redis operations
+async function getSongVotes(songId: string): Promise<{ upvotes: string[]; downvotes: string[]; score: number }> {
+    try {
+        const upvotesKey = getSongUpvotesKey(songId);
+        const downvotesKey = getSongDownvotesKey(songId);
+
+        // Fetch both vote sets in parallel
+        const [upvotesResult, downvotesResult] = await Promise.all([
+            redis.smembers(upvotesKey).catch(() => []),
+            redis.smembers(downvotesKey).catch(() => []),
+        ]);
+
+        // Ensure we have arrays (smembers returns null for non-existent keys in some cases)
+        const upvotes = Array.isArray(upvotesResult) ? upvotesResult : [];
+        const downvotes = Array.isArray(downvotesResult) ? downvotesResult : [];
+
+        return {
+            upvotes,
+            downvotes,
+            score: upvotes.length - downvotes.length,
+        };
+    } catch (error) {
+        console.error('Failed to get song votes for', songId, ':', error);
+        return { upvotes: [], downvotes: [], score: 0 };
+    }
+}
+
 // ============ SONG FUNCTIONS ============
 export async function getSortedSongs(): Promise<(Song & { score: number })[]> {
+    // Check cache first (2s TTL)
+    const cacheKey = 'sorted_songs';
+    const cached = getCached<(Song & { score: number })[]>(cacheKey);
+    if (cached) return cached;
+
     try {
         const songs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+        const songList = Object.values(songs);
 
-        return Object.values(songs)
-            .map(song => ({
+        // Fetch votes for all songs in parallel using atomic Redis Sets
+        const votesPromises = songList.map(song => getSongVotes(song.id));
+        const allVotes = await Promise.all(votesPromises);
+
+        // Merge vote data with songs
+        const result = songList
+            .map((song, index) => ({
                 ...song,
-                score: calculateScore(song),
+                upvotes: allVotes[index].upvotes,
+                downvotes: allVotes[index].downvotes,
+                score: allVotes[index].score,
             }))
             .sort((a, b) => {
                 if (b.score !== a.score) return b.score - a.score;
                 return a.addedAt - b.addedAt;
             });
+
+        setCache(cacheKey, result, CACHE_TTL.SONGS);
+        return result;
     } catch (error) {
         console.error('Failed to get songs:', error);
         return [];
     }
+}
+
+// Invalidate songs cache when data changes
+export function invalidateSongsCache(): void {
+    invalidateCache('sorted_songs');
 }
 
 // Update audio features for an existing song
@@ -236,6 +331,9 @@ export async function addSong(
         await redis.hset(SONGS_KEY, { [song.id]: newSong });
         await redis.hincrby(USER_SONG_COUNTS_KEY, visitorId, 1);
 
+        // Invalidate cache since songs changed
+        invalidateSongsCache();
+
         // If this add is beyond base limit, spend karma (5 karma per extra song)
         const newCount = counts + 1;
         if (newCount > MAX_SONGS_PER_USER) {
@@ -310,6 +408,20 @@ export async function deleteSong(songId: string, visitorId: string): Promise<{ s
     }
 }
 
+// Admin delete song - no ownership check, no limits
+// Also cleans up the vote sets for the song
+export async function adminDeleteSong(songId: string): Promise<void> {
+    try {
+        await Promise.all([
+            redis.hdel(SONGS_KEY, songId),
+            redis.del(getSongUpvotesKey(songId)),
+            redis.del(getSongDownvotesKey(songId)),
+        ]);
+    } catch (error) {
+        console.error('Failed to admin delete song:', error);
+    }
+}
+
 export async function vote(songId: string, visitorId: string, direction: 1 | -1): Promise<{ success: boolean; error?: string }> {
     try {
         const isLocked = await redis.get<boolean>(LOCKED_KEY) || false;
@@ -322,58 +434,84 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
             return { success: false, error: 'You are banned' };
         }
 
+        // Check song exists
         const song = await redis.hget<Song>(SONGS_KEY, songId);
         if (!song) {
             return { success: false, error: 'Song not found' };
         }
 
-        // Get current votes for this user (stored as arrays now)
+        // Get user's current vote lists (for limit tracking)
         const userUpvotes = await redis.hget<string[]>(USER_UPVOTE_KEY, visitorId) || [];
         const userDownvotes = await redis.hget<string[]>(USER_DOWNVOTE_KEY, visitorId) || [];
 
+        // Get song's vote keys for atomic operations
+        const upvotesKey = getSongUpvotesKey(songId);
+        const downvotesKey = getSongDownvotesKey(songId);
+
         if (direction === 1) {
-            // Upvoting
-            const alreadyUpvoted = userUpvotes.includes(songId);
+            // UPVOTING
+            // Check if already upvoted using atomic SISMEMBER
+            const alreadyUpvoted = await redis.sismember(upvotesKey, visitorId);
 
             if (alreadyUpvoted) {
-                // Toggle off - remove upvote
-                song.upvotes = song.upvotes.filter(id => id !== visitorId);
+                // Toggle off - remove upvote using atomic SREM
+                await redis.srem(upvotesKey, visitorId);
                 const newUserUpvotes = userUpvotes.filter(id => id !== songId);
-                await redis.hset(SONGS_KEY, { [songId]: song });
                 await redis.hset(USER_UPVOTE_KEY, { [visitorId]: newUserUpvotes });
             } else {
-                // Check limit
-                if (userUpvotes.length >= MAX_UPVOTES_PER_USER) {
-                    return { success: false, error: `Maximum ${MAX_UPVOTES_PER_USER} upvotes reached` };
+                // Check limit - include karma bonuses
+                const karmaBonuses = await getKarmaBonuses(visitorId);
+                const maxUpvotes = MAX_UPVOTES_PER_USER + karmaBonuses.bonusVotes;
+                if (userUpvotes.length >= maxUpvotes) {
+                    return { success: false, error: `Maximum ${maxUpvotes} upvotes reached` };
                 }
-                // Add upvote
-                song.upvotes.push(visitorId);
-                userUpvotes.push(songId);
-                await redis.hset(SONGS_KEY, { [songId]: song });
-                await redis.hset(USER_UPVOTE_KEY, { [visitorId]: userUpvotes });
+
+                // Remove any existing downvote on this song first (atomic SREM)
+                const hadDownvote = await redis.sismember(downvotesKey, visitorId);
+                if (hadDownvote) {
+                    await redis.srem(downvotesKey, visitorId);
+                    const newUserDownvotes = userDownvotes.filter(id => id !== songId);
+                    await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: newUserDownvotes });
+                }
+
+                // Add upvote using atomic SADD
+                await redis.sadd(upvotesKey, visitorId);
+                await redis.hset(USER_UPVOTE_KEY, { [visitorId]: [...userUpvotes, songId] });
             }
         } else {
-            // Downvoting
-            const alreadyDownvoted = userDownvotes.includes(songId);
+            // DOWNVOTING
+            // Check if already downvoted using atomic SISMEMBER
+            const alreadyDownvoted = await redis.sismember(downvotesKey, visitorId);
 
             if (alreadyDownvoted) {
-                // Toggle off - remove downvote
-                song.downvotes = song.downvotes.filter(id => id !== visitorId);
+                // Toggle off - remove downvote using atomic SREM
+                await redis.srem(downvotesKey, visitorId);
                 const newUserDownvotes = userDownvotes.filter(id => id !== songId);
-                await redis.hset(SONGS_KEY, { [songId]: song });
                 await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: newUserDownvotes });
             } else {
-                // Check limit
-                if (userDownvotes.length >= MAX_DOWNVOTES_PER_USER) {
-                    return { success: false, error: `Maximum ${MAX_DOWNVOTES_PER_USER} downvotes reached` };
+                // Check limit - include karma bonuses
+                const karmaBonuses = await getKarmaBonuses(visitorId);
+                const maxDownvotes = MAX_DOWNVOTES_PER_USER + karmaBonuses.bonusVotes;
+                if (userDownvotes.length >= maxDownvotes) {
+                    return { success: false, error: `Maximum ${maxDownvotes} downvotes reached` };
                 }
-                // Add downvote
-                song.downvotes.push(visitorId);
-                userDownvotes.push(songId);
-                await redis.hset(SONGS_KEY, { [songId]: song });
-                await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: userDownvotes });
+
+                // Remove any existing upvote on this song first (atomic SREM)
+                const hadUpvote = await redis.sismember(upvotesKey, visitorId);
+                if (hadUpvote) {
+                    await redis.srem(upvotesKey, visitorId);
+                    const newUserUpvotes = userUpvotes.filter(id => id !== songId);
+                    await redis.hset(USER_UPVOTE_KEY, { [visitorId]: newUserUpvotes });
+                }
+
+                // Add downvote using atomic SADD
+                await redis.sadd(downvotesKey, visitorId);
+                await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: [...userDownvotes, songId] });
             }
         }
+
+        // Invalidate cache since vote scores changed
+        invalidateSongsCache();
 
         // Track user activity for admin panel sorting
         await updateUserActivity(visitorId);
@@ -393,29 +531,31 @@ export async function adminVote(songId: string, visitorId: string, direction: 1 
             return { success: false, error: 'Song not found' };
         }
 
+        const upvotesKey = getSongUpvotesKey(songId);
+        const downvotesKey = getSongDownvotesKey(songId);
+
         if (direction === 1) {
-            // Toggle upvote
-            const hasUpvoted = song.upvotes.includes(visitorId);
+            // Toggle upvote using atomic operations
+            const hasUpvoted = await redis.sismember(upvotesKey, visitorId);
             if (hasUpvoted) {
-                song.upvotes = song.upvotes.filter(id => id !== visitorId);
+                await redis.srem(upvotesKey, visitorId);
             } else {
                 // Remove from downvotes if present, add to upvotes
-                song.downvotes = song.downvotes.filter(id => id !== visitorId);
-                song.upvotes.push(visitorId);
+                await redis.srem(downvotesKey, visitorId);
+                await redis.sadd(upvotesKey, visitorId);
             }
         } else {
-            // Toggle downvote
-            const hasDownvoted = song.downvotes.includes(visitorId);
+            // Toggle downvote using atomic operations
+            const hasDownvoted = await redis.sismember(downvotesKey, visitorId);
             if (hasDownvoted) {
-                song.downvotes = song.downvotes.filter(id => id !== visitorId);
+                await redis.srem(downvotesKey, visitorId);
             } else {
                 // Remove from upvotes if present, add to downvotes
-                song.upvotes = song.upvotes.filter(id => id !== visitorId);
-                song.downvotes.push(visitorId);
+                await redis.srem(upvotesKey, visitorId);
+                await redis.sadd(downvotesKey, visitorId);
             }
         }
 
-        await redis.hset(SONGS_KEY, { [songId]: song });
         return { success: true };
     } catch (error) {
         console.error('Failed to admin vote:', error);
@@ -451,14 +591,20 @@ export async function getUserStatus(visitorId: string): Promise<{
         const upvotes = await redis.hget<string[]>(USER_UPVOTE_KEY, visitorId) || [];
         const downvotes = await redis.hget<string[]>(USER_DOWNVOTE_KEY, visitorId) || [];
 
+        // Include karma bonuses in the maximum song calculation
+        const karmaBonuses = await getKarmaBonuses(visitorId);
+        const maxSongs = MAX_SONGS_PER_USER + karmaBonuses.bonusSongAdds;
+        const maxUpvotes = MAX_UPVOTES_PER_USER + karmaBonuses.bonusVotes;
+        const maxDownvotes = MAX_DOWNVOTES_PER_USER + karmaBonuses.bonusVotes;
+
         return {
-            songsRemaining: Math.max(0, MAX_SONGS_PER_USER - songsAdded),
+            songsRemaining: Math.max(0, maxSongs - songsAdded),
             songsAdded,
             deletesRemaining: Math.max(0, MAX_DELETES_PER_USER - deleteCount),
             deletesUsed: deleteCount,
-            upvotesRemaining: Math.max(0, MAX_UPVOTES_PER_USER - upvotes.length),
+            upvotesRemaining: Math.max(0, maxUpvotes - upvotes.length),
             upvotesUsed: upvotes.length,
-            downvotesRemaining: Math.max(0, MAX_DOWNVOTES_PER_USER - downvotes.length),
+            downvotesRemaining: Math.max(0, maxDownvotes - downvotes.length),
             downvotesUsed: downvotes.length,
         };
     } catch (error) {
@@ -482,7 +628,14 @@ export async function setPlaylistLocked(locked: boolean): Promise<void> {
 }
 
 export async function isPlaylistLocked(): Promise<boolean> {
-    return await redis.get<boolean>(LOCKED_KEY) || false;
+    // Check cache first (5s TTL)
+    const cacheKey = 'playlist_locked';
+    const cached = getCached<boolean>(cacheKey);
+    if (cached !== null) return cached;
+
+    const result = await redis.get<boolean>(LOCKED_KEY) || false;
+    setCache(cacheKey, result, CACHE_TTL.LOCKED);
+    return result;
 }
 
 // ============ BAN FUNCTIONS ============
@@ -510,6 +663,8 @@ export async function startTimer(durationMs?: number): Promise<void> {
         running: true,
     };
     await redis.set(TIMER_KEY, timer);
+    // Auto-unlock playlist when timer starts - users can participate
+    await setPlaylistLocked(false);
 }
 
 export async function stopTimer(): Promise<void> {
@@ -519,6 +674,8 @@ export async function stopTimer(): Promise<void> {
         timer.endTime = null;
         await redis.set(TIMER_KEY, timer);
     }
+    // Auto-lock playlist when timer stops - only admin can modify
+    await setPlaylistLocked(true);
 }
 
 export async function resetTimer(): Promise<void> {
@@ -531,12 +688,29 @@ export async function resetTimer(): Promise<void> {
         running: true,
     };
     await redis.set(TIMER_KEY, newTimer);
+    // Auto-unlock playlist when timer resets - users can participate
+    await setPlaylistLocked(false);
 }
 
 export async function getTimerStatus(): Promise<{ endTime: number | null; running: boolean; remaining: number }> {
+    // Check cache first (5s TTL) - but skip if timer might have just expired
+    const cacheKey = 'timer_status';
+    const cached = getCached<{ endTime: number | null; running: boolean; remaining: number }>(cacheKey);
+
+    // Use cache if timer is stopped, or if remaining time is still valid
+    if (cached && (!cached.running || (cached.endTime && cached.endTime > Date.now()))) {
+        // Recalculate remaining from cached endTime
+        const remaining = cached.endTime && cached.running
+            ? Math.max(0, cached.endTime - Date.now())
+            : 0;
+        return { ...cached, remaining };
+    }
+
     const timer = await redis.get<TimerData>(TIMER_KEY);
     if (!timer) {
-        return { endTime: null, running: false, remaining: 0 };
+        const result = { endTime: null, running: false, remaining: 0 };
+        setCache(cacheKey, result, CACHE_TTL.TIMER);
+        return result;
     }
 
     const remaining = timer.endTime && timer.running
@@ -546,14 +720,17 @@ export async function getTimerStatus(): Promise<{ endTime: number | null; runnin
     // Auto-stop if time ran out
     if (timer.running && timer.endTime && Date.now() >= timer.endTime) {
         await stopTimer();
+        invalidateCache(cacheKey);
         return { endTime: null, running: false, remaining: 0 };
     }
 
-    return {
+    const result = {
         endTime: timer.endTime,
         running: timer.running,
         remaining,
     };
+    setCache(cacheKey, result, CACHE_TTL.TIMER);
+    return result;
 }
 
 // ============ RESET SESSION ============
@@ -569,9 +746,124 @@ export async function resetSession(): Promise<void> {
         redis.del(USER_UPVOTE_KEY),
         redis.del(USER_DOWNVOTE_KEY),
         redis.del(TIMER_KEY),
+        redis.del(ACTIVITY_LOG_KEY),
+        redis.del(TOP3_KARMA_GRANTED_KEY),
+        redis.del(USER_LAST_ACTIVITY_KEY),
     ]);
 
     console.log('🗑️ WIPE SESSION: Complete!');
+}
+
+// ============ DEEP CLEANUP (for storage optimization) ============
+// This cleans up orphaned vote sets and other accumulated data
+export async function deepCleanup(): Promise<{ deletedKeys: number; freedBytes: string }> {
+    console.log('🧹 DEEP CLEANUP: Starting comprehensive cleanup...');
+
+    let deletedKeys = 0;
+
+    try {
+        // Get all current songs so we know which vote sets are valid
+        const songs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+        const validSongIds = new Set(Object.keys(songs));
+
+        // Scan for all vote set keys (hackathon:song:*:upvotes and hackathon:song:*:downvotes)
+        // Note: Upstash scan uses cursor-based pagination
+        let cursor = 0;
+        const orphanedKeys: string[] = [];
+
+        do {
+            const result = await redis.scan(cursor, { match: 'hackathon:song:*:*votes', count: 100 });
+            cursor = Number(result[0]);
+            const keys = result[1] as string[];
+
+            for (const key of keys) {
+                // Extract songId from key like "hackathon:song:abc123:upvotes"
+                const match = key.match(/hackathon:song:(.+):(up|down)votes/);
+                if (match) {
+                    const songId = match[1];
+                    if (!validSongIds.has(songId)) {
+                        orphanedKeys.push(key);
+                    }
+                }
+            }
+        } while (cursor !== 0);
+
+        // Delete orphaned keys in batches
+        if (orphanedKeys.length > 0) {
+            console.log(`🧹 Found ${orphanedKeys.length} orphaned vote sets to clean up`);
+            for (const key of orphanedKeys) {
+                await redis.del(key);
+                deletedKeys++;
+            }
+        }
+
+        // Clean up old activity log entries (keep last 10)
+        const activities = await redis.lrange(ACTIVITY_LOG_KEY, 0, -1);
+        if (activities && activities.length > 10) {
+            await redis.ltrim(ACTIVITY_LOG_KEY, 0, 9);
+            console.log(`🧹 Trimmed activity log from ${activities.length} to 10 entries`);
+        }
+
+        // Estimate freed space (rough estimate: ~100 bytes per key)
+        const freedBytes = deletedKeys > 0 ? `~${(deletedKeys * 100 / 1024).toFixed(1)} KB` : '0 KB';
+
+        console.log(`🧹 DEEP CLEANUP: Complete! Deleted ${deletedKeys} orphaned keys`);
+
+        return { deletedKeys, freedBytes };
+    } catch (error) {
+        console.error('Failed to run deep cleanup:', error);
+        return { deletedKeys: 0, freedBytes: '0 KB' };
+    }
+}
+
+// ============ VIEWER COUNT (heartbeat-based) ============
+const VIEWER_HEARTBEAT_KEY = 'hackathon:viewerHeartbeats';
+const VIEWER_TTL_SECONDS = 30; // Consider viewer active if heartbeat within 30s
+
+export async function updateViewerHeartbeat(visitorId: string): Promise<void> {
+    try {
+        await redis.hset(VIEWER_HEARTBEAT_KEY, { [visitorId]: Date.now() });
+    } catch (error) {
+        console.error('Failed to update viewer heartbeat:', error);
+    }
+}
+
+export async function getActiveViewerCount(): Promise<number> {
+    // Check cache first (10s TTL - viewer count doesn't need to be super precise)
+    const cacheKey = 'viewer_count';
+    const cached = getCached<number>(cacheKey);
+    if (cached !== null) return cached;
+
+    try {
+        const heartbeats = await redis.hgetall<Record<string, number>>(VIEWER_HEARTBEAT_KEY) || {};
+        const now = Date.now();
+        const activeThreshold = now - (VIEWER_TTL_SECONDS * 1000);
+
+        let activeCount = 0;
+        const staleViewers: string[] = [];
+
+        for (const [visitorId, lastSeen] of Object.entries(heartbeats)) {
+            if (lastSeen >= activeThreshold) {
+                activeCount++;
+            } else {
+                staleViewers.push(visitorId);
+            }
+        }
+
+        // Clean up stale heartbeats lazily (only if there are many)
+        // This prevents cleanup from running on every request
+        if (staleViewers.length > 50) {
+            // Background cleanup - don't await
+            Promise.all(staleViewers.slice(0, 20).map(id => redis.hdel(VIEWER_HEARTBEAT_KEY, id)))
+                .catch(console.error);
+        }
+
+        setCache(cacheKey, activeCount, CACHE_TTL.VIEWER_COUNT);
+        return activeCount;
+    } catch (error) {
+        console.error('Failed to get viewer count:', error);
+        return 0;
+    }
 }
 
 // ============ ACTIVE USERS ============
@@ -696,13 +988,17 @@ export async function getStats(): Promise<{ totalSongs: number; totalVotes: numb
         const songs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
         const songsList = Object.values(songs);
 
+        // Fetch votes for all songs using atomic Redis Sets
+        const votePromises = songsList.map(song => getSongVotes(song.id));
+        const allVotes = await Promise.all(votePromises);
+
         const voters = new Set<string>();
         let totalVotes = 0;
 
-        for (const song of songsList) {
-            totalVotes += song.upvotes.length + song.downvotes.length;
-            song.upvotes.forEach(v => voters.add(v));
-            song.downvotes.forEach(v => voters.add(v));
+        for (const votes of allVotes) {
+            totalVotes += votes.upvotes.length + votes.downvotes.length;
+            votes.upvotes.forEach(v => voters.add(v));
+            votes.downvotes.forEach(v => voters.add(v));
         }
 
         return {
@@ -778,6 +1074,7 @@ export interface ActivityItem {
     id: string;
     type: 'add' | 'upvote' | 'downvote';
     userName: string;
+    visitorId: string;  // Added for admin quick-ban feature
     songName: string;
     timestamp: number;
 }
@@ -816,6 +1113,61 @@ export async function getRecentActivity(): Promise<ActivityItem[]> {
     }
 }
 
+// Remove a specific activity by ID and optionally delete associated data
+export async function removeActivity(activityId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const items = await redis.lrange(ACTIVITY_LOG_KEY, 0, MAX_ACTIVITY_ITEMS - 1);
+
+        // Find and remove the activity
+        let foundActivity: ActivityItem | null = null;
+        const updatedItems: string[] = [];
+
+        for (const item of items) {
+            const parsed: ActivityItem = typeof item === 'string' ? JSON.parse(item) : item;
+            if (parsed.id === activityId) {
+                foundActivity = parsed;
+            } else {
+                updatedItems.push(typeof item === 'string' ? item : JSON.stringify(item));
+            }
+        }
+
+        if (!foundActivity) {
+            return { success: false, error: 'Activity not found' };
+        }
+
+        // Clear the list and repopulate without the deleted activity
+        await redis.del(ACTIVITY_LOG_KEY);
+        if (updatedItems.length > 0) {
+            await redis.rpush(ACTIVITY_LOG_KEY, ...updatedItems);
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to remove activity:', error);
+        return { success: false, error: 'Database error' };
+    }
+}
+
+// Clear all activities from a specific user (used when banning)
+export async function removeUserActivities(visitorId: string): Promise<void> {
+    try {
+        const items = await redis.lrange(ACTIVITY_LOG_KEY, 0, MAX_ACTIVITY_ITEMS - 1);
+
+        const filteredItems = items.filter(item => {
+            const parsed: ActivityItem = typeof item === 'string' ? JSON.parse(item) : item;
+            return parsed.visitorId !== visitorId;
+        });
+
+        await redis.del(ACTIVITY_LOG_KEY);
+        if (filteredItems.length > 0) {
+            const serialized = filteredItems.map(i => typeof i === 'string' ? i : JSON.stringify(i));
+            await redis.rpush(ACTIVITY_LOG_KEY, ...serialized);
+        }
+    } catch (error) {
+        console.error('Failed to remove user activities:', error);
+    }
+}
+
 // ============ KARMA SYSTEM ============
 // Karma bonuses:
 // - Each karma point = +1 extra vote (can upvote OR downvote additional songs)
@@ -844,15 +1196,19 @@ export async function addKarma(visitorId: string, points: number = 1): Promise<n
 
 export interface KarmaBonuses {
     karma: number;
-    bonusVotes: number;      // Extra upvotes OR downvotes available
+    bonusVotes: number;      // Extra upvotes AND downvotes (same value for both)
     bonusSongAdds: number;   // Extra songs can add
 }
 
+// SIMPLIFIED KARMA SYSTEM:
+// Base: 5 songs, 5 upvotes, 5 downvotes
+// Karma bonus: Each 1 karma = +1 song, +1 upvote, +1 downvote
+// Example: 6 karma → 11 songs, 11 upvotes, 11 downvotes
 export function calculateKarmaBonuses(karma: number): KarmaBonuses {
     return {
         karma,
-        bonusVotes: karma,  // 1 karma = 1 extra vote
-        bonusSongAdds: Math.floor(karma / 5),  // Every 5 karma = 1 extra song add
+        bonusVotes: karma,      // 1 karma = +1 upvote AND +1 downvote
+        bonusSongAdds: karma,   // 1 karma = +1 song add
     };
 }
 

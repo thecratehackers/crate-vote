@@ -5,6 +5,7 @@ import {
     isPlaylistLocked,
     getStats,
     resetSession,
+    deepCleanup,
     getActiveUsers,
     banUserAndDeleteSongs,
     isUserBanned,
@@ -14,7 +15,9 @@ import {
     setPlaylistTitle,
     addKarma,
     getUserKarma,
-    getRecentActivity
+    getRecentActivity,
+    removeActivity,
+    removeUserActivities,
 } from '@/lib/redis-store';
 
 // GET - Get playlist status and stats
@@ -91,9 +94,20 @@ export async function POST(request: Request) {
                 if (!visitorId) {
                     return NextResponse.json({ error: 'Visitor ID required' }, { status: 400 });
                 }
-                // Ban user AND delete all their songs
-                const result = await banUserAndDeleteSongs(visitorId);
-                return NextResponse.json({ success: true, deletedSongs: result.deletedSongCount });
+                // Ban user AND delete all their songs AND activities
+                const banResult = await banUserAndDeleteSongs(visitorId);
+                await removeUserActivities(visitorId);
+                return NextResponse.json({ success: true, deletedSongs: banResult.deletedSongCount });
+            case 'deleteActivity':
+                const { activityId } = body;
+                if (!activityId) {
+                    return NextResponse.json({ error: 'Activity ID required' }, { status: 400 });
+                }
+                const deleteResult = await removeActivity(activityId);
+                if (!deleteResult.success) {
+                    return NextResponse.json({ error: deleteResult.error }, { status: 400 });
+                }
+                return NextResponse.json({ success: true });
             case 'setTitle':
                 if (!title || typeof title !== 'string') {
                     return NextResponse.json({ error: 'Title required' }, { status: 400 });
@@ -107,6 +121,14 @@ export async function POST(request: Request) {
                 const karmaPoints = body.points || 1;
                 const newKarma = await addKarma(visitorId, karmaPoints);
                 return NextResponse.json({ success: true, karma: newKarma });
+            case 'cleanup':
+                // Deep cleanup - remove orphaned vote sets and free storage
+                const cleanupResult = await deepCleanup();
+                return NextResponse.json({
+                    success: true,
+                    deletedKeys: cleanupResult.deletedKeys,
+                    freedBytes: cleanupResult.freedBytes
+                });
             default:
                 return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }

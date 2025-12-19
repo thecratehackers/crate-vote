@@ -1,6 +1,35 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, getPlaylistStats, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
+
+// ============ THROTTLED BACKGROUND TASKS ============
+// At 1000 users polling every 15s, we get ~67 req/sec
+// Running expensive tasks on every request is wasteful
+// Instead, run them at most once every 30 seconds
+
+let lastPruneTime = 0;
+let lastKarmaCheckTime = 0;
+const BACKGROUND_TASK_INTERVAL = 30000; // 30 seconds
+
+function shouldRunPrune(): boolean {
+    const now = Date.now();
+    if (now - lastPruneTime > BACKGROUND_TASK_INTERVAL) {
+        lastPruneTime = now;
+        return true;
+    }
+    return false;
+}
+
+function shouldRunKarmaCheck(): boolean {
+    const now = Date.now();
+    if (now - lastKarmaCheckTime > BACKGROUND_TASK_INTERVAL) {
+        lastKarmaCheckTime = now;
+        return true;
+    }
+    return false;
+}
+
+const MAX_PLAYLIST_SIZE = 100; // Must match redis-store
 
 // GET - Get all songs sorted by score
 export async function GET(request: Request) {
@@ -14,17 +43,36 @@ export async function GET(request: Request) {
 
     const visitorId = getVisitorIdFromRequest(request);
 
-    // Background tasks (don't block response)
-    autoPruneSongs().catch(console.error);
-    checkAndGrantTop3Karma().catch(console.error);  // Reward users with top 3 songs
+    // Background tasks - THROTTLED (run at most once per 30s, not on every request)
+    if (shouldRunPrune()) {
+        autoPruneSongs().catch(console.error);
+    }
+    if (shouldRunKarmaCheck()) {
+        checkAndGrantTop3Karma().catch(console.error);
+    }
 
-    const [songs, isLocked, playlistTitle, recentActivity, playlistStats] = await Promise.all([
+    // Update viewer heartbeat (for live viewer count) - fire and forget
+    if (visitorId) {
+        updateViewerHeartbeat(visitorId).catch(console.error);
+    }
+
+    // Fetch data in parallel - most of these are cached
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
         getRecentActivity(),
-        getPlaylistStats(),
+        getActiveViewerCount(),
     ]);
+
+    // Compute playlist stats from songs we already have (avoid extra Redis call)
+    const songCount = songs.length;
+    const hasDisplaceable = songs.some(s => s.score <= 0);
+    const playlistStats = {
+        current: songCount,
+        max: MAX_PLAYLIST_SIZE,
+        canAdd: songCount < MAX_PLAYLIST_SIZE || hasDisplaceable,
+    };
 
     // Censor profanity in song titles/artists for display
     const censoredSongs = songs.map(song => ({
@@ -46,6 +94,7 @@ export async function GET(request: Request) {
         recentActivity,
         karmaBonuses,
         playlistStats,
+        viewerCount,
     });
 }
 
@@ -136,6 +185,7 @@ export async function POST(request: Request) {
         await addActivity({
             type: 'add',
             userName: displayName,
+            visitorId: visitorId || 'unknown',
             songName: name,
         });
 

@@ -1,6 +1,6 @@
 # Crate Vote 🎵
 
-A collaborative playlist voting app for Twitch streamers. Let your viewers build and vote on the playlist together!
+A collaborative playlist voting app. Let your audience build and vote on the playlist together!
 
 ## Features
 

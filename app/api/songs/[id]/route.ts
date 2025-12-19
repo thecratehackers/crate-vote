@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { deleteSong, banUser } from '@/lib/redis-store';
+import { deleteSong, banUser, adminDeleteSong } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 
 // DELETE - Remove a song (admin or song owner)
@@ -11,15 +11,9 @@ export async function DELETE(
     const adminKey = request.headers.get('x-admin-key');
     const visitorId = getVisitorIdFromRequest(request);
 
-    // Admin can delete any song (pass empty string as visitorId to bypass ownership check)
+    // Admin can delete any song
     if (adminKey === process.env.ADMIN_PASSWORD) {
-        // For admin, we just remove the song directly from Redis
-        const { Redis } = await import('@upstash/redis');
-        const redis = new Redis({
-            url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '',
-            token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '',
-        });
-        await redis.hdel('hackathon:songs', id);
+        await adminDeleteSong(id);
         return NextResponse.json({ success: true });
     }
 

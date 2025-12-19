@@ -1277,7 +1277,7 @@ body::before {
 }
 
 /* ============================================= */
-/* GAMIFIED STATS PANEL - Twitch Stream Ready */
+/* GAMIFIED STATS PANEL - Stream Ready */
 /* ============================================= */
 
 .game-stats-panel {
@@ -2114,6 +2114,28 @@ body::before {
 .modal-card button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Admin link in welcome modal */
+.admin-link-modal {
+  display: block;
+  margin-top: 12px;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.admin-link-modal:hover {
+  color: var(--orange-primary);
+  border-color: var(--orange-primary);
+  background: rgba(211, 119, 29, 0.1);
 }
 
 /* Welcome modal with rules */
@@ -3655,10 +3677,71 @@ body::before {
   background: rgba(34, 197, 94, 0.1);
 }
 
+/* Admin badge in user list */
+.admin-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #d3771d, #e09f24);
+  color: #000;
+  border-radius: 4px;
+}
+
 .user-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* Karma dropdown for admin panel */
+.karma-dropdown-wrapper {
+  position: relative;
+}
+
+.karma-select {
+  appearance: none;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.karma-select:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
+}
+
+.karma-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5);
+}
+
+.karma-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 8px;
+}
+
+/* Clickable logo in admin header */
+.clickable-logo {
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.clickable-logo:hover {
+  transform: scale(1.1);
+  opacity: 0.9;
 }
 
 /* Admin Live Activity Feed */
@@ -3752,6 +3835,47 @@ body::before {
   color: var(--text-muted);
   font-size: 0.75rem;
   white-space: nowrap;
+}
+
+/* Quick ban button in activity feed */
+.activity-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.activity-log-item:hover .activity-actions {
+  opacity: 1;
+}
+
+.delete-activity-btn,
+.quick-ban-btn {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-activity-btn {
+  background: rgba(156, 163, 175, 0.2);
+  border-color: rgba(156, 163, 175, 0.4);
+}
+
+.delete-activity-btn:hover {
+  background: rgba(156, 163, 175, 0.5);
+  border-color: #9ca3af;
+  transform: scale(1.1);
+}
+
+.quick-ban-btn:hover {
+  background: rgba(239, 68, 68, 0.5);
+  border-color: #ef4444;
+  transform: scale(1.1);
 }
 
 /* Homepage - Karma status bar */
@@ -3970,7 +4094,7 @@ body::before {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   🎮 STREAM LAYOUT - Twitch-inspired compact design
+   🎮 STREAM LAYOUT - Compact design for streaming
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .stream-layout {
@@ -4047,6 +4171,29 @@ body::before {
 .live-badge-inline .live-pulse {
   width: 6px;
   height: 6px;
+}
+
+.viewer-count {
+  opacity: 0.85;
+  font-weight: 500;
+}
+
+/* Playlist title bar - Always visible */
+.playlist-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.1), rgba(224, 159, 36, 0.05));
+  border-bottom: 1px solid rgba(211, 119, 29, 0.2);
+}
+
+.playlist-title-text {
+  font-family: 'Rubik', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--orange-primary);
+  text-align: center;
 }
 
 /* Activity ticker below header */
@@ -4168,10 +4315,20 @@ body::before {
   opacity: 1;
 }
 
+.logo-home-link {
+  display: flex;
+  align-items: center;
+}
+
+.logo-home-link:hover .mini-logo {
+  transform: scale(1.1);
+}
+
 .mini-logo {
   width: 28px;
   height: 28px;
   border-radius: 6px;
+  transition: transform 0.2s;
 }
 
 .brand-name {
@@ -4248,6 +4405,80 @@ body::before {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   ACTION PROGRESS BARS - Stream-ready quota display
+   ───────────────────────────────────────────────────────────────────────── */
+.action-bars {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bar-icon {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.bar-track {
+  display: flex;
+  gap: 2px;
+  padding: 3px 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.bar-segment {
+  width: 8px;
+  height: 10px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+/* Empty segments - dark background */
+.bar-segment.empty {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Songs - Orange filled */
+.bar-track.songs .bar-segment.filled {
+  background: linear-gradient(180deg, var(--orange-primary), #b85a10);
+  box-shadow: 0 0 4px rgba(211, 119, 29, 0.5);
+}
+
+/* Upvotes - Green filled */
+.bar-track.upvotes .bar-segment.filled {
+  background: linear-gradient(180deg, #22c55e, #16a34a);
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
+}
+
+/* Downvotes - Red filled */
+.bar-track.downvotes .bar-segment.filled {
+  background: linear-gradient(180deg, #ef4444, #dc2626);
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+}
+
+/* Responsive - Stack on very small screens */
+@media (max-width: 480px) {
+  .action-bars {
+    gap: 6px;
+  }
+
+  .bar-segment {
+    width: 6px;
+    height: 8px;
+  }
+
+  .bar-icon {
+    font-size: 0.7rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    BANNERS - Voting closed, banned
    ───────────────────────────────────────────────────────────────────────── */
 .stream-layout .voting-closed-banner {
@@ -4291,18 +4522,7 @@ body::before {
   white-space: nowrap;
 }
 
-.twitch-btn {
-  background: rgba(145, 70, 255, 0.15);
-  color: #ceb3ff;
-  border: 1px solid rgba(145, 70, 255, 0.3);
-}
 
-.twitch-btn:hover {
-  background: rgba(145, 70, 255, 0.25);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(145, 70, 255, 0.2);
-}
 
 .spotify-btn {
   background: rgba(29, 185, 84, 0.15);
@@ -4317,21 +4537,57 @@ body::before {
   box-shadow: 0 4px 12px rgba(29, 185, 84, 0.2);
 }
 
-.admin-gear-right {
-  font-size: 1.2rem;
-  padding: 8px;
-  border-radius: 50%;
-  transition: transform 0.2s ease;
-  opacity: 0.6;
-  margin-left: 8px;
-  text-decoration: none;
-  cursor: pointer;
+.spotify-logo-icon {
+  height: 16px;
+  width: auto;
+  vertical-align: middle;
+  margin-right: 4px;
 }
 
-.admin-gear-right:hover {
-  transform: rotate(90deg);
+.admin-gear-right {
+  display: none;
+  /* Moved to footer */
+}
+
+/* Edit hint for username pill */
+.edit-hint {
+  font-size: 0.75rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: 4px;
+}
+
+.user-pill:hover .edit-hint {
   opacity: 1;
+}
+
+/* Admin footer - tucked away at the bottom */
+.admin-footer {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  margin-top: 24px;
+  border-top: 1px solid var(--border-color);
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+
+.admin-footer:hover {
+  opacity: 1;
+}
+
+.admin-link-subtle {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.8rem;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.admin-link-subtle:hover {
   background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
 }
 
 /* Mobile adjustments */
@@ -4656,6 +4912,17 @@ body::before {
   transition: all 0.15s ease;
 }
 
+/* Default state - subtle hue so users know which is which */
+.thumb-btn.up {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.thumb-btn.down {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
 .thumb-btn:hover:not(:disabled) {
   transform: scale(1.1);
 }
@@ -4665,16 +4932,19 @@ body::before {
   cursor: not-allowed;
 }
 
+/* Hover and active states - more intense */
 .thumb-btn.up:hover:not(:disabled),
 .thumb-btn.up.active {
-  background: rgba(34, 197, 94, 0.2);
+  background: rgba(34, 197, 94, 0.25);
   border-color: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
 }
 
 .thumb-btn.down:hover:not(:disabled),
 .thumb-btn.down.active {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.25);
   border-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
 }
 
 .vote-score {

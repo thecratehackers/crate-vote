@@ -50,6 +50,7 @@ export async function POST(
             await addActivity({
                 type: voteDirection === 1 ? 'upvote' : 'downvote',
                 userName,
+                visitorId,
                 songName,
             });
         }
