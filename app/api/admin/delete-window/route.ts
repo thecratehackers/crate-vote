@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error('Start delete window error:', error);
         return NextResponse.json(
-            { error: 'Could not start chaos mode. Please try again.' },
+            { error: 'Could not start The Purge. Please try again.' },
             { status: 500 }
         );
     }

@@ -686,10 +686,10 @@ export default function AdminPage() {
         }
     };
 
-    // Start delete window - grants everyone ONE delete for 30 seconds
+    // Start THE PURGE - grants everyone ONE delete for 30 seconds
     const handleStartDeleteWindow = async () => {
         isConfirmDialogOpen.current = true;
-        const confirmed = confirm('🗑️ START DELETE WINDOW?\n\nThis grants EVERY USER the ability to delete ONE song for 30 seconds.\n\nThis could cause chaos - use wisely!');
+        const confirmed = confirm('� START THE PURGE?\n\nThis grants EVERY USER the ability to PURGE ONE song for 30 seconds.\n\nAll crimes are legal - use wisely!');
         isConfirmDialogOpen.current = false;
         if (!confirmed) {
             return;
@@ -706,7 +706,7 @@ export default function AdminPage() {
                 const data = await res.json();
                 setDeleteWindowActive(true);
                 setDeleteWindowEndTime(data.endTime);
-                setMessage({ type: 'success', text: '🔥 DELETE WINDOW STARTED! Everyone has 30 seconds to delete ONE song!' });
+                setMessage({ type: 'success', text: '� THE PURGE HAS BEGUN! Everyone has 30 seconds to purge ONE song!' });
 
                 // Auto-refresh when window ends
                 setTimeout(() => {
@@ -716,10 +716,10 @@ export default function AdminPage() {
                 }, 30000);
             } else {
                 const data = await res.json();
-                setMessage({ type: 'error', text: data.error || 'Failed to start delete window' });
+                setMessage({ type: 'error', text: data.error || 'Failed to start The Purge' });
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to start delete window - network error' });
+            setMessage({ type: 'error', text: 'Failed to start The Purge - network error' });
         } finally {
             setIsStartingDeleteWindow(false);
         }
@@ -1198,14 +1198,14 @@ export default function AdminPage() {
                         onClick={handleStartDeleteWindow}
                         disabled={isStartingDeleteWindow || deleteWindowActive || songs.length === 0}
                     >
-                        {deleteWindowActive ? '🔥 DELETE WINDOW ACTIVE!' : isStartingDeleteWindow ? '⏳ Starting...' : '💣 Grant Delete Power'}
+                        {deleteWindowActive ? '� THE PURGE ACTIVE!' : isStartingDeleteWindow ? '⏳ Starting...' : '� The Purge'}
                     </button>
                     <button
                         className="admin-btn versus-btn"
                         onClick={handleStartVersusBattle}
                         disabled={isStartingBattle || versusBattle.active || songs.length < 5 || deleteWindowActive}
                         style={{ background: versusBattle.active ? '#ff6b35' : 'linear-gradient(135deg, #ff6b35, #f7931e)' }}
-                        title={songs.length < 5 ? 'Need at least 5 songs (top 3 protected, need 2+ to battle)' : deleteWindowActive ? 'Wait for delete window to end' : ''}
+                        title={songs.length < 5 ? 'Need at least 5 songs (top 3 protected, need 2+ to battle)' : deleteWindowActive ? 'Wait for The Purge to end' : ''}
                     >
                         {versusBattle.active ? '⚔️ BATTLE ACTIVE!' : isStartingBattle ? '⏳ Starting...' : '⚔️ Versus Battle'}
                     </button>
@@ -1400,7 +1400,7 @@ export default function AdminPage() {
                             return (
                                 <div key={activity.id} className={`activity-log-item ${activity.type}`}>
                                     <span className="activity-type-icon">
-                                        {activity.type === 'add' ? '🎵' : activity.type === 'upvote' ? '👍' : '👎'}
+                                        {activity.type === 'add' ? '💿' : activity.type === 'upvote' ? '👍' : '👎'}
                                     </span>
                                     <span className="activity-user">{activity.userName}</span>
                                     <span className="activity-action">
@@ -1569,10 +1569,10 @@ export default function AdminPage() {
 
             {/* Playlist - Admin GOD MODE */}
             <div className="admin-playlist">
-                <h3>🎵 Playlist ({songs.length} songs)</h3>
+                <h3>📦 Playlist ({songs.length} tracks)</h3>
                 {songs.length === 0 ? (
                     <div className="playlist-empty">
-                        <div className="icon">🎶</div>
+                        <div className="icon">�</div>
                         <p>No songs yet. Use the search above to add songs!</p>
                     </div>
                 ) : (

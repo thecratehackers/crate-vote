@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const visitorId = getVisitorIdFromRequest(request);
 
     if (!visitorId) {
-        return NextResponse.json({ error: 'Session expired. Please refresh the page to participate in Chaos Mode.' }, { status: 401 });
+        return NextResponse.json({ error: 'Session expired. Please refresh the page to participate in The Purge.' }, { status: 401 });
     }
 
     try {

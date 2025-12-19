@@ -5427,12 +5427,64 @@ body::before {
   color: #cd7f32;
 }
 
+/* Album art container - clickable for video preview */
+.album-art-container {
+  position: relative;
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.album-art-container::after {
+  content: '▶';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 1rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border-radius: 6px;
+}
+
+.album-art-container:hover::after {
+  opacity: 1;
+}
+
+.album-art-container.loading::after {
+  display: none;
+}
+
+.album-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 6px;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(211, 119, 29, 0.3);
+  border-top-color: var(--orange-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 .album-thumb {
   width: 40px;
   height: 40px;
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
+  display: block;
 }
 
 .song-info-stream {
@@ -5759,11 +5811,11 @@ body::before {
 }
 
 /* ============================================
-   💣 CHAOS MODE - DELETE WINDOW
+   💀 THE PURGE MODE
    ============================================ */
 
 /* Admin button style */
-/* Chaos button - subtle style, no pulsing glow */
+/* Purge button - subtle style */
 .admin-btn.chaos-btn {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
@@ -5781,7 +5833,7 @@ body::before {
   opacity: 0.5;
 }
 
-/* CHAOS BANNER - Homepage display */
+/* PURGE BANNER - Homepage display */
 .chaos-banner {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.95) 0%, rgba(185, 28, 28, 0.95) 100%);
   border: 3px solid #ef4444;

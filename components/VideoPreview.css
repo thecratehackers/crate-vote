@@ -1,0 +1,210 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIDEO PREVIEW POPUP STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.video-preview-popup {
+    position: fixed;
+    z-index: 9999;
+    width: 320px;
+    background: var(--bg-secondary, #141414);
+    border: 1px solid var(--border-color, rgba(211, 119, 29, 0.3));
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(211, 119, 29, 0.2);
+    overflow: hidden;
+    animation: popup-appear 0.2s ease-out;
+}
+
+@keyframes popup-appear {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Header */
+.video-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.video-preview-title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+    margin-right: 8px;
+}
+
+.video-preview-title .song-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-primary, #fff);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.video-preview-title .artist-name {
+    font-size: 0.75rem;
+    color: var(--orange-primary, #d3771d);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.video-preview-header .close-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, #fff);
+    border-radius: 50%;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.video-preview-header .close-btn:hover {
+    background: rgba(255, 107, 53, 0.3);
+    color: #ff6b35;
+}
+
+/* Video Container */
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 180px;
+    background: #000;
+}
+
+.video-container iframe {
+    display: block;
+}
+
+.video-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.8);
+    color: var(--text-secondary, #a0a0a0);
+    font-size: 0.85rem;
+}
+
+.video-loading .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(211, 119, 29, 0.3);
+    border-top-color: var(--orange-primary, #d3771d);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Controls */
+.video-preview-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.mute-btn {
+    padding: 6px 12px;
+    border: none;
+    background: var(--bg-tertiary, #1a1a1a);
+    color: var(--text-primary, #fff);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.mute-btn:hover {
+    background: rgba(211, 119, 29, 0.2);
+}
+
+.mute-btn.muted {
+    color: var(--text-muted, #666);
+}
+
+.mute-btn.unmuted {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+}
+
+.youtube-link {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #a0a0a0);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+
+.youtube-link:hover {
+    color: #ff0000;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+    .video-preview-popup {
+        position: fixed;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%);
+        width: calc(100vw - 32px);
+        max-width: 360px;
+    }
+
+    .video-container {
+        height: 200px;
+    }
+}
+
+/* Album art hover indicator */
+.album-art-container {
+    position: relative;
+    cursor: pointer;
+}
+
+.album-art-container::after {
+    content: '▶';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    font-size: 1.5rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+    border-radius: inherit;
+}
+
+.album-art-container:hover::after {
+    opacity: 1;
+}

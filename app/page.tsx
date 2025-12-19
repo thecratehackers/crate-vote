@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS } from '@/lib/config';
 import { PlaylistSkeleton } from '@/components/Skeleton';
 import VersusBattle from '@/components/VersusBattle';
+import VideoPreview from '@/components/VideoPreview';
 
 // Network resilience - fetch with timeout
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response> => {
@@ -177,6 +178,17 @@ export default function HomePage() {
     const [battleCountdown, setBattleCountdown] = useState(0);
     const [isVotingInBattle, setIsVotingInBattle] = useState(false);
 
+    // 🎬 Video Preview state
+    interface VideoPreviewState {
+        songId: string;
+        songName: string;
+        artistName: string;
+        videoId: string;
+        anchorRect: DOMRect;
+    }
+    const [videoPreview, setVideoPreview] = useState<VideoPreviewState | null>(null);
+    const [isLoadingVideo, setIsLoadingVideo] = useState<string | null>(null); // Track which song is loading
+
     // 🔒 UI STABILITY - Prevent song re-ordering during active interaction
     const [isUserInteracting, setIsUserInteracting] = useState(false);
     const interactionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -338,7 +350,7 @@ export default function HomePage() {
         localStorage.setItem('crate-username', name);
         setIsSavingUsername(false);
         setShowUsernameModal(false);
-        setMessage({ type: 'success', text: `Welcome, ${name}! 🎵` });
+        setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
     };
 
     // Fetch playlist data with rank tracking for dopamine effects
@@ -587,7 +599,7 @@ export default function HomePage() {
             const encouragements = [
                 `👍 Use your upvote to champion your favorite!`,
                 `👎 Got a song you don't like? Downvote it!`,
-                `🎵 ${sortedSongs.length} songs and counting!`,
+                `💿 ${sortedSongs.length} tracks and counting!`,
             ];
             shoutouts.push(...encouragements);
 
@@ -846,6 +858,45 @@ export default function HomePage() {
         }
     };
 
+    // 🎬 Open video preview for a song
+    const handleOpenVideoPreview = async (songId: string, songName: string, artistName: string, event: React.MouseEvent) => {
+        // Don't open if already showing this video
+        if (videoPreview?.songId === songId) {
+            setVideoPreview(null);
+            return;
+        }
+
+        // Get the album art element's position
+        const target = event.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+
+        // Set loading state
+        setIsLoadingVideo(songId);
+
+        try {
+            const response = await fetch(`/api/youtube-search?song=${encodeURIComponent(songName)}&artist=${encodeURIComponent(artistName)}`);
+            const data = await response.json();
+
+            if (data.videoId) {
+                setVideoPreview({
+                    songId,
+                    songName,
+                    artistName,
+                    videoId: data.videoId,
+                    anchorRect: rect,
+                });
+            } else {
+                // No video found - show brief message
+                setMessage({ type: 'error', text: 'No music video found for this song' });
+                setTimeout(() => setMessage(null), 2000);
+            }
+        } catch (error) {
+            console.error('Failed to load video:', error);
+        } finally {
+            setIsLoadingVideo(null);
+        }
+    };
+
     // Vote on song - NEW MODEL: user gets ONE upvote and ONE downvote total
     const handleVote = async (songId: string, vote: 1 | -1) => {
         if (!visitorId || isBanned) {
@@ -1036,7 +1087,7 @@ export default function HomePage() {
             <div className="modal-overlay">
                 <div className="modal-card welcome-modal">
                     <img src="/logo.png" alt="Logo" className="welcome-logo" />
-                    <h2>🎵 Collaborative Playlist</h2>
+                    <h2>🎧 Collaborative Playlist</h2>
                     <p className="welcome-subtitle">Add songs, vote for your favorites, build the ultimate playlist together!</p>
 
                     <div className="how-it-works">
@@ -1073,7 +1124,7 @@ export default function HomePage() {
 
                     <div className="rules-section">
                         <div className="rules-row">
-                            <span data-tooltip="Add up to 5 songs to the playlist">🎵 5 songs</span>
+                            <span data-tooltip="Add up to 5 songs to the playlist">💿 5 tracks</span>
                             <span data-tooltip="5 upvotes and 5 downvotes to use">👍👎 10 votes</span>
                             <span data-tooltip="Get your song in top 3 to earn karma bonuses!">✨ Earn karma</span>
                         </div>
@@ -1162,7 +1213,7 @@ export default function HomePage() {
                         <span key={activity.id} className={`ticker-item ${activity.type}`}>
                             {activity.userName === 'System' ? activity.songName : (
                                 <>
-                                    {activity.type === 'add' && `🎵 ${activity.userName} added "${activity.songName}"`}
+                                    {activity.type === 'add' && `💿 ${activity.userName} added "${activity.songName}"`}
                                     {activity.type === 'upvote' && `👍 ${activity.userName} upvoted`}
                                     {activity.type === 'downvote' && `👎 ${activity.userName} downvoted`}
                                 </>
@@ -1197,9 +1248,9 @@ export default function HomePage() {
                 )
             }
 
-            {/* 🎵 PLAYLIST TITLE BAR - Always visible, below closed banner */}
+            {/* 📦 PLAYLIST TITLE BAR - Always visible, below closed banner */}
             <div className="playlist-title-bar">
-                <span className="playlist-title-text">🎵 {playlistTitle}</span>
+                <span className="playlist-title-text">📦 {playlistTitle}</span>
                 <button
                     className={`export-inline-btn ${timerRunning ? 'locked' : ''}`}
                     onClick={handleExport}
@@ -1211,18 +1262,18 @@ export default function HomePage() {
                 </button>
             </div>
 
-            {/* 🔥 CHAOS MODE BANNER - Delete window active */}
+            {/* 💀 THE PURGE BANNER - Active purge window */}
             {deleteWindow.active && (
                 <div className="chaos-banner">
                     <div className="chaos-content">
-                        <span className="chaos-icon">💣</span>
-                        <span className="chaos-title">DELETE WINDOW OPEN!</span>
+                        <span className="chaos-icon">💀</span>
+                        <span className="chaos-title">THE PURGE IS OPEN!</span>
                         <span className="chaos-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</span>
                     </div>
                     <div className="chaos-message">
                         {deleteWindow.canDelete
-                            ? '🗑️ You can DELETE one song! Tap the trash icon on any song.'
-                            : '✓ You already used your delete this window.'}
+                            ? '💀 You can PURGE one song! Tap the skull on any song.'
+                            : '✓ You already used your purge this window.'}
                     </div>
                 </div>
             )}
@@ -1499,7 +1550,7 @@ export default function HomePage() {
             <div className="song-list-stream" id="song-list">
                 {sortedSongs.length === 0 ? (
                     <div className="empty-state">
-                        <div className="empty-icon">🎵</div>
+                        <div className="empty-icon">🎧</div>
                         <div className="empty-title">
                             {timerRunning ? 'No songs yet!' : 'Waiting for session...'}
                         </div>
@@ -1532,8 +1583,21 @@ export default function HomePage() {
                                     {index === 0 ? '👑' : `#${index + 1}`}
                                 </span>
 
-                                {/* Album Art - smaller */}
-                                <img src={song.albumArt || '/placeholder.svg'} alt="" className="album-thumb" />
+                                {/* Album Art - clickable for video preview */}
+                                <div
+                                    className={`album-art-container ${isLoadingVideo === song.id ? 'loading' : ''}`}
+                                    onClick={(e) => handleOpenVideoPreview(song.id, song.name, song.artist, e)}
+                                    title="Click to preview music video"
+                                    role="button"
+                                    tabIndex={0}
+                                >
+                                    <img src={song.albumArt || '/placeholder.svg'} alt="" className="album-thumb" />
+                                    {isLoadingVideo === song.id && (
+                                        <div className="album-loading-overlay">
+                                            <div className="spinner-small" />
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Song Info - super compact */}
                                 <div className="song-info-stream">
@@ -1568,15 +1632,15 @@ export default function HomePage() {
                                     </button>
                                 </div>
 
-                                {/* 🔥 CHAOS DELETE - Only visible during delete window */}
+                                {/* 💀 THE PURGE - Only visible during purge window */}
                                 {deleteWindow.active && deleteWindow.canDelete && (
                                     <button
                                         className="chaos-delete-btn"
                                         onClick={() => handleWindowDelete(song.id)}
                                         disabled={isDeleting}
-                                        title="DELETE this song!"
+                                        title="PURGE this song!"
                                     >
-                                        🗑️
+                                        💀
                                     </button>
                                 )}
                             </div>
@@ -1584,6 +1648,17 @@ export default function HomePage() {
                     })
                 )}
             </div>
+
+            {/* 🎬 Video Preview Popup */}
+            {videoPreview && (
+                <VideoPreview
+                    videoId={videoPreview.videoId}
+                    songName={videoPreview.songName}
+                    artistName={videoPreview.artistName}
+                    anchorRect={videoPreview.anchorRect}
+                    onClose={() => setVideoPreview(null)}
+                />
+            )}
         </div>
     );
 }

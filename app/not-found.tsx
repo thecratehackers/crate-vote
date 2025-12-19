@@ -4,7 +4,7 @@ export default function NotFound() {
     return (
         <div className="notfound-page">
             <div className="notfound-card">
-                <div className="notfound-icon">🎵</div>
+                <div className="notfound-icon">💿</div>
                 <h1>404 - Page Not Found</h1>
                 <p className="notfound-message">
                     Looks like this track got lost in the shuffle.

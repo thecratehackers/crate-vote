@@ -1354,12 +1354,15 @@ export interface KarmaBonuses {
 // SIMPLIFIED KARMA SYSTEM:
 // Base: 5 songs, 5 upvotes, 5 downvotes
 // Karma bonus: Each 1 karma = +1 song, +1 upvote, +1 downvote
-// Example: 6 karma → 11 songs, 11 upvotes, 11 downvotes
+// CAPPED at 5 bonus (max 10 total) to prevent excessive accumulation
+const MAX_KARMA_BONUS = 5; // Base 5 + 5 bonus = 10 max
+
 export function calculateKarmaBonuses(karma: number): KarmaBonuses {
+    const cappedBonus = Math.min(karma, MAX_KARMA_BONUS);
     return {
-        karma,
-        bonusVotes: karma,      // 1 karma = +1 upvote AND +1 downvote
-        bonusSongAdds: karma,   // 1 karma = +1 song add
+        karma,                    // Show actual karma for display
+        bonusVotes: cappedBonus,  // 1 karma = +1 upvote AND +1 downvote (capped)
+        bonusSongAdds: cappedBonus, // 1 karma = +1 song add (capped)
     };
 }
 
