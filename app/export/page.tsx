@@ -243,18 +243,23 @@ export default function ExportPage() {
                     }
                     .back-link {
                         display: inline-block;
-                        color: var(--text-secondary);
+                        color: #d3771d !important;
                         text-decoration: none;
-                        font-size: 1.1rem;
-                        font-weight: 500;
-                        padding: 12px 24px;
-                        margin-top: 8px;
+                        font-size: 1.2rem;
+                        font-weight: 600;
+                        padding: 14px 28px;
+                        margin-top: 12px;
                         transition: all 0.2s;
-                        border-radius: 8px;
+                        border-radius: 10px;
+                        border: 2px solid transparent;
+                    }
+                    .back-link:visited {
+                        color: #d3771d !important;
                     }
                     .back-link:hover {
-                        color: var(--text-primary);
-                        background: rgba(255, 255, 255, 0.05);
+                        color: #e09f24 !important;
+                        background: rgba(211, 119, 29, 0.1);
+                        border-color: rgba(211, 119, 29, 0.3);
                     }
                 `}</style>
             </div>
