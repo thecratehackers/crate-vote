@@ -1131,7 +1131,7 @@ export default function AdminPage() {
 
             {/* Playlist - Admin GOD MODE */}
             <div className="admin-playlist">
-                <h3>🎵 Playlist ({songs.length} songs) <span className="god-mode-badge">GOD MODE</span></h3>
+                <h3>🎵 Playlist ({songs.length} songs)</h3>
                 {songs.length === 0 ? (
                     <div className="playlist-empty">
                         <div className="icon">🎶</div>

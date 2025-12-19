@@ -5624,34 +5624,22 @@ body::before {
    ============================================ */
 
 /* Admin button style */
+/* Chaos button - subtle style, no pulsing glow */
 .admin-btn.chaos-btn {
-  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
-  border: 2px solid #ef4444;
-  color: white;
-  font-weight: 700;
-  animation: chaosButtonPulse 1.5s ease-in-out infinite;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .admin-btn.chaos-btn:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+  background: var(--bg-elevated);
+  border-color: var(--orange-primary);
+  color: var(--orange-primary);
 }
 
 .admin-btn.chaos-btn:disabled {
-  opacity: 0.6;
-  animation: none;
-}
-
-@keyframes chaosButtonPulse {
-
-  0%,
-  100% {
-    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
-  }
-
-  50% {
-    box-shadow: 0 0 25px rgba(239, 68, 68, 0.8);
-  }
+  opacity: 0.5;
 }
 
 /* CHAOS BANNER - Homepage display */
