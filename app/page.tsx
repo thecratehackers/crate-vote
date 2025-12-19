@@ -856,37 +856,22 @@ export default function HomePage() {
                 </div>
                 <div className="header-right">
                     {!isBanned && isSessionActive && (
-                        <div className="action-bars">
-                            {/* Songs progress bar */}
-                            <div className="action-bar" title={`Songs: ${userStatus.songsAdded}/${userStatus.songsAdded + userStatus.songsRemaining} used`}>
-                                <span className="bar-icon">💿</span>
-                                <div className="bar-track songs">
-                                    {[...Array(userStatus.songsAdded + userStatus.songsRemaining)].map((_, i) => (
-                                        <div key={i} className={`bar-segment ${i < userStatus.songsAdded ? 'filled' : 'empty'}`} />
-                                    ))}
-                                </div>
-                            </div>
-                            {/* Upvotes progress bar */}
-                            <div className="action-bar" title={`Upvotes: ${userStatus.upvotesUsed}/${userStatus.upvotesUsed + userStatus.upvotesRemaining} used`}>
-                                <span className="bar-icon">👍</span>
-                                <div className="bar-track upvotes">
-                                    {[...Array(userStatus.upvotesUsed + userStatus.upvotesRemaining)].map((_, i) => (
-                                        <div key={i} className={`bar-segment ${i < userStatus.upvotesUsed ? 'filled' : 'empty'}`} />
-                                    ))}
-                                </div>
-                            </div>
-                            {/* Downvotes progress bar */}
-                            <div className="action-bar" title={`Downvotes: ${userStatus.downvotesUsed}/${userStatus.downvotesUsed + userStatus.downvotesRemaining} used`}>
-                                <span className="bar-icon">👎</span>
-                                <div className="bar-track downvotes">
-                                    {[...Array(userStatus.downvotesUsed + userStatus.downvotesRemaining)].map((_, i) => (
-                                        <div key={i} className={`bar-segment ${i < userStatus.downvotesUsed ? 'filled' : 'empty'}`} />
-                                    ))}
-                                </div>
-                            </div>
+                        <div className="action-stats">
+                            {/* Songs remaining */}
+                            <span className="stat-counter songs" title={`${userStatus.songsRemaining} songs left to add`}>
+                                💿 {userStatus.songsRemaining}
+                            </span>
+                            {/* Upvotes remaining */}
+                            <span className="stat-counter upvotes" title={`${userStatus.upvotesRemaining} upvotes left`}>
+                                👍 {userStatus.upvotesRemaining}
+                            </span>
+                            {/* Downvotes remaining */}
+                            <span className="stat-counter downvotes" title={`${userStatus.downvotesRemaining} downvotes left`}>
+                                👎 {userStatus.downvotesRemaining}
+                            </span>
                             {/* Karma - only show if > 0 */}
                             {karmaBonuses.karma > 0 && (
-                                <span className="stat-pill karma" title="Your karma">
+                                <span className="stat-counter karma" title="Your karma">
                                     ✨ {karmaBonuses.karma}
                                 </span>
                             )}

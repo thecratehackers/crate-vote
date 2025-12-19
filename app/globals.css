@@ -4826,76 +4826,58 @@ body::before {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   ACTION PROGRESS BARS - Stream-ready quota display
+   ACTION STATS - Compact counters for mobile-friendly display
    ───────────────────────────────────────────────────────────────────────── */
-.action-bars {
+.action-stats {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
-.action-bar {
+.stat-counter {
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.bar-icon {
-  font-size: 0.8rem;
-  line-height: 1;
-}
-
-.bar-track {
-  display: flex;
-  gap: 2px;
-  padding: 3px 4px;
+  padding: 4px 10px;
   background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-}
-
-.bar-segment {
-  width: 8px;
-  height: 10px;
-  border-radius: 2px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
   transition: all 0.2s ease;
 }
 
-/* Empty segments - dark background */
-.bar-segment.empty {
-  background: rgba(255, 255, 255, 0.1);
+/* Color-coded counters */
+.stat-counter.songs {
+  border-color: rgba(211, 119, 29, 0.3);
+  color: var(--orange-primary);
 }
 
-/* Songs - Orange filled */
-.bar-track.songs .bar-segment.filled {
-  background: linear-gradient(180deg, var(--orange-primary), #b85a10);
-  box-shadow: 0 0 4px rgba(211, 119, 29, 0.5);
+.stat-counter.upvotes {
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
 }
 
-/* Upvotes - Green filled */
-.bar-track.upvotes .bar-segment.filled {
-  background: linear-gradient(180deg, #22c55e, #16a34a);
-  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
+.stat-counter.downvotes {
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }
 
-/* Downvotes - Red filled */
-.bar-track.downvotes .bar-segment.filled {
-  background: linear-gradient(180deg, #ef4444, #dc2626);
-  box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+.stat-counter.karma {
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
 }
 
-/* Responsive - Stack on very small screens */
+/* Responsive - slightly smaller on mobile */
 @media (max-width: 480px) {
-  .action-bars {
-    gap: 6px;
+  .action-stats {
+    gap: 4px;
   }
 
-  .bar-segment {
-    width: 6px;
-    height: 8px;
-  }
-
-  .bar-icon {
-    font-size: 0.7rem;
+  .stat-counter {
+    padding: 3px 8px;
+    font-size: 0.75rem;
   }
 }
 
