@@ -2151,51 +2151,35 @@ body::before {
 }
 
 .rules-section {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 20px;
+  padding-top: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.rules-section h3 {
-  font-size: 0.95rem;
-  margin-bottom: 16px;
+/* Simple horizontal row of rules - minimal text */
+.rules-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.rules-row span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
   color: var(--text-secondary);
-}
-
-.rules-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.rule-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px;
+  cursor: default;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
+  border-radius: 20px;
+  transition: all 0.2s;
 }
 
-.rule-icon {
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.rule-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.rule-text strong {
-  font-size: 0.85rem;
+.rules-row span:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
-}
-
-.rule-text span {
-  font-size: 0.75rem;
-  color: var(--text-muted);
 }
 
 /* Added by user name */

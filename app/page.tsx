@@ -803,7 +803,7 @@ export default function HomePage() {
                         maxLength={20}
                     />
                     <button onClick={handleSetUsername} disabled={!usernameInput.trim()}>
-                        Let's start hacking!
+                        Let's Go! 🎵
                     </button>
 
                     <Link href="/admin" className="admin-link-modal">
@@ -811,36 +811,10 @@ export default function HomePage() {
                     </Link>
 
                     <div className="rules-section">
-                        <h3>How It Works</h3>
-                        <div className="rules-grid">
-                            <div className="rule-item">
-                                <span className="rule-icon">🎵</span>
-                                <div className="rule-text">
-                                    <strong>Add Songs</strong>
-                                    <span>You get 5 songs to add</span>
-                                </div>
-                            </div>
-                            <div className="rule-item">
-                                <span className="rule-icon">▲▼</span>
-                                <div className="rule-text">
-                                    <strong>Vote</strong>
-                                    <span>5 upvotes & 5 downvotes</span>
-                                </div>
-                            </div>
-                            <div className="rule-item">
-                                <span className="rule-icon">🏆</span>
-                                <div className="rule-text">
-                                    <strong>Top 3 = Karma</strong>
-                                    <span>Your song hits top 3? +5 karma!</span>
-                                </div>
-                            </div>
-                            <div className="rule-item">
-                                <span className="rule-icon">✨</span>
-                                <div className="rule-text">
-                                    <strong>Karma Bonus</strong>
-                                    <span>Each karma = +1 song & +1 vote each</span>
-                                </div>
-                            </div>
+                        <div className="rules-row">
+                            <span title="Add up to 5 songs">🎵 5 songs</span>
+                            <span title="5 upvotes, 5 downvotes">👍👎 10 votes</span>
+                            <span title="Top 3 songs earn karma">🏆 Earn karma</span>
                         </div>
                     </div>
                 </div>
@@ -957,7 +931,7 @@ export default function HomePage() {
                 !timerRunning && !isBanned && (
                     <div className="voting-closed-banner">
                         <div className="closed-message">
-                            🎧 <strong>Voting is closed!</strong> Check back when the next session starts.
+                            ⏳ <strong>Next session coming soon!</strong> Grab the playlist while you wait.
                         </div>
                         <div className="closed-actions">
                             <button onClick={handleExport} className="action-btn spotify-btn">
