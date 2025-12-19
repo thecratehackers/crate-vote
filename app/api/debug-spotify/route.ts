@@ -33,7 +33,7 @@ export async function GET(request: Request) {
         const token = tokenData.access_token;
 
         // Try to fetch the playlist
-        const playlistUrl = `https://api.spotify.com/v1/playlists/${playlistId}`;
+        const playlistUrl = `https://api.spotify.com/v1/playlists/${playlistId}?market=US`;
         console.log('Fetching playlist from:', playlistUrl);
 
         const playlistResponse = await fetch(playlistUrl, {

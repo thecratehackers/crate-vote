@@ -293,8 +293,9 @@ export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): P
     console.log('Fetching Spotify playlist:', playlistId);
 
     // Get playlist info first
+    // Note: Market parameter is required as a workaround for Spotify API bug (Dec 2024)
     const playlistResponse = await fetch(
-        `${SPOTIFY_API_BASE}/playlists/${playlistId}?fields=name`,
+        `${SPOTIFY_API_BASE}/playlists/${playlistId}?fields=name&market=US`,
         {
             headers: { Authorization: `Bearer ${token}` },
             cache: 'no-store',
@@ -320,7 +321,7 @@ export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): P
 
     // Fetch tracks (Spotify returns max 100 per request, we'll just get first batch)
     const tracksResponse = await fetch(
-        `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks?limit=${Math.min(maxTracks, 100)}&fields=items(track(id,uri,name,artists,album,preview_url,popularity,explicit,duration_ms))`,
+        `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks?limit=${Math.min(maxTracks, 100)}&market=US&fields=items(track(id,uri,name,artists,album,preview_url,popularity,explicit,duration_ms))`,
         {
             headers: { Authorization: `Bearer ${token}` },
             cache: 'no-store',
