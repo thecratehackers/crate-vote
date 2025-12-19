@@ -80,11 +80,7 @@ export default function AdminPage() {
     const [isSearching, setIsSearching] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
 
-    // Playlist import state
-    const [importPlaylistUrl, setImportPlaylistUrl] = useState('');
-    const [isImporting, setIsImporting] = useState(false);
-    const [importProgress, setImportProgress] = useState<{ total: number; current: number; stage: string } | null>(null);
-    const [importResult, setImportResult] = useState<{ imported: number; skipped: number; playlistName: string } | null>(null);
+    // Shuffle state
     const [isShuffling, setIsShuffling] = useState(false);
 
     // Fetch playlist data (with admin heartbeat)
@@ -565,65 +561,6 @@ export default function AdminPage() {
             }
         } catch (error) {
             setMessage({ type: 'error', text: 'Failed to refresh features - network error' });
-        }
-    };
-
-    // Import Spotify playlist
-    const handleImportPlaylist = async () => {
-        if (!importPlaylistUrl.trim()) {
-            setMessage({ type: 'error', text: 'Please enter a Spotify playlist URL' });
-            return;
-        }
-
-        setIsImporting(true);
-        setImportResult(null);
-
-        // Animated progress stages
-        setImportProgress({ total: 0, current: 0, stage: '🔗 Connecting to Spotify...' });
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setImportProgress({ total: 0, current: 0, stage: '📋 Fetching playlist info...' });
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        try {
-            const res = await adminFetch('/api/admin/import-playlist', {
-                method: 'POST',
-                body: JSON.stringify({ playlistUrl: importPlaylistUrl.trim() }),
-            });
-
-            setImportProgress({ total: 0, current: 0, stage: '🎵 Adding songs to your playlist...' });
-            const data = await res.json();
-
-            if (res.ok) {
-                setImportProgress({
-                    total: data.imported + data.skipped,
-                    current: data.imported + data.skipped,
-                    stage: `✅ Done! ${data.imported} songs imported`
-                });
-
-                setImportResult({
-                    imported: data.imported,
-                    skipped: data.skipped,
-                    playlistName: data.playlistName
-                });
-                setMessage({
-                    type: 'success',
-                    text: `✅ Imported ${data.imported} songs from "${data.playlistName}"${data.skipped > 0 ? ` (${data.skipped} duplicates skipped)` : ''}`
-                });
-                setImportPlaylistUrl('');
-                setPlaylistTitle(data.playlistName);
-                fetchPlaylist();
-            } else {
-                setImportProgress({ total: 0, current: 0, stage: '❌ ' + (data.error || 'Import failed') });
-                setMessage({ type: 'error', text: data.error || 'Failed to import playlist' });
-            }
-        } catch (error) {
-            setImportProgress({ total: 0, current: 0, stage: '❌ Network error' });
-            setMessage({ type: 'error', text: 'Failed to import playlist - network error' });
-        } finally {
-            // Keep the final status visible briefly
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            setIsImporting(false);
-            setImportProgress(null);
         }
     };
 
