@@ -80,6 +80,10 @@ export default function AdminPage() {
     const [isSearching, setIsSearching] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
 
+    // Playlist import state
+    const [importPlaylistUrl, setImportPlaylistUrl] = useState('');
+    const [isImporting, setIsImporting] = useState(false);
+
     // Fetch playlist data (with admin heartbeat)
     const fetchPlaylist = useCallback(async () => {
         try {
@@ -561,6 +565,39 @@ export default function AdminPage() {
         }
     };
 
+    // Import Spotify playlist to prime the pump
+    const handleImportPlaylist = async () => {
+        if (!importPlaylistUrl.trim()) {
+            setMessage({ type: 'error', text: 'Please enter a Spotify playlist URL' });
+            return;
+        }
+
+        setIsImporting(true);
+        try {
+            const res = await adminFetch('/api/admin/import-playlist', {
+                method: 'POST',
+                body: JSON.stringify({ playlistUrl: importPlaylistUrl.trim() }),
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                setMessage({
+                    type: 'success',
+                    text: `✅ Imported ${data.imported} songs from "${data.playlistName}"${data.skipped > 0 ? ` (${data.skipped} duplicates skipped)` : ''}`
+                });
+                setImportPlaylistUrl('');
+                setPlaylistTitle(data.playlistName);
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to import playlist' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to import playlist - network error' });
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
     // Toggle lock
     const handleToggleLock = async () => {
         try {
@@ -747,6 +784,28 @@ export default function AdminPage() {
                         </button>
                     </div>
                 )}
+            </div>
+
+            {/* 📥 IMPORT SPOTIFY PLAYLIST */}
+            <div className="import-playlist-panel">
+                <label>📥 Import Spotify Playlist (prime the pump with songs):</label>
+                <div className="import-row">
+                    <input
+                        type="text"
+                        value={importPlaylistUrl}
+                        onChange={(e) => setImportPlaylistUrl(e.target.value)}
+                        placeholder="Paste Spotify playlist URL (e.g., https://open.spotify.com/playlist/...)"
+                        disabled={isImporting}
+                    />
+                    <button
+                        className="admin-btn success"
+                        onClick={handleImportPlaylist}
+                        disabled={isImporting || !importPlaylistUrl.trim()}
+                    >
+                        {isImporting ? '⏳ Importing...' : '📥 Import'}
+                    </button>
+                </div>
+                <p className="import-hint">Imports up to 100 songs from a public Spotify playlist. Perfect for starting a session with seed tracks!</p>
             </div>
 
             {/* Timer Control Panel */}

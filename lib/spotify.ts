@@ -234,6 +234,130 @@ export async function createPlaylist(
     };
 }
 
+// Extract playlist ID from various Spotify URL formats
+function extractPlaylistId(url: string): string | null {
+    // Supported formats:
+    // https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
+    // https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=abc123
+    // spotify:playlist:37i9dQZF1DXcBWIGoYBM5M
+
+    const patterns = [
+        /spotify\.com\/playlist\/([a-zA-Z0-9]+)/,
+        /spotify:playlist:([a-zA-Z0-9]+)/,
+    ];
+
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+    }
+
+    // If it's just the ID itself (22 chars alphanumeric)
+    if (/^[a-zA-Z0-9]{22}$/.test(url.trim())) {
+        return url.trim();
+    }
+
+    return null;
+}
+
+// Fetch tracks from a Spotify playlist
+export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): Promise<{
+    playlistName: string;
+    tracks: {
+        id: string;
+        spotifyUri: string;
+        name: string;
+        artist: string;
+        album: string;
+        albumArt: string;
+        previewUrl: string | null;
+        popularity: number;
+        bpm: number | null;
+        energy: number | null;
+        valence: number | null;
+        danceability: number | null;
+        explicit: boolean;
+        durationMs: number;
+    }[];
+}> {
+    const playlistId = extractPlaylistId(playlistUrl);
+    if (!playlistId) {
+        throw new Error('Invalid Spotify playlist URL');
+    }
+
+    const token = await getClientToken();
+
+    console.log('Fetching Spotify playlist:', playlistId);
+
+    // Get playlist info first
+    const playlistResponse = await fetch(
+        `${SPOTIFY_API_BASE}/playlists/${playlistId}?fields=name`,
+        {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+        }
+    );
+
+    if (!playlistResponse.ok) {
+        const errorText = await playlistResponse.text();
+        console.error('Spotify playlist error:', playlistResponse.status, errorText);
+        throw new Error(`Failed to fetch playlist: ${playlistResponse.status}`);
+    }
+
+    const playlistInfo = await playlistResponse.json();
+    const playlistName = playlistInfo.name;
+
+    // Fetch tracks (Spotify returns max 100 per request, we'll just get first batch)
+    const tracksResponse = await fetch(
+        `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks?limit=${Math.min(maxTracks, 100)}&fields=items(track(id,uri,name,artists,album,preview_url,popularity,explicit,duration_ms))`,
+        {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+        }
+    );
+
+    if (!tracksResponse.ok) {
+        const errorText = await tracksResponse.text();
+        console.error('Spotify tracks error:', tracksResponse.status, errorText);
+        throw new Error(`Failed to fetch playlist tracks: ${tracksResponse.status}`);
+    }
+
+    const tracksData = await tracksResponse.json();
+    const items = tracksData.items || [];
+
+    // Filter out null tracks (can happen with unavailable songs)
+    const validTracks = items
+        .filter((item: { track: SpotifyTrack | null }) => item.track !== null)
+        .map((item: { track: SpotifyTrack }) => item.track);
+
+    // Fetch audio features for all tracks
+    const trackIds = validTracks.map((t: SpotifyTrack) => t.id);
+    const audioFeatures = await getAudioFeatures(token, trackIds);
+
+    const tracks = validTracks.map((track: SpotifyTrack) => {
+        const features = audioFeatures.get(track.id);
+        return {
+            id: track.id,
+            spotifyUri: track.uri,
+            name: track.name,
+            artist: track.artists.map((a) => a.name).join(', '),
+            album: track.album.name,
+            albumArt: track.album.images[0]?.url || '',
+            previewUrl: track.preview_url,
+            popularity: track.popularity,
+            bpm: features ? Math.round(features.tempo) : null,
+            energy: features ? features.energy : null,
+            valence: features ? features.valence : null,
+            danceability: features ? features.danceability : null,
+            explicit: track.explicit,
+            durationMs: track.duration_ms,
+        };
+    });
+
+    console.log(`Fetched ${tracks.length} tracks from playlist "${playlistName}"`);
+
+    return { playlistName, tracks };
+}
+
 // Get current user's profile (to get user ID for playlist creation)
 export async function getCurrentUser(accessToken: string): Promise<{ id: string; displayName: string }> {
     const response = await fetch(`${SPOTIFY_API_BASE}/me`, {

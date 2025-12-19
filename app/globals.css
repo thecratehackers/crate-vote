@@ -3411,6 +3411,77 @@ body::before {
 }
 
 /* ============================================
+   📥 IMPORT PLAYLIST PANEL
+   ============================================ */
+
+.import-playlist-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.import-playlist-panel label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.import-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.import-row input {
+  flex: 1;
+  min-width: 250px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.import-row input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+}
+
+.import-row input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.import-hint {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .import-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .import-row input {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .import-row button {
+    width: 100%;
+  }
+}
+
+/* ============================================
    🎵 STANDALONE PLAY PREVIEW BUTTON
    ============================================ */
 
