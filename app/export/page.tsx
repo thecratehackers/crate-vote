@@ -136,20 +136,123 @@ export default function ExportPage() {
         return (
             <div className="export-page">
                 <div className="success-card">
-                    <img src="/logo.png" alt="Crate Hackers" className="success-logo" />
-                    <div className="success-checkmark">✓</div>
-                    <h1>Playlist Created!</h1>
+                    <div className="success-header">
+                        <img src="/logo.png" alt="Crate Hackers" className="success-logo" />
+                        <div className="success-checkmark">✓</div>
+                    </div>
+                    <h1>🎉 Playlist Created!</h1>
                     <p className="success-subtitle">
-                        Your {tracks.length}-song playlist has been exported to Spotify
+                        Your <strong>{tracks.length}-song</strong> playlist is ready on Spotify
                     </p>
                     <a href={playlistUrl} target="_blank" rel="noopener noreferrer" className="spotify-link">
-                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                        </svg>
+                        <img src="/spotify-logo.png" alt="" className="spotify-btn-icon" />
                         Open in Spotify
                     </a>
                     <Link href="/" className="back-link">← Back to voting</Link>
                 </div>
+
+                <style jsx>{`
+                    .export-page {
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 20px;
+                    }
+                    .success-card {
+                        background: var(--bg-secondary);
+                        border: 1px solid var(--border-color);
+                        border-radius: 20px;
+                        padding: 48px 40px;
+                        text-align: center;
+                        max-width: 400px;
+                        width: 100%;
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+                    }
+                    .success-header {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 16px;
+                        margin-bottom: 24px;
+                    }
+                    .success-logo {
+                        width: 60px;
+                        height: 60px;
+                        object-fit: contain;
+                    }
+                    .success-checkmark {
+                        width: 60px;
+                        height: 60px;
+                        background: linear-gradient(135deg, #1DB954, #1ed760);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 32px;
+                        font-weight: bold;
+                        color: white;
+                        animation: pop 0.4s ease-out;
+                        box-shadow: 0 4px 16px rgba(29, 185, 84, 0.4);
+                    }
+                    @keyframes pop {
+                        0% { transform: scale(0); opacity: 0; }
+                        70% { transform: scale(1.15); }
+                        100% { transform: scale(1); opacity: 1; }
+                    }
+                    .success-card h1 {
+                        font-size: 1.75rem;
+                        font-weight: 700;
+                        margin-bottom: 12px;
+                        color: var(--text-primary);
+                    }
+                    .success-subtitle {
+                        color: var(--text-secondary);
+                        font-size: 1rem;
+                        margin-bottom: 28px;
+                        line-height: 1.5;
+                    }
+                    .success-subtitle strong {
+                        color: var(--orange-primary);
+                    }
+                    .spotify-link {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 10px;
+                        background: #1DB954;
+                        color: white;
+                        padding: 14px 28px;
+                        border-radius: 50px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        font-size: 1rem;
+                        margin-bottom: 20px;
+                        transition: all 0.2s;
+                        width: 100%;
+                        max-width: 280px;
+                    }
+                    .spotify-link:hover {
+                        background: #1ed760;
+                        transform: scale(1.02);
+                        box-shadow: 0 4px 16px rgba(29, 185, 84, 0.4);
+                    }
+                    .spotify-btn-icon {
+                        width: 22px;
+                        height: 22px;
+                    }
+                    .back-link {
+                        display: inline-block;
+                        color: var(--text-muted);
+                        text-decoration: none;
+                        font-size: 0.9rem;
+                        padding: 8px 16px;
+                        transition: color 0.2s;
+                    }
+                    .back-link:hover {
+                        color: var(--text-primary);
+                    }
+                `}</style>
             </div>
         );
     }
