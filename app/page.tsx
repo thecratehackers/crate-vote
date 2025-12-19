@@ -1159,6 +1159,10 @@ export default function HomePage() {
                         <img src="/logo.png" alt="" className="mini-logo" />
                     </Link>
                     <span className="brand-name">{APP_CONFIG.name}</span>
+                    {/* Discrete admin link */}
+                    <Link href="/admin" className="admin-link-subtle" title="Admin Panel">
+                        ⚙️
+                    </Link>
                     {/* LIVE badge integrated into header with viewer count */}
                     {timerRunning && (
                         <span className="live-badge-inline">

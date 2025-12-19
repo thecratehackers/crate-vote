@@ -5005,6 +5005,20 @@ body::before {
   background-clip: text;
 }
 
+/* Subtle admin link - hidden until hovered */
+.admin-link-subtle {
+  opacity: 0.3;
+  font-size: 0.9rem;
+  margin-left: 6px;
+  transition: opacity 0.2s, transform 0.2s;
+  text-decoration: none;
+}
+
+.admin-link-subtle:hover {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+
 .playlist-title {
   color: var(--text-secondary);
   font-size: 0.85rem;
