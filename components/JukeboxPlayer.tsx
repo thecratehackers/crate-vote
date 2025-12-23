@@ -224,15 +224,66 @@ export default function JukeboxPlayer({
         { icon: '💎', text: 'High karma = playlist VIP status!' },
     ];
 
-    // 🎬 GENERATE FACTS WHEN SONG CHANGES
+    // 🎬 FETCH FACTS FROM GENIUS API + ERA DATA
     useEffect(() => {
-        // Default to current year if no release info
-        // In production, this would come from Genius API
-        const releaseYear = new Date().getFullYear() - Math.floor(Math.random() * 10); // Simulate varied years
-        const facts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
-        setPopUpFacts(facts);
-        factIndexRef.current = 0;
-    }, [currentSong.id]);
+        const fetchGeniusFacts = async () => {
+            try {
+                const response = await fetch(
+                    `/api/genius?artist=${encodeURIComponent(currentSong.artist)}&title=${encodeURIComponent(currentSong.name)}`
+                );
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Convert Genius facts to PopUpFact format
+                    const geniusFacts: PopUpFact[] = (data.facts || []).map((text: string, i: number) => ({
+                        category: text.startsWith('📅') ? 'Release' :
+                            text.startsWith('🎛️') ? 'Production' :
+                                text.startsWith('✍️') ? 'Credits' :
+                                    text.startsWith('🎤') ? 'Artist' :
+                                        text.startsWith('💿') ? 'Album' :
+                                            text.startsWith('🔥') || text.startsWith('👀') ? 'Stats' :
+                                                text.startsWith('📝') ? 'Info' : 'Fact',
+                        emoji: text.substring(0, 2),
+                        text: text.substring(2).trim(),
+                        id: `genius-${i}-${Date.now()}`
+                    }));
+
+                    // Also generate era facts as backup
+                    const releaseYear = data.releaseDate
+                        ? parseInt(data.releaseDate.split(', ')[1] || data.releaseDate.split(' ')[2] || '2020')
+                        : new Date().getFullYear();
+                    const eraFacts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
+
+                    // Combine and shuffle: Genius facts first, then era facts
+                    const allFacts = [...geniusFacts, ...eraFacts.slice(0, 8)];
+
+                    // Shuffle
+                    for (let i = allFacts.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [allFacts[i], allFacts[j]] = [allFacts[j], allFacts[i]];
+                    }
+
+                    setPopUpFacts(allFacts);
+                } else {
+                    // Fallback to era facts only
+                    const releaseYear = new Date().getFullYear() - Math.floor(Math.random() * 10);
+                    const facts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
+                    setPopUpFacts(facts);
+                }
+            } catch (error) {
+                console.error('Failed to fetch Genius facts:', error);
+                // Fallback to era facts
+                const releaseYear = new Date().getFullYear() - Math.floor(Math.random() * 10);
+                const facts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
+                setPopUpFacts(facts);
+            }
+
+            factIndexRef.current = 0;
+        };
+
+        fetchGeniusFacts();
+    }, [currentSong.id, currentSong.name, currentSong.artist]);
 
     // 🎬 SHOW FACTS PERIODICALLY
     useEffect(() => {
