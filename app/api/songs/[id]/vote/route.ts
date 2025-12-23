@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { vote, adminVote, isPlaylistLocked, addActivity } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
-import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
+import { checkRateLimit, checkSongVoteLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
 // POST - Vote on a song
 export async function POST(
@@ -20,13 +20,29 @@ export async function POST(
     // Rate limiting for non-admin requests
     if (!isAdmin) {
         const clientId = getClientIdentifier(request);
-        const rateCheck = checkRateLimit(clientId + ':vote', RATE_LIMITS.vote);
-        if (!rateCheck.success) {
+
+        // Check global vote rate limit (30/minute)
+        const globalCheck = await checkRateLimit(clientId + ':vote', RATE_LIMITS.vote);
+        if (!globalCheck.success) {
             const response = NextResponse.json(
-                { error: 'Slow down! You\'re voting too fast.' },
+                { error: 'Slow down! You\'re voting too fast. Try again in a few seconds.' },
                 { status: 429 }
             );
-            const headers = getRateLimitHeaders(rateCheck);
+            const headers = getRateLimitHeaders(globalCheck);
+            Object.entries(headers).forEach(([key, value]) => {
+                response.headers.set(key, value);
+            });
+            return response;
+        }
+
+        // Check per-song rate limit (1 per 5 seconds per song)
+        const songCheck = await checkSongVoteLimit(clientId, id);
+        if (!songCheck.success) {
+            const response = NextResponse.json(
+                { error: 'Wait a moment before voting on this song again.' },
+                { status: 429 }
+            );
+            const headers = getRateLimitHeaders(songCheck);
             Object.entries(headers).forEach(([key, value]) => {
                 response.headers.set(key, value);
             });
@@ -76,3 +92,4 @@ export async function POST(
         return NextResponse.json({ error: 'Something went wrong. Please refresh and try voting again.' }, { status: 500 });
     }
 }
+

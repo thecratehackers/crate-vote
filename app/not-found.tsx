@@ -10,7 +10,8 @@ export default function NotFound() {
                     Looks like this track got lost in the shuffle.
                 </p>
                 <Link href="/" className="home-link">
-                    ← Back to the Playlist
+                    <span className="link-icon">🎵</span>
+                    <span>Back to the Playlist</span>
                 </Link>
             </div>
 
@@ -51,19 +52,28 @@ export default function NotFound() {
                     line-height: 1.5;
                 }
                 .home-link {
-                    display: inline-block;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 10px;
                     padding: 14px 28px;
-                    background: linear-gradient(135deg, #d3771d 0%, #e09f24 100%);
-                    color: white;
+                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.15) 0%, rgba(224, 159, 36, 0.1) 100%);
+                    border: 1px solid rgba(211, 119, 29, 0.4);
+                    color: #e0a030;
                     text-decoration: none;
                     border-radius: 50px;
                     font-weight: 600;
                     font-size: 1rem;
-                    transition: all 0.2s;
+                    transition: all 0.3s ease;
                 }
                 .home-link:hover {
-                    transform: scale(1.02);
-                    box-shadow: 0 4px 16px rgba(211, 119, 29, 0.4);
+                    transform: translateY(-2px);
+                    border-color: #d3771d;
+                    box-shadow: 0 8px 25px rgba(211, 119, 29, 0.25);
+                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.25) 0%, rgba(224, 159, 36, 0.15) 100%);
+                }
+                .home-link .link-icon {
+                    font-size: 1.2rem;
                 }
             `}</style>
         </div>

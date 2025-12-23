@@ -78,9 +78,12 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { action, visitorId, title } = body;
+        const { action, visitorId, title, locked } = body;
 
         switch (action) {
+            case 'setLock':
+                await setPlaylistLocked(locked);
+                return NextResponse.json({ success: true, isLocked: locked });
             case 'lock':
                 await setPlaylistLocked(true);
                 return NextResponse.json({ success: true, isLocked: true });

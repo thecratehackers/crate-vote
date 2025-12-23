@@ -6,7 +6,10 @@ import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS } from '@/lib/config';
 import { PlaylistSkeleton } from '@/components/Skeleton';
 import VersusBattle from '@/components/VersusBattle';
 import VideoPreview from '@/components/VideoPreview';
+import JukeboxPlayer from '@/components/JukeboxPlayer';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { ToastContainer, useToast } from '@/components/Toast';
+import { SoundEffects } from '@/lib/sounds';
 
 // Network resilience - fetch with timeout
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response> => {
@@ -65,6 +68,8 @@ interface Song {
     previewUrl: string | null;
     addedBy: string;
     addedByName: string;
+    addedByAvatar?: string;
+    addedByColor?: string;
     addedAt: number;
     score: number;
     // Audio features for DJs
@@ -73,6 +78,7 @@ interface Song {
     energy: number | null;
     valence: number | null;
     danceability: number | null;
+    camelotKey: string | null;
 }
 
 interface SearchResult {
@@ -88,6 +94,7 @@ interface SearchResult {
     energy: number | null;
     valence: number | null;
     danceability: number | null;
+    camelotKey: string | null;
     explicit: boolean;
     durationMs: number;
 }
@@ -123,6 +130,13 @@ export default function HomePage() {
     const [isLocked, setIsLocked] = useState(false);
     const [visitorId, setVisitorId] = useState<string | null>(null);
     const [isBanned, setIsBanned] = useState(false);
+
+    // 🍞 TOAST NOTIFICATIONS
+    const toast = useToast();
+
+    // ⏱️ RATE LIMITING - Prevent vote spam (1 vote per song per 3 seconds)
+    const voteTimestamps = useRef<Map<string, number>>(new Map());
+    const VOTE_COOLDOWN_MS = 3000;
 
     // Timer state
     const [timerRemaining, setTimerRemaining] = useState<number>(0);
@@ -190,6 +204,16 @@ export default function HomePage() {
     const [videoPreview, setVideoPreview] = useState<VideoPreviewState | null>(null);
     const [isLoadingVideo, setIsLoadingVideo] = useState<string | null>(null); // Track which song is loading
 
+    // 🎵 JUKEBOX MODE - User-controlled auto-advancing music video player
+    interface JukeboxState {
+        songId: string;
+        videoId: string;
+        song: Song;
+    }
+    const [jukeboxState, setJukeboxState] = useState<JukeboxState | null>(null);
+
+
+
     // 🔒 UI STABILITY - Prevent song re-ordering during active interaction
     const [isUserInteracting, setIsUserInteracting] = useState(false);
     const interactionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -244,10 +268,22 @@ export default function HomePage() {
     const [showUsernameModal, setShowUsernameModal] = useState(false);
     const [userAvatar, setUserAvatar] = useState<string>('🎧'); // Default avatar
     const [avatarInput, setAvatarInput] = useState<string>('🎧');
+    const [userColor, setUserColor] = useState<string>('#ffffff');
+    const [colorInput, setColorInput] = useState<string>('#ffffff');
+
+    // Color options for user name
+    // Color options for user name - limited to readable colors on dark background
+    const COLOR_OPTIONS = [
+        '#ffffff', // White
+        '#ef4444', // Red
+        '#f97316', // Orange (Crate Hackers brand)
+        '#22c55e', // Green
+        '#3b82f6', // Blue
+        '#a855f7', // Purple
+    ];
 
     // Audio preview state
-    const [playingSongId, setPlayingSongId] = useState<string | null>(null);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+
 
     // 🎉 DOPAMINE FEATURES - Engagement state
     const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
@@ -256,6 +292,8 @@ export default function HomePage() {
     const [voteAnimation, setVoteAnimation] = useState<{ songId: string; type: 'up' | 'down' } | null>(null);
     const [recentlyMoved, setRecentlyMoved] = useState<Record<string, 'up' | 'down' | 'new'>>({});
     const [showKarmaTooltip, setShowKarmaTooltip] = useState(false);
+    const [showKarmaRain, setShowKarmaRain] = useState(false);
+    const [lastKarmaRainTimestamp, setLastKarmaRainTimestamp] = useState(0);
 
     // 📢 LIVE ACTIVITY FEED - Show what everyone is doing
     interface ActivityItem {
@@ -284,44 +322,33 @@ export default function HomePage() {
     // 🔄 Debounce for refresh button
     const [isRefreshCooldown, setIsRefreshCooldown] = useState(false);
 
-    // Toggle audio preview - with error handling
-    const togglePreview = (songId: string, previewUrl: string | null) => {
-        if (!previewUrl) {
-            setMessage({ type: 'error', text: 'No preview available for this track' });
-            return;
-        }
+    // 🎮 NEW ENGAGEMENT FEATURES
+    // Quick Reactions - emoji reactions on songs
+    type ReactionType = 'fire' | 'skull' | 'laugh' | 'heart';
+    const [songReactions, setSongReactions] = useState<Record<string, Record<ReactionType, number>>>({});
+    const [userReactions, setUserReactions] = useState<Record<string, ReactionType>>({});
+    const [reactingTo, setReactingTo] = useState<string | null>(null);
 
-        if (playingSongId === songId) {
-            // Stop playing
-            audioRef.current?.pause();
-            setPlayingSongId(null);
-        } else {
-            // Start playing new song
-            if (audioRef.current) {
-                audioRef.current.pause();
-            }
-            audioRef.current = new Audio(previewUrl);
-            audioRef.current.volume = 0.5;
-            audioRef.current.play().catch(() => {
-                // Handle autoplay restrictions or failed playback
-                setMessage({ type: 'error', text: 'Could not play preview - try again' });
-                setPlayingSongId(null);
-            });
-            audioRef.current.onerror = () => {
-                setMessage({ type: 'error', text: 'Preview unavailable' });
-                setPlayingSongId(null);
-            };
-            audioRef.current.onended = () => setPlayingSongId(null);
-            setPlayingSongId(songId);
-        }
-    };
+    // Leaderboard - top contributors
+    interface LeaderboardEntry {
+        visitorId: string;
+        username: string;
+        score: number;
+        songsInTop10: number;
+        hasTopSong: boolean;
+    }
+    const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+    const [showLeaderboard, setShowLeaderboard] = useState(false);
 
-    // Cleanup audio on unmount
-    useEffect(() => {
-        return () => {
-            audioRef.current?.pause();
-        };
-    }, []);
+    // Predictions - guess the winner
+    const [userPrediction, setUserPrediction] = useState<string | null>(null);
+    const [predictionsLocked, setPredictionsLocked] = useState(false);
+    const [showPredictionModal, setShowPredictionModal] = useState(false);
+
+    // Sound effects enabled
+    const [soundsEnabled, setSoundsEnabled] = useState(true);
+
+
 
     // Initialize fingerprint and load saved username
     useEffect(() => {
@@ -334,6 +361,9 @@ export default function HomePage() {
             // Load saved username and avatar from localStorage
             const savedName = localStorage.getItem('crate-username');
             const savedAvatar = localStorage.getItem('crate-avatar');
+            const savedColor = localStorage.getItem('crate-color');
+            const savedSounds = localStorage.getItem('crate-sounds');
+
             if (savedName) {
                 setUsername(savedName);
             }
@@ -341,9 +371,19 @@ export default function HomePage() {
                 setUserAvatar(savedAvatar);
                 setAvatarInput(savedAvatar);
             }
+            if (savedColor) {
+                setUserColor(savedColor);
+                setColorInput(savedColor);
+            }
+            if (savedSounds === 'off') {
+                setSoundsEnabled(false);
+            }
             if (!savedName) {
                 setShowUsernameModal(true);
             }
+
+            // Initialize sound effects on first interaction
+            SoundEffects.init();
         }
         init();
     }, []);
@@ -376,13 +416,15 @@ export default function HomePage() {
                 localStorage.setItem('crate-avatar', avatarInput);
                 setUserAvatar(avatarInput);
             }
+            localStorage.setItem('crate-color', colorInput);
+            setUserColor(colorInput);
         } catch (e) {
             // localStorage full or disabled - continue anyway, just won't persist
             console.warn('Could not save to localStorage:', e);
         }
         setIsSavingUsername(false);
         setShowUsernameModal(false);
-        setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
+        setMessage({ type: 'success', text: `Welcome, ${name}!` });
     };
 
     // Fetch playlist data with rank tracking for dopamine effects
@@ -477,6 +519,18 @@ export default function HomePage() {
                 if (newBattle.active && newBattle.endTime) {
                     setBattleCountdown(Math.max(0, newBattle.endTime - Date.now()));
                 }
+            }
+
+            // 🌧️ Handle Karma Rain celebration
+            if (data.karmaRain && data.karmaRain.active && data.karmaRain.timestamp > lastKarmaRainTimestamp) {
+                setLastKarmaRainTimestamp(data.karmaRain.timestamp);
+                setShowKarmaRain(true);
+                setConfettiMessage(`🌧️ KARMA RAIN! +1 karma for everyone!`);
+                setShowConfetti(true);
+                setTimeout(() => {
+                    setShowKarmaRain(false);
+                    setShowConfetti(false);
+                }, 5000);
             }
 
             // 📢 Process live activity from server
@@ -594,6 +648,8 @@ export default function HomePage() {
             clearInterval(interval);
         };
     }, [visitorId, fetchPlaylist, fetchTimer]);
+
+
 
     // 📢 AUTO SHOUT-OUTS - Generate encouraging messages
     useEffect(() => {
@@ -871,7 +927,7 @@ export default function HomePage() {
                     'Content-Type': 'application/json',
                     'x-visitor-id': visitorId,
                 },
-                body: JSON.stringify({ ...track, addedByName: username }),
+                body: JSON.stringify({ ...track, addedByName: username, addedByAvatar: userAvatar, addedByColor: userColor }),
             });
 
             const data = await res.json();
@@ -886,6 +942,11 @@ export default function HomePage() {
             setShowResults(false);
             setNoSearchResults(false);
             fetchPlaylist();
+
+            // 🔊 Play sound effect
+            if (soundsEnabled) {
+                SoundEffects.addSong();
+            }
         } catch (error) {
             setMessage({ type: 'error', text: 'Network error - please try again' });
         } finally {
@@ -893,17 +954,125 @@ export default function HomePage() {
         }
     };
 
-    // 🎬 Open video preview for a song
+    // 🔥 Handle reaction toggle on a song
+    const handleReaction = async (songId: string, reaction: ReactionType) => {
+        if (!visitorId) return;
+
+        setReactingTo(songId);
+
+        try {
+            const res = await fetch('/api/reactions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-visitor-id': visitorId,
+                },
+                body: JSON.stringify({ songId, reaction }),
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                // Update local state
+                setSongReactions(prev => ({
+                    ...prev,
+                    [songId]: data.counts,
+                }));
+
+                if (data.action === 'added') {
+                    setUserReactions(prev => ({ ...prev, [songId]: reaction }));
+                } else {
+                    setUserReactions(prev => {
+                        const next = { ...prev };
+                        delete next[songId];
+                        return next;
+                    });
+                }
+
+                // 🔊 Play sound
+                if (soundsEnabled) {
+                    SoundEffects.reaction();
+                }
+            }
+        } catch (error) {
+            console.error('Reaction error:', error);
+        } finally {
+            setReactingTo(null);
+        }
+    };
+
+    // 🎯 Handle prediction submission
+    const handleMakePrediction = async (songId: string) => {
+        if (!visitorId) return;
+
+        try {
+            const res = await fetch('/api/predictions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-visitor-id': visitorId,
+                },
+                body: JSON.stringify({ songId }),
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                setUserPrediction(songId);
+                setShowPredictionModal(false);
+                setMessage({ type: 'success', text: '🎯 Prediction locked in! Good luck!' });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Could not save prediction' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Network error - please try again' });
+        }
+    };
+
+    // 🏆 Fetch leaderboard
+    const fetchLeaderboard = async () => {
+        try {
+            const res = await fetch('/api/leaderboard');
+            const data = await res.json();
+            if (data.leaderboard) {
+                setLeaderboard(data.leaderboard);
+            }
+        } catch (error) {
+            console.error('Leaderboard fetch error:', error);
+        }
+    };
+
+    // 🎯 Fetch prediction status
+    const fetchPredictionStatus = async () => {
+        if (!visitorId) return;
+        try {
+            const res = await fetch('/api/predictions', {
+                headers: { 'x-visitor-id': visitorId },
+            });
+            const data = await res.json();
+            setPredictionsLocked(data.isLocked);
+            setUserPrediction(data.userPrediction);
+        } catch (error) {
+            console.error('Prediction status error:', error);
+        }
+    };
+
+    // 🎬 Open video preview for a song - now launches JUKEBOX MODE
     const handleOpenVideoPreview = async (songId: string, songName: string, artistName: string, event: React.MouseEvent) => {
-        // Don't open if already showing this video
-        if (videoPreview?.songId === songId) {
-            setVideoPreview(null);
+        // If already in jukebox mode with this song, close it
+        if (jukeboxState?.songId === songId) {
+            setJukeboxState(null);
             return;
         }
 
-        // Get the album art element's position
-        const target = event.currentTarget as HTMLElement;
-        const rect = target.getBoundingClientRect();
+        // If in small preview mode, close it and open jukebox
+        if (videoPreview?.songId === songId) {
+            setVideoPreview(null);
+        }
+
+        // Find the song in playlist
+        const song = sortedSongs.find(s => s.id === songId);
+        if (!song) return;
 
         // Set loading state
         setIsLoadingVideo(songId);
@@ -913,13 +1082,13 @@ export default function HomePage() {
             const data = await response.json();
 
             if (data.videoId) {
-                setVideoPreview({
+                // Launch JUKEBOX MODE with full-screen player
+                setJukeboxState({
                     songId,
-                    songName,
-                    artistName,
                     videoId: data.videoId,
-                    anchorRect: rect,
+                    song: song,
                 });
+                setMessage({ type: 'success', text: '🎵 Jukebox mode activated! Enjoy the music.' });
             } else {
                 // No video found - show brief message
                 setMessage({ type: 'error', text: 'No music video found for this song' });
@@ -933,12 +1102,84 @@ export default function HomePage() {
         }
     };
 
+    // 🎵 JUKEBOX: Handle advancing to next song
+    const handleJukeboxNextSong = async (nextSongId: string) => {
+        const nextSong = sortedSongs.find(s => s.id === nextSongId);
+        if (!nextSong) {
+            setJukeboxState(null);
+            return;
+        }
+
+        setIsLoadingVideo(nextSongId);
+        try {
+            const response = await fetch(`/api/youtube-search?song=${encodeURIComponent(nextSong.name)}&artist=${encodeURIComponent(nextSong.artist)}`);
+            const data = await response.json();
+
+            if (data.videoId) {
+                setJukeboxState({
+                    songId: nextSongId,
+                    videoId: data.videoId,
+                    song: nextSong,
+                });
+            } else {
+                // Skip songs without videos
+                const currentIndex = sortedSongs.findIndex(s => s.id === nextSongId);
+                if (currentIndex < sortedSongs.length - 1) {
+                    handleJukeboxNextSong(sortedSongs[currentIndex + 1].id);
+                } else {
+                    setJukeboxState(null);
+                    setMessage({ type: 'success', text: '🎉 Playlist complete! Thanks for listening.' });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load next video:', error);
+            setJukeboxState(null);
+        } finally {
+            setIsLoadingVideo(null);
+        }
+    };
+
+    // 🎵 JUKEBOX: Handle karma earned from watching
+    const handleJukeboxKarmaEarned = async () => {
+        if (!visitorId) return;
+
+        try {
+            const res = await fetch('/api/karma', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-visitor-id': visitorId,
+                },
+                body: JSON.stringify({ action: 'jukebox' }),
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                setConfettiMessage('🎧 +1 Karma for watching!');
+                setShowConfetti(true);
+                setTimeout(() => setShowConfetti(false), 3000);
+                fetchPlaylist(); // Refresh to show updated karma
+            }
+        } catch (error) {
+            console.warn('Failed to award jukebox karma:', error);
+        }
+    };
+
+
     // Vote on song - NEW MODEL: user gets ONE upvote and ONE downvote total
     const handleVote = async (songId: string, vote: 1 | -1) => {
         if (!visitorId || isBanned) {
-            setMessage({ type: 'error', text: isBanned ? 'You are banned from voting' : 'Please wait...' });
+            toast.error(isBanned ? 'You are banned from voting' : 'Please wait...');
             return;
         }
+
+        // ⏱️ RATE LIMITING - Check if too soon since last vote on this song
+        const lastVoteTime = voteTimestamps.current.get(songId);
+        if (lastVoteTime && Date.now() - lastVoteTime < VOTE_COOLDOWN_MS) {
+            toast.info('Slow down! Wait a moment before voting again.');
+            return;
+        }
+        voteTimestamps.current.set(songId, Date.now());
 
         // Prevent double-clicks on same song
         if (votingInProgress.has(songId)) return;
@@ -952,6 +1193,11 @@ export default function HomePage() {
         // 🎉 DOPAMINE: Trigger vote animation
         setVoteAnimation({ songId, type: vote === 1 ? 'up' : 'down' });
         setTimeout(() => setVoteAnimation(null), 600);
+
+        // 🔊 Play sound effect
+        if (soundsEnabled) {
+            vote === 1 ? SoundEffects.upvote() : SoundEffects.downvote();
+        }
 
         // Check if already voted on this song
         const hasUpvoted = userVotes.upvotedSongIds.includes(songId);
@@ -1050,15 +1296,23 @@ export default function HomePage() {
                 const data = await res.json();
                 if (data.error?.includes('banned')) {
                     setIsBanned(true);
-                    setMessage({ type: 'error', text: 'You have been banned' });
+                    toast.error('You have been banned');
                 } else if (data.error?.includes('not found') || data.error?.includes('locked')) {
                     // Song was deleted or playlist was locked - refresh to sync
+                    toast.info('Song was modified - refreshing...');
                     fetchPlaylist();
+                } else {
+                    toast.error(data.error || 'Vote failed');
+                }
+            } else {
+                // Success - brief confirmation (only show occasionally to avoid spam)
+                if (Math.random() < 0.3) {
+                    toast.success(vote === 1 ? '👍 Upvoted!' : '👎 Downvoted!');
                 }
             }
         } catch (error) {
             console.error('Vote failed:', error);
-            setMessage({ type: 'error', text: 'Vote failed - refreshing...' });
+            toast.error('Vote failed - check your connection');
             // On network error, refresh to ensure sync
             fetchPlaylist();
         } finally {
@@ -1121,48 +1375,16 @@ export default function HomePage() {
         );
     }
 
-    // Username modal
+    // Username modal - condensed for stream viewing
     if (showUsernameModal) {
         return (
             <div className="modal-overlay">
-                <div className="modal-card welcome-modal">
-                    <img src="/logo.png" alt="Logo" className="welcome-logo" />
-                    <h2>🎧 Collaborative Playlist</h2>
-                    <p className="welcome-subtitle">Add songs, vote for your favorites, build the ultimate playlist together!</p>
+                <div className="modal-card welcome-modal compact">
+                    <img src="/logo.png" alt="Logo" className="welcome-logo-small" />
+                    <h2>🎧 Join the Hackathon!</h2>
 
-                    <div className="how-it-works">
-                        <div className="how-step">
-                            <span className="step-icon">🔍</span>
-                            <span className="step-text">Search & add songs</span>
-                        </div>
-                        <div className="how-step">
-                            <span className="step-icon">👍👎</span>
-                            <span className="step-text">Vote songs up or down</span>
-                        </div>
-                        <div className="how-step">
-                            <span className="step-icon">🏆</span>
-                            <span className="step-text">Top songs win!</span>
-                        </div>
-                    </div>
-                    {/* Compact name + avatar input */}
-                    <div className="name-input-section">
-                        <label className="name-label">Pick an avatar & enter your name:</label>
-                        <div className="name-avatar-row">
-                            {/* Compact avatar picker - small inline circles */}
-                            <div className="avatar-mini-picker">
-                                {AVATAR_OPTIONS.map((emoji) => (
-                                    <span
-                                        key={emoji}
-                                        className={`avatar-mini ${avatarInput === emoji ? 'selected' : ''}`}
-                                        onClick={() => setAvatarInput(emoji)}
-                                        role="button"
-                                        tabIndex={0}
-                                    >
-                                        {emoji}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
+                    {/* Compact name input */}
+                    <div className="name-input-section compact">
                         <input
                             type="text"
                             placeholder="Your name"
@@ -1172,18 +1394,31 @@ export default function HomePage() {
                             autoFocus
                             maxLength={20}
                             disabled={isSavingUsername}
+                            style={{ color: colorInput }}
                         />
+                        {/* Color picker row */}
+                        <div className="color-picker-row">
+                            {COLOR_OPTIONS.map((color) => (
+                                <span
+                                    key={color}
+                                    className={`color-dot ${colorInput === color ? 'selected' : ''}`}
+                                    style={{ background: color }}
+                                    onClick={() => setColorInput(color)}
+                                    role="button"
+                                    tabIndex={0}
+                                />
+                            ))}
+                        </div>
                         <button onClick={handleSetUsername} disabled={!usernameInput.trim() || isSavingUsername}>
-                            {isSavingUsername ? '⏳ Joining...' : "Join the Party! 🎉"}
+                            {isSavingUsername ? 'Joining...' : "Let's Go! 🚀"}
                         </button>
                     </div>
 
-                    <div className="rules-section">
-                        <div className="rules-row">
-                            <span data-tooltip="Add up to 5 songs to the playlist">💿 5 tracks</span>
-                            <span data-tooltip="5 upvotes and 5 downvotes to use">👍👎 10 votes</span>
-                            <span data-tooltip="Get your song in top 3 to earn karma bonuses!">✨ Earn karma</span>
-                        </div>
+                    {/* Lively rules with emojis */}
+                    <div className="rules-compact lively">
+                        <span className="rule-item">💿 5 songs</span>
+                        <span className="rule-item">🗳️ 10 votes</span>
+                        <span className="rule-item">🏆 Top 3 wins!</span>
                     </div>
                 </div>
             </div>
@@ -1199,12 +1434,33 @@ export default function HomePage() {
 
     return (
         <div className="stream-layout">
+
             {/* 🎉 CONFETTI CELEBRATION OVERLAY */}
             {showConfetti && (
                 <div className="confetti-overlay">
                     <div className="confetti-message">{confettiMessage}</div>
                 </div>
             )}
+
+            {/* 🌧️ KARMA RAIN ANIMATION */}
+            {showKarmaRain && (
+                <div className="karma-rain-overlay">
+                    {[...Array(30)].map((_, i) => (
+                        <span
+                            key={i}
+                            className="rain-drop"
+                            style={{
+                                left: `${Math.random() * 100}%`,
+                                animationDelay: `${Math.random() * 2}s`,
+                                animationDuration: `${1.5 + Math.random() * 1}s`,
+                            }}
+                        >
+                            {['💧', '✨', '💫', '⭐', '🌟'][i % 5]}
+                        </span>
+                    ))}
+                </div>
+            )}
+
 
             {/* ═══════════════════════════════════════════════════════════
                 COMPACT TOP BAR - Everything important on 1-2 lines
@@ -1270,6 +1526,123 @@ export default function HomePage() {
                     )}
                 </div>
             </header>
+
+            {/* 🎮 GAME FEATURES BAR - Leaderboard, Predictions, Sound toggle */}
+            {timerRunning && (
+                <div className="game-features-bar">
+                    <button
+                        className={`feature-btn ${showLeaderboard ? 'active' : ''}`}
+                        onClick={() => { setShowLeaderboard(!showLeaderboard); if (!showLeaderboard) fetchLeaderboard(); }}
+                    >
+                        🏆 Top DJs
+                    </button>
+
+                    {!predictionsLocked && !userPrediction && (
+                        <button
+                            className="feature-btn prediction"
+                            onClick={() => setShowPredictionModal(true)}
+                        >
+                            🎯 Predict #1
+                        </button>
+                    )}
+
+                    {userPrediction && (
+                        <span className="prediction-badge">
+                            🎯 Predicted!
+                        </span>
+                    )}
+
+                    <button
+                        className={`feature-btn sound-toggle ${soundsEnabled ? '' : 'muted'}`}
+                        onClick={() => {
+                            const newState = !soundsEnabled;
+                            setSoundsEnabled(newState);
+                            SoundEffects.setEnabled(newState);
+                        }}
+                        title={soundsEnabled ? 'Mute sounds' : 'Enable sounds'}
+                    >
+                        {soundsEnabled ? '🔊' : '🔇'}
+                    </button>
+                </div>
+            )}
+
+            {/* 🏆 LEADERBOARD PANEL - Collapsible */}
+            {showLeaderboard && (
+                <div className="leaderboard-panel">
+                    <div className="leaderboard-header">
+                        <span>🏆 Top Contributors</span>
+                        <button className="close-btn" onClick={() => setShowLeaderboard(false)}>×</button>
+                    </div>
+                    <div className="leaderboard-list">
+                        {leaderboard.length === 0 ? (
+                            <div className="leaderboard-empty">Add songs to appear here!</div>
+                        ) : (
+                            leaderboard.slice(0, 5).map((entry, idx) => (
+                                <div key={entry.visitorId} className={`leaderboard-row ${entry.hasTopSong ? 'has-crown' : ''}`}>
+                                    <span className="lb-rank">{idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}</span>
+                                    <span className="lb-name" style={entry.visitorId === visitorId ? { color: userColor } : {}}>
+                                        {entry.username}{entry.visitorId === visitorId && ' (you)'}
+                                    </span>
+                                    <span className="lb-score">+{entry.score}</span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 🎯 PREDICTION MODAL */}
+            {showPredictionModal && (
+                <div className="modal-overlay" onClick={() => setShowPredictionModal(false)}>
+                    <div className="prediction-modal" onClick={(e) => e.stopPropagation()}>
+                        <h3>🎯 Predict the Winner!</h3>
+                        <p>Which song will be #1 when voting ends?<br />Correct predictions earn <strong>+3 karma!</strong></p>
+                        <div className="prediction-list">
+                            {sortedSongs.slice(0, 10).map((song) => (
+                                <button
+                                    key={song.id}
+                                    className="prediction-option"
+                                    onClick={() => handleMakePrediction(song.id)}
+                                >
+                                    <img src={song.albumArt || '/placeholder.svg'} alt="" />
+                                    <span className="pred-name">{song.name.length > 25 ? song.name.slice(0, 25) + '…' : song.name}</span>
+                                    <span className="pred-score">+{song.score}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <button className="cancel-btn" onClick={() => setShowPredictionModal(false)}>Cancel</button>
+                    </div>
+                </div>
+            )}
+
+            {/* 🎧 YOUR REQUESTS - Show songs added by this user */}
+            {(() => {
+                const mySongs = sortedSongs.filter(s => s.addedBy === visitorId);
+                if (mySongs.length === 0) return null;
+                return (
+                    <div className="your-requests-section">
+                        <div className="your-requests-header">
+                            <span className="your-requests-label">🎧 Your Requests</span>
+                            <span className="your-requests-count">{mySongs.length} song{mySongs.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="your-requests-row">
+                            {mySongs.map((song, idx) => {
+                                const rank = sortedSongs.findIndex(s => s.id === song.id) + 1;
+                                return (
+                                    <div key={song.id} className={`your-song-card ${rank <= 3 ? 'top-three' : ''}`}>
+                                        <img src={song.albumArt || '/placeholder.svg'} alt="" className="your-song-art" />
+                                        <div className="your-song-info">
+                                            <span className="your-song-name">{song.name.length > 20 ? song.name.slice(0, 20) + '…' : song.name}</span>
+                                            <span className="your-song-rank">#{rank} • {song.score > 0 ? '+' : ''}{song.score}</span>
+                                        </div>
+                                        {rank <= 3 && <span className="top-badge">{rank === 1 ? '👑' : rank === 2 ? '🥈' : '🥉'}</span>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* 📦 PLAYLIST HEADER - Title + Activity ticker in fixed-height banner */}
             <div className="playlist-header-bar">
@@ -1425,26 +1798,24 @@ export default function HomePage() {
                                     {index === 0 ? '👑' : `#${index + 1}`}
                                 </span>
 
-                                {/* Album Art - clickable for video preview */}
-                                <div
-                                    className={`album-art-container ${isLoadingVideo === song.id ? 'loading' : ''}`}
-                                    onClick={(e) => handleOpenVideoPreview(song.id, song.name, song.artist, e)}
-                                    title="Click to preview music video"
-                                    role="button"
-                                    tabIndex={0}
-                                >
+                                {/* Album Art - clean, no overlay */}
+                                <div className="album-art-wrapper">
                                     <img src={song.albumArt || '/placeholder.svg'} alt="" className="album-thumb" />
-                                    {isLoadingVideo === song.id && (
-                                        <div className="album-loading-overlay">
-                                            <div className="spinner-small" />
-                                        </div>
-                                    )}
                                 </div>
+
+                                {/* Play Button - separate, always visible */}
+                                <button
+                                    className={`play-preview-btn ${isLoadingVideo === song.id ? 'loading' : ''}`}
+                                    onClick={(e) => handleOpenVideoPreview(song.id, song.name, song.artist, e)}
+                                    title="Preview music video"
+                                >
+                                    {isLoadingVideo === song.id ? '⏳' : '▶'}
+                                </button>
 
                                 {/* Song Info - super compact */}
                                 <div className="song-info-stream">
                                     <span className="song-title">{song.name}</span>
-                                    <span className="song-artist">{song.artist} <span className="by-user">• {song.addedByName}{isMyComment && ' (you)'}</span></span>
+                                    <span className="song-artist">{song.artist} <span className="by-user" style={{ color: isMyComment ? userColor : (song.addedByColor || '#9ca3af'), opacity: 1 }}>• {song.addedByName}{isMyComment && ' (you)'}</span></span>
                                 </div>
 
                                 {/* Voting - inline thumbs up/down with score */}
@@ -1474,6 +1845,55 @@ export default function HomePage() {
                                     </button>
                                 </div>
 
+                                {/* 🔥 QUICK REACTIONS - Hidden by default, reveal on hover */}
+                                {(() => {
+                                    const reactions = songReactions[song.id];
+                                    const reactionCounts = {
+                                        fire: reactions?.fire || 0,
+                                        skull: reactions?.skull || 0,
+                                        laugh: reactions?.laugh || 0,
+                                        heart: reactions?.heart || 0,
+                                    };
+                                    const totalReactions = reactionCounts.fire + reactionCounts.skull + reactionCounts.laugh + reactionCounts.heart;
+
+                                    // Find the dominant emoji (most votes)
+                                    const emojiMap = { fire: '🔥', skull: '💀', laugh: '😂', heart: '❤️' };
+                                    let dominantEmoji = '😄'; // default when no reactions
+                                    let maxCount = 0;
+                                    for (const [key, count] of Object.entries(reactionCounts)) {
+                                        if (count > maxCount) {
+                                            maxCount = count;
+                                            dominantEmoji = emojiMap[key as keyof typeof emojiMap];
+                                        }
+                                    }
+
+                                    return (
+                                        <div className={`reaction-trigger-container ${totalReactions > 0 ? 'has-reactions' : ''}`}>
+                                            <button className="reaction-trigger" title="React to this song">
+                                                {dominantEmoji}{totalReactions > 0 && <span className="trigger-count">{totalReactions}</span>}
+                                            </button>
+                                            <div className="reaction-flyout">
+                                                {(['fire', 'skull', 'laugh', 'heart'] as ReactionType[]).map((reaction) => {
+                                                    const emoji = emojiMap[reaction];
+                                                    const count = reactionCounts[reaction];
+                                                    const isActive = userReactions[song.id] === reaction;
+                                                    return (
+                                                        <button
+                                                            key={reaction}
+                                                            className={`reaction-btn ${isActive ? 'active' : ''}`}
+                                                            onClick={() => handleReaction(song.id, reaction)}
+                                                            disabled={reactingTo === song.id}
+                                                            title={`${reaction} reaction`}
+                                                        >
+                                                            {emoji}{count > 0 && <span className="reaction-count">{count}</span>}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
                                 {/* 💀 THE PURGE - Only visible during purge window */}
                                 {deleteWindow.active && deleteWindow.canDelete && (
                                     <button
@@ -1491,8 +1911,22 @@ export default function HomePage() {
                 )}
             </div>
 
-            {/* 🎬 Video Preview Popup */}
-            {videoPreview && (
+            {/* � JUKEBOX MODE - Full-screen music experience */}
+            {jukeboxState && (
+                <JukeboxPlayer
+                    currentSong={jukeboxState.song}
+                    videoId={jukeboxState.videoId}
+                    playlist={sortedSongs}
+                    onClose={() => setJukeboxState(null)}
+                    onNextSong={handleJukeboxNextSong}
+                    onVote={(songId, delta) => handleVote(songId, delta as 1 | -1)}
+                    onKarmaEarned={handleJukeboxKarmaEarned}
+                    visitorId={visitorId || undefined}
+                />
+            )}
+
+            {/* �🎬 Video Preview Popup (fallback - now mainly used for Jukebox) */}
+            {videoPreview && !jukeboxState && (
                 <VideoPreview
                     videoId={videoPreview.videoId}
                     songName={videoPreview.songName}
@@ -1501,6 +1935,9 @@ export default function HomePage() {
                     onClose={() => setVideoPreview(null)}
                 />
             )}
+
+            {/* 🍞 TOAST NOTIFICATIONS */}
+            <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
         </div>
     );
 }

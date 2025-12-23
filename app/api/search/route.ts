@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
     // Rate limiting
     const clientId = getClientIdentifier(request);
-    const rateCheck = checkRateLimit(clientId + ':search', RATE_LIMITS.search);
+    const rateCheck = await checkRateLimit(clientId + ':search', RATE_LIMITS.search);
     if (!rateCheck.success) {
         const response = NextResponse.json(
             { error: 'Too many searches. Please wait a moment before searching again.' },
@@ -32,10 +32,10 @@ export async function GET(request: Request) {
         const tracks = await searchTracks(query, 10);
         return NextResponse.json({ tracks });
     } catch (error) {
-        // Log in development only
         if (process.env.NODE_ENV === 'development') {
             console.error('Search error:', error);
         }
         return NextResponse.json({ error: 'Could not search Spotify at this time. Please try again in a moment.' }, { status: 500 });
     }
 }
+

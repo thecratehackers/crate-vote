@@ -102,7 +102,7 @@ export default function ExportPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: cleanTitle,
-                    description: `Collaborative playlist created with Crate Hackers | ${tracks.length} songs`,
+                    description: `Collaborative playlist from DJ Booth | ${tracks.length} songs`,
                 }),
             });
 
@@ -134,7 +134,7 @@ export default function ExportPage() {
                 <div className="exporting-card">
                     <div className="spinner"></div>
                     <h2>Creating your Spotify playlist...</h2>
-                    <p>Adding {tracks.length} songs to your library</p>
+                    <p>Adding {tracks.length} crowd-approved songs to your library</p>
                 </div>
             </div>
         );
@@ -145,18 +145,23 @@ export default function ExportPage() {
             <div className="export-page">
                 <div className="success-card">
                     <div className="success-header">
-                        <img src="/logo.png" alt="Crate Hackers" className="success-logo" />
+                        <img src="/logo.png" alt="DJ Booth" className="success-logo" />
                         <div className="success-checkmark">✓</div>
                     </div>
-                    <h1>🎉 Playlist Created!</h1>
+                    <h1>Crate Created!</h1>
                     <p className="success-subtitle">
-                        Your <strong>{tracks.length}-song</strong> playlist is ready on Spotify
+                        <strong>{tracks.length} crowd-approved songs</strong> are now in your Spotify
                     </p>
-                    <a href={playlistUrl} target="_blank" rel="noopener noreferrer" className="spotify-link">
-                        <img src="/spotify-logo.png" alt="" className="spotify-btn-icon" />
-                        Open in Spotify
-                    </a>
-                    <Link href="/" className="back-link">← Back to voting</Link>
+                    <div className="success-actions">
+                        <a href={playlistUrl} target="_blank" rel="noopener noreferrer" className="spotify-link">
+                            <img src="/spotify-logo.png" alt="" className="spotify-btn-icon" />
+                            Open in Spotify
+                        </a>
+                        <Link href="/" className="back-to-home-btn">
+                            <span className="btn-icon">🎵</span>
+                            <span className="btn-text">Back to Voting</span>
+                        </Link>
+                    </div>
                 </div>
 
                 <style jsx>{`
@@ -223,6 +228,12 @@ export default function ExportPage() {
                     .success-subtitle strong {
                         color: var(--orange-primary);
                     }
+                    .success-actions {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 12px;
+                        align-items: center;
+                    }
                     .spotify-link {
                         display: inline-flex;
                         align-items: center;
@@ -235,7 +246,6 @@ export default function ExportPage() {
                         text-decoration: none;
                         font-weight: 600;
                         font-size: 1rem;
-                        margin-bottom: 20px;
                         transition: all 0.2s;
                         width: 100%;
                         max-width: 280px;
@@ -249,36 +259,47 @@ export default function ExportPage() {
                         width: 22px;
                         height: 22px;
                     }
-                    .back-link {
-                        display: inline-block;
-                        color: #d3771d !important;
-                        text-decoration: none;
-                        font-size: 1.2rem;
-                        font-weight: 600;
+                    .back-to-home-btn {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 10px;
                         padding: 14px 28px;
-                        margin-top: 12px;
-                        transition: all 0.2s;
-                        border-radius: 10px;
-                        border: 2px solid transparent;
+                        background: linear-gradient(135deg, rgba(211, 119, 29, 0.15) 0%, rgba(224, 159, 36, 0.1) 100%);
+                        border: 1px solid rgba(211, 119, 29, 0.4);
+                        border-radius: 50px;
+                        color: var(--gold, #e0a030);
+                        font-weight: 600;
+                        font-size: 1rem;
+                        text-decoration: none;
+                        transition: all 0.3s ease;
+                        width: 100%;
+                        max-width: 280px;
                     }
-                    .back-link:visited {
-                        color: #d3771d !important;
+                    .back-to-home-btn:hover {
+                        transform: translateY(-2px);
+                        border-color: var(--orange-primary);
+                        box-shadow: 0 8px 25px rgba(211, 119, 29, 0.25);
+                        background: linear-gradient(135deg, rgba(211, 119, 29, 0.25) 0%, rgba(224, 159, 36, 0.15) 100%);
                     }
-                    .back-link:hover {
-                        color: #e09f24 !important;
-                        background: rgba(211, 119, 29, 0.1);
-                        border-color: rgba(211, 119, 29, 0.3);
+                    .back-to-home-btn .btn-icon {
+                        font-size: 1.2rem;
+                    }
+                    .back-to-home-btn .btn-text {
+                        letter-spacing: 0.5px;
                     }
                 `}</style>
             </div>
         );
     }
 
+
     return (
         <div className="export-page">
             <header className="export-header">
                 <Link href="/" className="back-btn" title="Back to Voting">
-                    ← Back
+                    <span className="back-icon">🎵</span>
+                    <span>Back</span>
                 </Link>
                 <Link href="/" className="logo-link">
                     <img src="/logo.png" alt="Hackathon" className="export-logo" />
@@ -288,8 +309,17 @@ export default function ExportPage() {
 
             {error && <div className="error-msg">{error}</div>}
 
+            {/* CLEAR EXPLANATION */}
+            <div className="export-explainer">
+                <div className="explainer-icon">✨</div>
+                <div className="explainer-text">
+                    <strong>Only the good stuff!</strong>
+                    <span>Songs with positive votes only — no duds, no clutter.</span>
+                </div>
+            </div>
+
             <div className="export-preview">
-                <p className="preview-label">{tracks.length} songs (ranked by votes)</p>
+                <p className="preview-label">👍 {tracks.length} upvoted songs ready to export</p>
 
                 <div className="track-list">
                     {tracks.map((track, index) => (
@@ -357,20 +387,25 @@ export default function ExportPage() {
                 .back-btn {
                     display: inline-flex;
                     align-items: center;
-                    padding: 8px 14px;
-                    background: var(--bg-tertiary);
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    color: var(--text-secondary);
+                    gap: 8px;
+                    padding: 8px 16px;
+                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.15) 0%, rgba(224, 159, 36, 0.1) 100%);
+                    border: 1px solid rgba(211, 119, 29, 0.4);
+                    border-radius: 50px;
+                    color: #e0a030;
                     font-size: 0.9rem;
                     text-decoration: none;
-                    transition: all 0.2s;
-                    font-weight: 500;
+                    transition: all 0.3s ease;
+                    font-weight: 600;
                 }
                 .back-btn:hover {
-                    background: var(--bg-secondary);
-                    color: var(--text-primary);
-                    border-color: var(--orange-primary);
+                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.25) 0%, rgba(224, 159, 36, 0.15) 100%);
+                    border-color: #d3771d;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 15px rgba(211, 119, 29, 0.2);
+                }
+                .back-btn .back-icon {
+                    font-size: 1rem;
                 }
                 .logo-link {
                     display: flex;
@@ -401,6 +436,32 @@ export default function ExportPage() {
                     padding: 12px;
                     border-radius: 8px;
                     margin-bottom: 16px;
+                }
+                .export-explainer {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 16px 20px;
+                    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
+                    border: 1px solid rgba(34, 197, 94, 0.3);
+                    border-radius: 12px;
+                    margin-bottom: 20px;
+                }
+                .explainer-icon {
+                    font-size: 1.5rem;
+                }
+                .explainer-text {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                }
+                .explainer-text strong {
+                    color: #22c55e;
+                    font-size: 0.95rem;
+                }
+                .explainer-text span {
+                    color: var(--text-secondary);
+                    font-size: 0.85rem;
                 }
                 .exporting-card {
                     text-align: center;

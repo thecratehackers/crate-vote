@@ -24,6 +24,8 @@ interface SpotifyAudioFeatures {
     energy: number;          // 0.0 to 1.0
     valence: number;         // 0.0 to 1.0 (happiness)
     danceability: number;    // 0.0 to 1.0
+    key: number;             // 0-11 (C, C#, D, ... B) or -1 if unknown
+    mode: number;            // 0 = minor, 1 = major
 }
 
 interface SpotifySearchResponse {
@@ -34,6 +36,36 @@ interface SpotifySearchResponse {
 
 interface SpotifyAudioFeaturesResponse {
     audio_features: (SpotifyAudioFeatures | null)[];
+}
+
+// Camelot Wheel - maps musical keys to DJ-friendly wheel notation
+// Major keys are B (1B-12B), Minor keys are A (1A-12A)
+const CAMELOT_WHEEL: { [key: number]: { major: string; minor: string } } = {
+    0: { major: '8B', minor: '5A' },   // C / Am
+    1: { major: '3B', minor: '12A' },  // C# / A#m
+    2: { major: '10B', minor: '7A' },  // D / Bm
+    3: { major: '5B', minor: '2A' },   // D# / Cm
+    4: { major: '12B', minor: '9A' },  // E / C#m
+    5: { major: '7B', minor: '4A' },   // F / Dm
+    6: { major: '2B', minor: '11A' },  // F# / D#m
+    7: { major: '9B', minor: '6A' },   // G / Em
+    8: { major: '4B', minor: '1A' },   // G# / Fm
+    9: { major: '11B', minor: '8A' },  // A / F#m
+    10: { major: '6B', minor: '3A' },  // A# / Gm
+    11: { major: '1B', minor: '10A' }, // B / G#m
+};
+
+/**
+ * Convert Spotify's key/mode to Camelot wheel notation
+ * @param key Spotify key (0-11, or -1 for unknown)
+ * @param mode Spotify mode (0 = minor, 1 = major)
+ * @returns Camelot notation (e.g., "8A", "11B") or null if unknown
+ */
+function toCamelotKey(key: number, mode: number): string | null {
+    if (key < 0 || key > 11) return null;
+    const wheel = CAMELOT_WHEEL[key];
+    if (!wheel) return null;
+    return mode === 1 ? wheel.major : wheel.minor;
 }
 
 // Get client credentials token (for search - doesn't need user auth)
@@ -117,7 +149,7 @@ async function getAudioFeatures(token: string, trackIds: string[]): Promise<Map<
     return featuresMap;
 }
 
-// Search tracks - returns basic info + audio features (BPM, energy, etc.)
+// Search tracks - returns basic info + audio features (BPM, energy, key, etc.)
 export async function searchTracks(query: string, limit = 10): Promise<{
     id: string;
     spotifyUri: string;
@@ -131,6 +163,7 @@ export async function searchTracks(query: string, limit = 10): Promise<{
     energy: number | null;
     valence: number | null;
     danceability: number | null;
+    camelotKey: string | null;
     explicit: boolean;
     durationMs: number;
 }[]> {
@@ -176,6 +209,7 @@ export async function searchTracks(query: string, limit = 10): Promise<{
             energy: features ? features.energy : null,
             valence: features ? features.valence : null,
             danceability: features ? features.danceability : null,
+            camelotKey: features ? toCamelotKey(features.key, features.mode) : null,
             explicit: track.explicit,
             durationMs: track.duration_ms,
         };
@@ -281,6 +315,7 @@ export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): P
         energy: number | null;
         valence: number | null;
         danceability: number | null;
+        camelotKey: string | null;
         explicit: boolean;
         durationMs: number;
     }[];
@@ -369,6 +404,7 @@ export async function getPlaylistTracks(playlistUrl: string, maxTracks = 100): P
             energy: features ? features.energy : null,
             valence: features ? features.valence : null,
             danceability: features ? features.danceability : null,
+            camelotKey: features ? toCamelotKey(features.key, features.mode) : null,
             explicit: track.explicit,
             durationMs: track.duration_ms,
         };

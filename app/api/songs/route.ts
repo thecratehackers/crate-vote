@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch data in parallel - most of these are cached
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
@@ -66,6 +66,7 @@ export async function GET(request: Request) {
         getActiveViewerCount(),
         getDeleteWindowStatus(),
         getVersusBattleStatus(visitorId || undefined, false), // Don't include vote counts for users
+        getKarmaRainStatus(),
     ]);
 
     // Check if user can delete during window
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
             canDelete: canDeleteInWindow,
         },
         versusBattle: versusBattleStatus,
+        karmaRain: karmaRainStatus,
     });
 }
 
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
     // Rate limiting for non-admin requests
     if (!isAdmin) {
         const clientId = getClientIdentifier(request);
-        const rateCheck = checkRateLimit(clientId + ':addSong', RATE_LIMITS.addSong);
+        const rateCheck = await checkRateLimit(clientId + ':addSong', RATE_LIMITS.addSong);
         if (!rateCheck.success) {
             const response = NextResponse.json(
                 { error: 'Too many requests. Please wait a moment before adding more songs.' },
@@ -160,13 +162,57 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { id, spotifyUri, name, artist, album, albumArt, previewUrl, popularity, bpm, energy, valence, danceability, addedByName, explicit, durationMs } = body;
+        const { id, spotifyUri, name, artist, album, albumArt, previewUrl, popularity, bpm, energy, valence, danceability, camelotKey, addedByName, addedByAvatar, explicit, durationMs } = body;
 
+        // ============ INPUT VALIDATION & SANITIZATION ============
+
+        // Required fields check
         if (!id || !spotifyUri || !name || !artist) {
             return NextResponse.json({ error: 'Something went wrong with the song data. Please search again and try adding a different track.' }, { status: 400 });
         }
 
-        // Note: Explicit songs are allowed - profanity in titles is censored in display
+        // Type validation
+        if (typeof id !== 'string' || typeof name !== 'string' || typeof artist !== 'string') {
+            return NextResponse.json({ error: 'Invalid data format. Please refresh and try again.' }, { status: 400 });
+        }
+
+        // Length limits (prevent database bloat attacks)
+        if (id.length > 100 || name.length > 300 || artist.length > 300 || (album && album.length > 300)) {
+            return NextResponse.json({ error: 'Song data is too long. Please try a different track.' }, { status: 400 });
+        }
+
+        // Spotify ID format validation (alphanumeric, 22 chars)
+        if (!/^[a-zA-Z0-9]{22}$/.test(id)) {
+            return NextResponse.json({ error: 'Invalid Spotify track ID. Please search again.' }, { status: 400 });
+        }
+
+        // Spotify URI format validation
+        if (!/^spotify:track:[a-zA-Z0-9]{22}$/.test(spotifyUri)) {
+            return NextResponse.json({ error: 'Invalid Spotify URI. Please search again.' }, { status: 400 });
+        }
+
+        // URL validation for album art and preview
+        if (albumArt && !/^https:\/\//.test(albumArt)) {
+            return NextResponse.json({ error: 'Invalid album art URL.' }, { status: 400 });
+        }
+        if (previewUrl && !/^https:\/\//.test(previewUrl)) {
+            return NextResponse.json({ error: 'Invalid preview URL.' }, { status: 400 });
+        }
+
+        // Numeric field validation
+        if (durationMs !== undefined && (typeof durationMs !== 'number' || durationMs < 0 || durationMs > 3600000)) {
+            return NextResponse.json({ error: 'Invalid duration.' }, { status: 400 });
+        }
+        if (popularity !== undefined && (typeof popularity !== 'number' || popularity < 0 || popularity > 100)) {
+            return NextResponse.json({ error: 'Invalid popularity.' }, { status: 400 });
+        }
+
+        // Sanitize username (strip HTML/scripts)
+        const sanitizedAddedByName = (addedByName || 'Anonymous')
+            .replace(/<[^>]*>/g, '') // Strip HTML tags
+            .replace(/[<>"'&]/g, '') // Remove dangerous chars
+            .trim()
+            .slice(0, 50); // Max length
 
         // ⏱️ DURATION LIMIT - Block songs over 8 minutes (skip for admins)
         const MAX_DURATION_MS = 8 * 60 * 1000; // 8 minutes
@@ -177,7 +223,7 @@ export async function POST(request: Request) {
         // 🛡️ RESERVED USERNAMES - Prevent impersonation
         const reservedWords = ['admin', 'moderator', 'mod', 'host', 'system'];
         const reservedExactNames = ['aaron', 'crate hackers', 'dj aaron', 'cratehackers'];
-        const lowerName = (addedByName || '').toLowerCase().trim();
+        const lowerName = sanitizedAddedByName.toLowerCase();
         if (!isAdmin && (
             reservedWords.some(word => lowerName.includes(word)) ||
             reservedExactNames.includes(lowerName)
@@ -196,13 +242,15 @@ export async function POST(request: Request) {
             albumArt,
             previewUrl,
             addedBy: visitorId,
-            addedByName: isAdmin ? `${addedByName || 'Admin'} (admin)` : (addedByName || 'Anonymous'),
+            addedByName: isAdmin ? `${sanitizedAddedByName} (admin)` : sanitizedAddedByName,
+            addedByAvatar: addedByAvatar || '🎧',
             // Audio features for DJs
             popularity: popularity || 0,
             bpm: bpm || null,
             energy: energy || null,
             valence: valence || null,
             danceability: danceability || null,
+            camelotKey: camelotKey || null,
         };
 
         // Use adminAddSong for admins (unlimited), regular addSong for users

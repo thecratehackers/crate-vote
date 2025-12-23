@@ -67,6 +67,7 @@ export default function AdminPage() {
     const [activeAdminCount, setActiveAdminCount] = useState(0);
     const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
+
     // Unique admin ID for this session
     const [adminId] = useState(() => 'admin-' + Math.random().toString(36).substr(2, 9));
 
@@ -102,12 +103,21 @@ export default function AdminPage() {
     const [isGrantingKarma, setIsGrantingKarma] = useState<string | null>(null);
     const [isBanningUser, setIsBanningUser] = useState<string | null>(null);
     const [isWiping, setIsWiping] = useState(false);
+    const [isRainingKarma, setIsRainingKarma] = useState(false);
     const [isAddingSong, setIsAddingSong] = useState<string | null>(null);
 
     // Delete window (chaos mode) state
     const [isStartingDeleteWindow, setIsStartingDeleteWindow] = useState(false);
     const [deleteWindowActive, setDeleteWindowActive] = useState(false);
     const [deleteWindowEndTime, setDeleteWindowEndTime] = useState<number | null>(null);
+
+    // Import playlist state
+    const [importUrl, setImportUrl] = useState('');
+    const [isImporting, setIsImporting] = useState(false);
+    const [showImportPanel, setShowImportPanel] = useState(false);
+
+    // Predictions state
+    const [isRevealingPredictions, setIsRevealingPredictions] = useState(false);
 
     // Custom confirmation modal state (replaces native confirm() which flickers)
     interface ConfirmModalState {
@@ -140,37 +150,24 @@ export default function AdminPage() {
         closeConfirmModal();
     };
 
-    // Versus Battle state
-    interface VersusBattleSong {
-        id: string;
-        name: string;
-        artist: string;
-        albumArt: string;
-    }
-    interface VersusBattleState {
-        active: boolean;
-        songA?: VersusBattleSong;
-        songB?: VersusBattleSong;
-        endTime?: number;
-        remaining?: number;
-        phase?: 'voting' | 'lightning' | 'resolved';
-        isLightningRound?: boolean;
-        votesA?: number;
-        votesB?: number;
-        winner?: 'A' | 'B' | null;
-    }
-    const [versusBattle, setVersusBattle] = useState<VersusBattleState>({ active: false });
-    const [isStartingBattle, setIsStartingBattle] = useState(false);
-    const [battleCountdown, setBattleCountdown] = useState(0);
-    const isResolvingBattle = useRef(false);  // Prevent multiple auto-resolves
-
-    // Ref to prevent polling while confirmation dialogs are open
-    const isConfirmDialogOpen = useRef(false);
+    // Admin API call helper
+    const adminFetch = async (url: string, options: RequestInit = {}) => {
+        return fetch(url, {
+            ...options,
+            headers: {
+                ...options.headers,
+                'Content-Type': 'application/json',
+                'x-admin-key': adminPassword,
+                'x-admin-id': adminId,
+            },
+        });
+    };
 
     // Fetch playlist data (with admin heartbeat)
     const fetchPlaylist = useCallback(async () => {
         // Skip fetching if a confirmation dialog is open to prevent flickering
-        if (isConfirmDialogOpen.current) return;
+        // Using a ref for this would be better but we don't have one readily exposed in current scope easily without re-declaring
+        if (confirmModal.isOpen) return;
 
         try {
             const res = await fetch('/api/playlist', {
@@ -196,12 +193,37 @@ export default function AdminPage() {
             console.error('Failed to fetch playlist:', error);
             setMessage({ type: 'error', text: 'Failed to load playlist - check your connection' });
         }
-    }, [isAuthenticated, adminPassword, adminId, isEditingTitle]);
+    }, [isAuthenticated, adminPassword, adminId, isEditingTitle, confirmModal.isOpen]);
+
+
+    // Versus Battle state
+    interface VersusBattleSong {
+        id: string;
+        name: string;
+        artist: string;
+        albumArt: string;
+    }
+    interface VersusBattleState {
+        active: boolean;
+        songA?: VersusBattleSong;
+        songB?: VersusBattleSong;
+        endTime?: number;
+        remaining?: number;
+        phase?: 'voting' | 'lightning' | 'resolved';
+        isLightningRound?: boolean;
+        votesA?: number;
+        votesB?: number;
+        winner?: 'A' | 'B' | null;
+    }
+    const [versusBattle, setVersusBattle] = useState<VersusBattleState>({ active: false });
+    const [isStartingBattle, setIsStartingBattle] = useState(false);
+    const [battleCountdown, setBattleCountdown] = useState(0);
+    const isResolvingBattle = useRef(false);  // Prevent multiple auto-resolves
+
 
     // Fetch timer status
     const fetchTimer = useCallback(async () => {
-        // Skip fetching if a confirmation dialog is open to prevent flickering
-        if (isConfirmDialogOpen.current) return;
+        if (confirmModal.isOpen) return;
 
         try {
             const res = await fetch('/api/timer');
@@ -220,7 +242,7 @@ export default function AdminPage() {
                 setMessage({ type: 'error', text: 'Timer sync failed - retrying...' });
             }
         }
-    }, []);
+    }, [confirmModal.isOpen]);
 
     // Initial fetch when authenticated
     useEffect(() => {
@@ -345,19 +367,6 @@ export default function AdminPage() {
 
     // Check if song is already in playlist
     const isSongInPlaylist = (trackId: string) => songs.some(s => s.id === trackId);
-
-    // Admin API call helper
-    const adminFetch = async (url: string, options: RequestInit = {}) => {
-        return fetch(url, {
-            ...options,
-            headers: {
-                ...options.headers,
-                'Content-Type': 'application/json',
-                'x-admin-key': adminPassword,
-                'x-admin-id': adminId,
-            },
-        });
-    };
 
     // Admin vote on song (contributes to aggregate score)
     const handleAdminVote = async (songId: string, vote: 1 | -1) => {
@@ -610,6 +619,7 @@ export default function AdminPage() {
             if (res.ok) {
                 // 1 karma = +1 song, +1 upvote, +1 downvote
                 setMessage({ type: 'success', text: `✓ +${karmaAmount} Karma to ${userName}! (Total: ${data.karma}) → +${karmaAmount} songs & votes!` });
+                // Refresh playlist to show karma badge updates
                 fetchPlaylist();
             } else {
                 setMessage({ type: 'error', text: data.error || 'Failed to grant karma' });
@@ -688,25 +698,75 @@ export default function AdminPage() {
         );
     };
 
+    // Export to Spotify - redirect to export page
+    const handleExportSpotify = () => {
+        // Just redirect to the export page - it handles Spotify auth
+        window.location.href = '/export';
+    };
 
-    // Refresh audio features for all songs
-    const handleRefreshFeatures = async () => {
+    // JSON Export
+    const handleExportJSON = () => {
+        const dataStr = JSON.stringify(songs, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `crate-playlist-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setMessage({ type: 'success', text: '✓ JSON Exported!' });
+    };
+
+    // Login handler - now uses server-side verification
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoggingIn(true);
+        setLoginError(null);
+
         try {
-            setMessage({ type: 'success', text: 'Refreshing audio features...' });
-            const res = await adminFetch('/api/admin/refresh-features', {
+            const res = await fetch('/api/admin/auth', {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: adminPassword }),
             });
+
             const data = await res.json();
-            if (res.ok) {
-                setMessage({ type: 'success', text: data.message });
-                fetchPlaylist(); // Refresh to show updated features
+
+            if (data.success) {
+                setIsAuthenticated(true);
             } else {
-                setMessage({ type: 'error', text: data.error || 'Failed to refresh features' });
+                setLoginError(data.error || 'Incorrect password');
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to refresh features - network error' });
+            setLoginError('Network error - please try again');
+        } finally {
+            setIsLoggingIn(false);
         }
     };
+
+    const handleToggleLock = async () => {
+        setIsTogglingLock(true);
+        const newState = !isLocked;
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'setLock', locked: newState }),
+            });
+            if (res.ok) {
+                setIsLocked(newState);
+                setMessage({ type: 'success', text: newState ? '🔒 Playlist locked' : '🔓 Playlist unlocked' });
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: 'Failed to toggle lock' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to toggle lock' });
+        } finally {
+            setIsTogglingLock(false);
+        }
+    };
+
 
     // Shuffle all songs in the playlist
     const handleShufflePlaylist = async () => {
@@ -774,6 +834,51 @@ export default function AdminPage() {
         );
     };
 
+    // Karma Rain - give everyone +1 karma!
+    const handleKarmaRain = async () => {
+        setIsRainingKarma(true);
+        try {
+            const res = await adminFetch('/api/admin/karma-rain', { method: 'POST' });
+            const data = await res.json();
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: `🌧️ Karma Rain! ${data.usersRained} users received +1 karma!` });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to rain karma' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to rain karma - network error' });
+        } finally {
+            setIsRainingKarma(false);
+        }
+    };
+
+    // ============ PREDICTIONS HANDLERS ============
+
+    // Reveal predictions and award karma
+    const handleRevealPredictions = async () => {
+        setIsRevealingPredictions(true);
+        try {
+            const res = await adminFetch('/api/predictions', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'reveal' }),
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                setMessage({
+                    type: 'success',
+                    text: `🎯 ${data.winners} predicted correctly! "${data.winningSong.name}" wins!`
+                });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to reveal predictions' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to reveal predictions - network error' });
+        } finally {
+            setIsRevealingPredictions(false);
+        }
+    };
 
     // ============ VERSUS BATTLE HANDLERS ============
 
@@ -800,312 +905,85 @@ export default function AdminPage() {
         // Fetch immediately
         fetchVersusBattle();
 
-        // Poll every 2 seconds during active battle
-        const interval = setInterval(fetchVersusBattle, 2000);
+        const interval = setInterval(fetchVersusBattle, 2000); // 2s poll for admin awareness
         return () => clearInterval(interval);
     }, [isAuthenticated, fetchVersusBattle]);
 
-    // Countdown timer for battle (just visual - don't auto-resolve from admin, let server handle it)
-    useEffect(() => {
-        if (!versusBattle.active || !versusBattle.endTime) return;
-
-        const interval = setInterval(() => {
-            const remaining = Math.max(0, versusBattle.endTime! - Date.now());
-            setBattleCountdown(remaining);
-
-            // When timer hits 0, fetch to get resolved state (but don't trigger resolve - let polling handle it)
-            // This prevents race conditions from multiple clients trying to resolve
-        }, 100);
-
-        return () => clearInterval(interval);
-    }, [versusBattle.active, versusBattle.endTime]);
-
-    // Start a new versus battle
     const handleStartVersusBattle = async () => {
+        if (songs.length < 2) {
+            setMessage({ type: 'error', text: 'Need at least 2 songs for a battle!' });
+            return;
+        }
+
         setIsStartingBattle(true);
         try {
             const res = await adminFetch('/api/admin/versus-battle', {
                 method: 'POST',
-                body: JSON.stringify({ action: 'start' }),
+                // Default 45s battle
+                body: JSON.stringify({ action: 'start', duration: 45 }),
             });
             const data = await res.json();
 
             if (res.ok) {
-                setMessage({ type: 'success', text: `⚔️ VERSUS BATTLE! "${data.songA.name}" vs "${data.songB.name}"` });
-                setVersusBattle({
-                    active: true,
-                    songA: data.songA,
-                    songB: data.songB,
-                    endTime: data.endTime,
-                    phase: 'voting',
-                    isLightningRound: false,
-                });
+                setMessage({ type: 'success', text: '⚔️ VERSUS BATTLE STARTED!' });
+                setVersusBattle(data);
             } else {
                 setMessage({ type: 'error', text: data.error || 'Failed to start battle' });
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to start battle - network error' });
+            setMessage({ type: 'error', text: 'Failed to start battle' });
         } finally {
             setIsStartingBattle(false);
         }
     };
 
-    // Resolve the battle (when timer ends)
-    const handleResolveBattle = async () => {
-        // Prevent multiple simultaneous resolves
-        if (isResolvingBattle.current) return;
-        isResolvingBattle.current = true;
-
-        try {
-            const res = await adminFetch('/api/admin/versus-battle', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'resolve' }),
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                if (data.isTie) {
-                    // It's a tie - show option for lightning round
-                    setMessage({ type: 'success', text: `⚡ TIE! ${data.votesA} vs ${data.votesB} — Start lightning round!` });
-                    setVersusBattle(prev => ({ ...prev, phase: 'voting', votesA: data.votesA, votesB: data.votesB }));
-                } else {
-                    setMessage({ type: 'success', text: `🏆 Song ${data.winner} WINS! "${data.deletedSongName}" eliminated!` });
-                    setVersusBattle({ active: false });
-                    fetchPlaylist();
-                }
-            }
-        } catch (error) {
-            console.error('Failed to resolve battle:', error);
-            setMessage({ type: 'error', text: 'Failed to resolve battle - try again' });
-        } finally {
-            isResolvingBattle.current = false;
-        }
-    };
-
-    // Start lightning round
-    const handleLightningRound = async () => {
-        try {
-            const res = await adminFetch('/api/admin/versus-battle', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'lightning' }),
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                setMessage({ type: 'success', text: '⚡ LIGHTNING ROUND! 15 seconds!' });
-                setVersusBattle(prev => ({
-                    ...prev,
-                    endTime: data.endTime,
-                    phase: 'lightning',
-                    isLightningRound: true,
-                    votesA: 0,
-                    votesB: 0,
-                }));
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Failed to start lightning round' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to start lightning round' });
-        }
-    };
-
-    // Admin override - pick a winner
-    const handleOverrideWinner = async (winner: 'A' | 'B') => {
-        try {
-            const res = await adminFetch('/api/admin/versus-battle', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'override', winner }),
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                setMessage({ type: 'success', text: `👑 ADMIN OVERRIDE: Song ${winner} wins! "${data.deletedSongName}" eliminated!` });
-                setVersusBattle({ active: false });
-                fetchPlaylist();
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Failed to override' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to override - network error' });
-        }
-    };
-
-    // Cancel battle
     const handleCancelBattle = async () => {
         try {
-            const res = await adminFetch('/api/admin/versus-battle', {
+            await adminFetch('/api/admin/versus-battle', {
                 method: 'POST',
                 body: JSON.stringify({ action: 'cancel' }),
             });
-
-            if (res.ok) {
-                setMessage({ type: 'success', text: '❌ Battle cancelled' });
-                setVersusBattle({ active: false });
-            }
+            setMessage({ type: 'success', text: 'Battle cancelled.' });
+            fetchVersusBattle();
         } catch (error) {
             setMessage({ type: 'error', text: 'Failed to cancel battle' });
         }
     };
 
-    // Toggle lock
-    const handleToggleLock = async () => {
-        if (isTogglingLock) return;
-        setIsTogglingLock(true);
-        try {
-            const res = await adminFetch('/api/playlist', {
-                method: 'POST',
-                body: JSON.stringify({ action: isLocked ? 'unlock' : 'lock' }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setIsLocked(data.isLocked);
-                setMessage({ type: 'success', text: data.isLocked ? '✓ Playlist locked' : '✓ Playlist unlocked' });
-            } else {
-                setMessage({ type: 'error', text: 'Failed to toggle lock' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to toggle lock - network error' });
-        } finally {
-            setIsTogglingLock(false);
-        }
-    };
 
-    // Export to Spotify (only if connected)
-    const handleExportSpotify = async () => {
-        if (!session) {
-            setMessage({ type: 'success', text: 'Connecting to Spotify...' });
-            signIn('spotify');
-            return;
-        }
-
-        if (isExportingSpotify) return;
-        setIsExportingSpotify(true);
-        setMessage({ type: 'success', text: 'Creating Spotify playlist...' });
-
-        try {
-            // Strip emojis from playlist title for Spotify
-            const cleanTitle = playlistTitle
-                .split('')
-                .filter(char => {
-                    const code = char.charCodeAt(0);
-                    return !(code >= 0x1F300 && code <= 0x1F9FF) &&
-                        !(code >= 0x2600 && code <= 0x26FF) &&
-                        !(code >= 0x2700 && code <= 0x27BF) &&
-                        !(code >= 0xD83C && code <= 0xD83E);
-                })
-                .join('')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            const res = await fetch('/api/playlist/export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: cleanTitle || `${APP_CONFIG.name} Playlist`,
-                    description: `Created with Hackathon | ${stats.totalSongs} songs | ${stats.uniqueVoters} voters`,
-                }),
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                setExportUrl(data.playlistUrl);
-                setMessage({ type: 'success', text: `✓ Playlist created with ${data.trackCount} tracks!` });
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Export failed' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to export playlist - network error' });
-        } finally {
-            setIsExportingSpotify(false);
-        }
-    };
-
-    // Export JSON download
-    const handleExportJSON = async () => {
-        if (isExportingJSON) return;
-        setIsExportingJSON(true);
-        try {
-            const res = await fetch('/api/playlist/export');
-            const data = await res.json();
-
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `hackathon-${new Date().toISOString().split('T')[0]}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-
-            setMessage({ type: 'success', text: '✓ Exported as JSON' });
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Export failed - network error' });
-        } finally {
-            setIsExportingJSON(false);
-        }
-    };
-
-    // Password login - verify with server before proceeding
-    const handlePasswordLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!adminPassword.trim() || isLoggingIn) return;
-
-        setIsLoggingIn(true);
-        setLoginError(null);
-
-        try {
-            // Verify password by making a test request
-            const res = await fetch('/api/playlist', {
-                headers: {
-                    'x-admin-key': adminPassword,
-                    'x-admin-id': adminId,
-                },
-            });
-
-            if (res.ok) {
-                setIsAuthenticated(true);
-            } else if (res.status === 401) {
-                setLoginError('Invalid password');
-            } else {
-                setLoginError('Server error - please try again');
-            }
-        } catch (error) {
-            setLoginError('Connection failed - check your network');
-        } finally {
-            setIsLoggingIn(false);
-        }
-    };
-
-    // Show login screen if not authenticated
+    // LOGIN SCREEN
     if (!isAuthenticated) {
         return (
             <div className="auth-container">
                 <div className="auth-card">
-                    <img src="/logo.png" alt="Hackathon" style={{ width: 80, height: 80, marginBottom: 16 }} />
-                    <h1>Admin Panel</h1>
-                    <p>Enter the admin password to access controls</p>
-
-                    <form className="password-form" onSubmit={handlePasswordLogin} autoComplete="off">
+                    <h1>🔐 Admin Access</h1>
+                    <p>Enter your credentials to control the party</p>
+                    <form onSubmit={handleLogin} className="password-form">
                         <input
                             type="password"
-                            placeholder="Admin password"
+                            placeholder="Enter Admin Password"
                             value={adminPassword}
-                            onChange={(e) => { setAdminPassword(e.target.value); setLoginError(null); }}
+                            onChange={(e) => setAdminPassword(e.target.value)}
                             autoFocus
-                            autoComplete="new-password"
-                            data-lpignore="true"
-                            data-form-type="other"
-                            disabled={isLoggingIn}
                         />
-                        {loginError && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginTop: 8 }}>{loginError}</div>}
-                        <button type="submit" className="admin-btn primary" disabled={isLoggingIn || !adminPassword.trim()}>
-                            {isLoggingIn ? '⏳ Verifying...' : 'Enter Admin Panel'}
+                        <button
+                            type="submit"
+                            className="spotify-btn"
+                            style={{ marginTop: '20px', width: '100%', justifyContent: 'center' }}
+                            disabled={isLoggingIn}
+                        >
+                            {isLoggingIn ? 'Verifying...' : 'Unlock Dashboard'}
                         </button>
                     </form>
-
-                    <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
-                        <Link href="/" style={{ color: 'var(--orange-primary)', fontSize: '0.875rem' }}>
-                            ← Back to voting
+                    {loginError && (
+                        <div className="message error" style={{ marginTop: '20px', justifyContent: 'center' }}>
+                            {loginError}
+                        </div>
+                    )}
+                    <div className="admin-login-footer">
+                        <Link href="/" className="back-to-voting-btn">
+                            <span className="btn-icon">🎵</span>
+                            <span className="btn-text">Back to Voting</span>
                         </Link>
                     </div>
                 </div>
@@ -1113,69 +991,47 @@ export default function AdminPage() {
         );
     }
 
+    // MAIN DASHBOARD
     return (
-        <div className="container">
-            {/* Top bar */}
-            <div className="top-bar">
-                <Link href="/" className="admin-link">
-                    ← Back to Voting
-                </Link>
-                {timerRunning && <span className="live-indicator">🔴 LIVE</span>}
-            </div>
-
-            <header className="header">
-                <div className="logo-header-admin">
-                    <Link href="/" title="Go to Voting Page">
-                        <img src="/logo.png" alt="Hackathon" className="header-logo-admin clickable-logo" />
+        <div className="admin-container">
+            {/* Header / Nav */}
+            <div className="admin-header">
+                <div className="header-left">
+                    <div className="logo-header-admin">
+                        <img src="/logo.png" alt="DJ Booth" className="header-logo-admin" />
+                    </div>
+                    <Link href="/" className="view-live-btn" target="_blank">
+                        <span className="pulse-dot">●</span>
+                        <span>View Live</span>
+                        <span className="arrow">↗</span>
                     </Link>
-                    <div>
-                        <h1>
-                            <span className="logo-text">Hackathon</span>
-                        </h1>
-                        <p>Admin Panel</p>
-                    </div>
+                    {isEditingTitle ? (
+                        <div className="title-edit">
+                            <input
+                                type="text"
+                                value={titleInput}
+                                onChange={(e) => setTitleInput(e.target.value)}
+                                className="title-input"
+                                placeholder="Playlist Title"
+                            />
+                            <button className="save-btn" onClick={handleSaveTitle} disabled={isSavingTitle}>💾</button>
+                        </div>
+                    ) : (
+                        <div className="playlist-title-display">
+                            <h1>{playlistTitle}</h1>
+                            <button className="admin-btn small" onClick={() => setIsEditingTitle(true)}>
+                                ✏️ Edit
+                            </button>
+                        </div>
+                    )}
                 </div>
-                {/* 👥 ADMIN COUNT INDICATOR */}
-                <div className="admin-count-indicator">
-                    <span className="admin-dot"></span>
-                    <span className="admin-count-text">
-                        {activeAdminCount} Admin{activeAdminCount !== 1 ? 's' : ''} Online
-                    </span>
-                </div>
-            </header>
 
-            {/* 📝 PLAYLIST TITLE EDITOR */}
-            <div className="title-editor-panel">
-                <label>📝 Playlist Title (shown to users):</label>
-                {isEditingTitle ? (
-                    <div className="title-edit-row">
-                        <input
-                            type="text"
-                            value={titleInput}
-                            onChange={(e) => setTitleInput(e.target.value)}
-                            placeholder="Enter playlist title..."
-                            maxLength={100}
-                            autoFocus
-                            disabled={isSavingTitle}
-                        />
-                        <button className="admin-btn success small" onClick={handleSaveTitle} disabled={isSavingTitle}>
-                            {isSavingTitle ? '⏳...' : '✓ Save'}
-                        </button>
-                        <button className="admin-btn small" onClick={() => {
-                            setIsEditingTitle(false);
-                            setTitleInput(playlistTitle);
-                        }} disabled={isSavingTitle}>
-                            ✕ Cancel
-                        </button>
+                <div className="header-right">
+                    <div className="admin-status">
+                        <span className="status-dot"></span>
+                        {activeAdminCount > 1 ? `${activeAdminCount} Admins Online` : 'Admin Active'}
                     </div>
-                ) : (
-                    <div className="title-display-row">
-                        <span className="current-title">{playlistTitle}</span>
-                        <button className="admin-btn small" onClick={() => setIsEditingTitle(true)}>
-                            ✏️ Edit
-                        </button>
-                    </div>
-                )}
+                </div>
             </div>
 
             {/* Timer Control Panel */}
@@ -1208,7 +1064,8 @@ export default function AdminPage() {
                             <option value={45}>45 min</option>
                             <option value={60}>1 hour</option>
                             <option value={120}>2 hours</option>
-                            <option value={360}>6 hours</option>
+                            <option value={240}>4 hours</option>
+                            <option value={480}>8 hours</option>
                             <option value={720}>12 hours</option>
                             <option value={1440}>24 hours</option>
                             <option value={10080}>7 days</option>
@@ -1236,29 +1093,45 @@ export default function AdminPage() {
             <div className="admin-stats-bar">
                 <div className="stat-mini" data-tooltip="Total tracks in playlist">
                     <span className="stat-value">{stats.totalSongs}</span>
-                    <span className="stat-label">🎵</span>
+                    <span className="stat-label">🎵 Songs</span>
                 </div>
                 <div className="stat-mini" data-tooltip="Total votes cast">
                     <span className="stat-value">{stats.totalVotes}</span>
-                    <span className="stat-label">🗳️</span>
+                    <span className="stat-label">🗳️ Votes</span>
                 </div>
                 <div className="stat-mini" data-tooltip="Unique participants">
                     <span className="stat-value">{stats.uniqueVoters}</span>
-                    <span className="stat-label">👥</span>
+                    <span className="stat-label">👥 Users</span>
                 </div>
                 <div className="stat-mini" data-tooltip="Active users now">
                     <span className="stat-value">{activeUsers.length}</span>
-                    <span className="stat-label">🟢</span>
+                    <span className="stat-label">🟢 Live</span>
                 </div>
             </div>
 
-            {/* Quick Actions - Always visible, most used features */}
+            {/* Quick Actions - Always visible with labels */}
             <div className="admin-quick-actions">
-                <button className={`quick-action-btn ${isLocked ? 'locked' : ''}`} onClick={handleToggleLock} disabled={isTogglingLock}>
-                    {isTogglingLock ? '⏳' : isLocked ? '🔓' : '🔒'}
+                <button
+                    className={`quick-action-btn labeled ${isLocked ? 'locked' : 'unlocked'}`}
+                    onClick={handleToggleLock}
+                    disabled={isTogglingLock}
+                >
+                    <span className="btn-icon">{isTogglingLock ? '⏳' : isLocked ? '🔒' : '🔓'}</span>
+                    <span className="btn-label">{isLocked ? 'Locked' : 'Open'}</span>
                 </button>
-                <button className="quick-action-btn spotify" onClick={handleExportSpotify} disabled={songs.length === 0 || isExportingSpotify} title="Export to Spotify">
-                    {isExportingSpotify ? '⏳' : '🎶'}
+                <button
+                    className="quick-action-btn labeled spotify"
+                    onClick={handleExportSpotify}
+                    disabled={songs.length === 0 || isExportingSpotify}
+                >
+                    <span className="btn-icon">
+                        {isExportingSpotify ? '⏳' : (
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                            </svg>
+                        )}
+                    </span>
+                    <span className="btn-label">Export</span>
                 </button>
             </div>
 
@@ -1320,7 +1193,7 @@ export default function AdminPage() {
                     className={`admin-tab ${activeTab === 'activity' ? 'active' : ''}`}
                     onClick={() => setActiveTab('activity')}
                 >
-                    <span className="tab-icon">📢</span>
+                    <span className="tab-icon">🎙️</span>
                     <span className="tab-label">Live</span>
                     {recentActivity.length > 0 && <span className="tab-badge">{recentActivity.length}</span>}
                 </button>
@@ -1496,6 +1369,64 @@ export default function AdminPage() {
                 {/* TOOLS TAB */}
                 {activeTab === 'tools' && (
                     <div className="tab-panel tools-panel">
+                        {/* Import from Spotify */}
+                        <div className="import-section">
+                            <button
+                                className="tool-btn import-spotify"
+                                onClick={() => setShowImportPanel(!showImportPanel)}
+                            >
+                                <span className="tool-icon">📥</span>
+                                <span className="tool-name">Import Spotify Playlist</span>
+                            </button>
+
+                            {showImportPanel && (
+                                <div className="import-panel">
+                                    <p className="import-hint">Paste a Spotify playlist URL to import up to 100 tracks</p>
+                                    <div className="import-input-row">
+                                        <input
+                                            type="text"
+                                            placeholder="https://open.spotify.com/playlist/..."
+                                            value={importUrl}
+                                            onChange={(e) => setImportUrl(e.target.value)}
+                                            className="import-input"
+                                        />
+                                        <button
+                                            className="import-btn"
+                                            disabled={isImporting || !importUrl.includes('spotify.com/playlist')}
+                                            onClick={async () => {
+                                                setIsImporting(true);
+                                                try {
+                                                    const res = await adminFetch('/api/admin/import-playlist', {
+                                                        method: 'POST',
+                                                        body: JSON.stringify({ playlistUrl: importUrl }),
+                                                    });
+                                                    const data = await res.json();
+                                                    if (res.ok) {
+                                                        setMessage({
+                                                            type: 'success',
+                                                            text: `✓ Imported ${data.imported} songs from "${data.playlistName}"${data.skipped > 0 ? ` (${data.skipped} skipped)` : ''}`
+                                                        });
+                                                        setImportUrl('');
+                                                        setShowImportPanel(false);
+                                                        fetchPlaylist();
+                                                    } else {
+                                                        setMessage({ type: 'error', text: data.error || 'Import failed' });
+                                                    }
+                                                } catch (error) {
+                                                    setMessage({ type: 'error', text: 'Import failed - network error' });
+                                                } finally {
+                                                    setIsImporting(false);
+                                                }
+                                            }}
+                                        >
+                                            {isImporting ? 'Importing...' : '🚀 Import'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Quick Tools */}
                         <div className="tools-grid">
                             <button className="tool-btn shuffle" onClick={handleShufflePlaylist} disabled={isShuffling || songs.length < 2}>
                                 <span className="tool-icon">🔀</span>
@@ -1509,14 +1440,18 @@ export default function AdminPage() {
                                 <span className="tool-icon">🗑️</span>
                                 <span className="tool-name">{isWiping ? 'Wiping...' : 'Wipe All'}</span>
                             </button>
-                            <button className="tool-btn export" onClick={handleExportJSON} disabled={isExportingJSON}>
-                                <span className="tool-icon">📁</span>
-                                <span className="tool-name">Export JSON</span>
+                            <button className="tool-btn karma-rain" onClick={handleKarmaRain} disabled={isRainingKarma}>
+                                <span className="tool-icon">🌧️</span>
+                                <span className="tool-name">{isRainingKarma ? 'Raining...' : 'Karma Rain'}</span>
+                            </button>
+                            <button className="tool-btn predictions" onClick={handleRevealPredictions} disabled={isRevealingPredictions}>
+                                <span className="tool-icon">🎯</span>
+                                <span className="tool-name">{isRevealingPredictions ? 'Revealing...' : 'Reveal Predictions'}</span>
                             </button>
                         </div>
                     </div>
                 )}
             </div>
-        </div >
+        </div>
     );
 }

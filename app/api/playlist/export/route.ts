@@ -21,29 +21,49 @@ export async function POST(request: Request) {
         const accessToken = session.accessToken as string;
 
         // Get user ID
-        const user = await getCurrentUser(accessToken);
+        let user;
+        try {
+            user = await getCurrentUser(accessToken);
+        } catch (userError) {
+            console.error('Failed to get Spotify user:', userError);
+            return NextResponse.json({ error: 'Spotify session expired. Please sign out and sign in again.' }, { status: 401 });
+        }
 
         // Get playlist data
         const songs = await getSortedSongs();
 
-        // Filter: Only export songs with positive score
-        const validSongs = songs.filter(s => s.score > 0);
-
-        const exportData = validSongs.map(s => ({
-            id: s.id,
-            spotifyUri: s.spotifyUri,
-            name: s.name,
-            artist: s.artist,
-            albumArt: s.albumArt,
-            score: s.score,
-        }));
-
-        if (exportData.length === 0) {
-            return NextResponse.json({ error: 'No songs with positive scores to export. Songs need upvotes before they can be saved to Spotify.' }, { status: 400 });
+        if (songs.length === 0) {
+            return NextResponse.json({ error: 'No songs in the playlist to export.' }, { status: 400 });
         }
 
-        // Create playlist - use the provided name (already cleaned by client)
-        const trackUris = exportData.map((s) => s.spotifyUri);
+        // Filter: Only export songs with positive score (score > 0)
+        // If all songs have score 0, export all songs instead
+        let validSongs = songs.filter(s => s.score > 0);
+        if (validSongs.length === 0) {
+            // No songs have positive score - export all songs
+            validSongs = songs;
+            console.log('No positive scores - exporting all songs');
+        }
+
+        // Filter to only valid Spotify URIs
+        const songsWithValidUri = validSongs.filter(s =>
+            s.spotifyUri && s.spotifyUri.startsWith('spotify:track:')
+        );
+
+        if (songsWithValidUri.length === 0) {
+            const hasItunesUris = validSongs.some(s => s.spotifyUri?.startsWith('itunes:'));
+            if (hasItunesUris) {
+                return NextResponse.json({
+                    error: 'These songs were added with an older version. Please wipe the playlist and add fresh songs to export.'
+                }, { status: 400 });
+            }
+            return NextResponse.json({ error: 'No valid Spotify tracks to export.' }, { status: 400 });
+        }
+
+        const trackUris = songsWithValidUri.map((s) => s.spotifyUri);
+
+        console.log(`Exporting ${trackUris.length} tracks to Spotify for user ${user.id}`);
+
         const result = await createPlaylist(
             accessToken,
             user.id,
@@ -60,7 +80,10 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('Export error:', error);
-        return NextResponse.json({ error: 'Could not export to Spotify. Please try signing in again.' }, { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({
+            error: `Export failed: ${errorMessage}. Try signing out and back in.`
+        }, { status: 500 });
     }
 }
 

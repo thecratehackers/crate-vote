@@ -56,6 +56,7 @@ export async function POST(request: Request) {
                 energy: track.energy,
                 valence: track.valence,
                 danceability: track.danceability,
+                camelotKey: track.camelotKey,
             };
 
             const result = await adminAddSong(songData);

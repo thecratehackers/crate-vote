@@ -28,6 +28,11 @@ export async function POST(request: Request) {
             } else {
                 return NextResponse.json({ error: result.error || 'Failed' }, { status: 400 });
             }
+        } else if (action === 'jukebox') {
+            // Grant 1 karma for watching 60+ seconds of jukebox video
+            const newKarma = await addKarma(visitorId, 1);
+            const bonuses = await getKarmaBonuses(visitorId);
+            return NextResponse.json({ success: true, karma: newKarma, bonuses });
         }
 
         return NextResponse.json({ error: 'Unknown karma action. Please refresh and try again.' }, { status: 400 });

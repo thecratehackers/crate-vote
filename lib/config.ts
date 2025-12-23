@@ -5,7 +5,7 @@
 
 // ============ BRANDING ============
 export const APP_CONFIG = {
-    name: process.env.NEXT_PUBLIC_APP_NAME || 'Crate Hackers',
+    name: process.env.NEXT_PUBLIC_APP_NAME || 'Hackathon',
     tagline: 'Collaborative Playlist Voting',
     description: 'Vote on songs and build the ultimate playlist together',
 
@@ -14,6 +14,9 @@ export const APP_CONFIG = {
 
     // URLs
     baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://crateoftheweek.com',
+
+    // Auth
+    adminPassword: process.env.ADMIN_PASSWORD || 'admin',
 };
 
 // ============ GAME LIMITS ============

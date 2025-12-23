@@ -76,6 +76,7 @@ const TOP3_KARMA_GRANTED_KEY = 'hackathon:top3KarmaGranted';  // Track songs tha
 const USER_LAST_ACTIVITY_KEY = 'hackathon:userLastActivity';  // Track when users were last active
 const DELETE_WINDOW_KEY = 'hackathon:deleteWindow';  // { endTime: timestamp } - when delete window is active
 const DELETE_WINDOW_USED_KEY = 'hackathon:deleteWindowUsed';  // Set of visitorIds who used their delete this window
+const KARMA_RAIN_KEY = 'hackathon:karmaRain';  // { timestamp: number } - when last karma rain happened
 
 // VERSUS BATTLE KEYS - Head-to-head song battles
 const VERSUS_BATTLE_KEY = 'hackathon:versusBattle';  // Main battle state
@@ -111,6 +112,7 @@ export interface Song {
     energy: number | null;
     valence: number | null;
     danceability: number | null;
+    camelotKey: string | null;  // DJ-friendly key notation (e.g., "8A", "11B")
 }
 
 interface TimerData {
@@ -1335,9 +1337,35 @@ export async function getUserKarma(visitorId: string): Promise<number> {
     }
 }
 
+// Maximum karma a user can have - hard cap
+const MAX_KARMA = 10;
+
 export async function addKarma(visitorId: string, points: number = 1): Promise<number> {
     try {
-        const newKarma = await redis.hincrby(USER_KARMA_KEY, visitorId, points);
+        // Get current karma first to enforce cap
+        const currentKarma = await getUserKarma(visitorId);
+
+        // If already at max, don't add more
+        if (currentKarma >= MAX_KARMA) {
+            console.log(`User ${visitorId} already at max karma (${MAX_KARMA}), skipping add`);
+            return currentKarma;
+        }
+
+        // Calculate how much we can actually add without exceeding cap
+        const pointsToAdd = Math.min(points, MAX_KARMA - currentKarma);
+
+        if (pointsToAdd <= 0) {
+            return currentKarma;
+        }
+
+        const newKarma = await redis.hincrby(USER_KARMA_KEY, visitorId, pointsToAdd);
+
+        // Safety check - if somehow over cap, reset to cap
+        if (newKarma > MAX_KARMA) {
+            await redis.hset(USER_KARMA_KEY, { [visitorId]: MAX_KARMA });
+            return MAX_KARMA;
+        }
+
         return newKarma;
     } catch (error) {
         console.error('Failed to add karma:', error);
@@ -1805,4 +1833,437 @@ export async function cancelVersusBattle(): Promise<{ success: boolean }> {
 // Clear eliminated songs list (part of session reset)
 export async function clearEliminatedSongs(): Promise<void> {
     await redis.del(ELIMINATED_SONGS_KEY);
+}
+
+// ============ KARMA RAIN - Give all active users +1 karma ============
+export async function karmaRain(): Promise<{ count: number; timestamp: number }> {
+    try {
+        const timestamp = Date.now();
+
+        // Get all users who have karma (meaning they've been active)
+        const karmaMap = await redis.hgetall<Record<string, number>>(USER_KARMA_KEY) || {};
+        const userIds = Object.keys(karmaMap);
+
+        if (userIds.length === 0) {
+            // If no one has karma yet, check song counts to find active users
+            const songCounts = await redis.hgetall<Record<string, number>>(USER_SONG_COUNTS_KEY) || {};
+            const songUserIds = Object.keys(songCounts).filter(id => (songCounts[id] || 0) > 0);
+
+            // Give each active user +1 karma
+            for (const userId of songUserIds) {
+                await addKarma(userId, 1);
+            }
+
+            // Store when rain happened (expires in 30 seconds)
+            await redis.set(KARMA_RAIN_KEY, { timestamp, count: songUserIds.length }, { ex: 30 });
+
+            console.log(`🌧️ KARMA RAIN: Gave +1 karma to ${songUserIds.length} users (from song counts)`);
+            return { count: songUserIds.length, timestamp };
+        }
+
+        // Give everyone in the karma map +1 karma
+        for (const userId of userIds) {
+            await addKarma(userId, 1);
+        }
+
+        // Store when rain happened (expires in 30 seconds)
+        await redis.set(KARMA_RAIN_KEY, { timestamp, count: userIds.length }, { ex: 30 });
+
+        console.log(`🌧️ KARMA RAIN: Gave +1 karma to ${userIds.length} users!`);
+        return { count: userIds.length, timestamp };
+    } catch (error) {
+        console.error('Failed to rain karma:', error);
+        return { count: 0, timestamp: 0 };
+    }
+}
+
+// Get karma rain status (for client to detect if rain happened recently)
+export async function getKarmaRainStatus(): Promise<{ active: boolean; timestamp: number; count: number }> {
+    try {
+        const data = await redis.get<{ timestamp: number; count: number }>(KARMA_RAIN_KEY);
+        if (!data) return { active: false, timestamp: 0, count: 0 };
+        return { active: true, timestamp: data.timestamp, count: data.count };
+    } catch (error) {
+        console.error('Failed to get karma rain status:', error);
+        return { active: false, timestamp: 0, count: 0 };
+    }
+}
+
+// ============ QUICK REACTIONS ============
+// Allow users to react to songs with emojis (🔥 💀 😂 ❤️) - doesn't affect score
+
+const REACTION_TYPES = ['fire', 'skull', 'laugh', 'heart'] as const;
+type ReactionType = typeof REACTION_TYPES[number];
+
+function getSongReactionsKey(songId: string, reactionType: ReactionType): string {
+    return `hackathon:song:${songId}:reactions:${reactionType}`;
+}
+
+// Add a reaction to a song (user can only have one reaction per song)
+export async function addReaction(
+    songId: string,
+    visitorId: string,
+    reactionType: ReactionType
+): Promise<{ success: boolean; counts: Record<ReactionType, number> }> {
+    try {
+        // Remove any existing reaction from this user on this song
+        for (const type of REACTION_TYPES) {
+            await redis.srem(getSongReactionsKey(songId, type), visitorId);
+        }
+
+        // Add the new reaction
+        await redis.sadd(getSongReactionsKey(songId, reactionType), visitorId);
+
+        // Get updated counts
+        const counts = await getReactionCounts(songId);
+        return { success: true, counts };
+    } catch (error) {
+        console.error('Failed to add reaction:', error);
+        return { success: false, counts: { fire: 0, skull: 0, laugh: 0, heart: 0 } };
+    }
+}
+
+// Remove a reaction
+export async function removeReaction(
+    songId: string,
+    visitorId: string,
+    reactionType: ReactionType
+): Promise<{ success: boolean; counts: Record<ReactionType, number> }> {
+    try {
+        await redis.srem(getSongReactionsKey(songId, reactionType), visitorId);
+        const counts = await getReactionCounts(songId);
+        return { success: true, counts };
+    } catch (error) {
+        console.error('Failed to remove reaction:', error);
+        return { success: false, counts: { fire: 0, skull: 0, laugh: 0, heart: 0 } };
+    }
+}
+
+// Get reaction counts for a song
+export async function getReactionCounts(songId: string): Promise<Record<ReactionType, number>> {
+    try {
+        const counts = await Promise.all(
+            REACTION_TYPES.map(async (type) => {
+                const count = await redis.scard(getSongReactionsKey(songId, type));
+                return [type, count] as [ReactionType, number];
+            })
+        );
+        return Object.fromEntries(counts) as Record<ReactionType, number>;
+    } catch (error) {
+        console.error('Failed to get reaction counts:', error);
+        return { fire: 0, skull: 0, laugh: 0, heart: 0 };
+    }
+}
+
+// Get user's reaction on a song
+export async function getUserReaction(songId: string, visitorId: string): Promise<ReactionType | null> {
+    try {
+        for (const type of REACTION_TYPES) {
+            const hasReaction = await redis.sismember(getSongReactionsKey(songId, type), visitorId);
+            if (hasReaction) return type;
+        }
+        return null;
+    } catch (error) {
+        console.error('Failed to get user reaction:', error);
+        return null;
+    }
+}
+
+// Get all reactions for multiple songs (batch for efficiency)
+export async function getBatchReactionCounts(songIds: string[]): Promise<Record<string, Record<ReactionType, number>>> {
+    try {
+        const results: Record<string, Record<ReactionType, number>> = {};
+
+        await Promise.all(songIds.map(async (songId) => {
+            results[songId] = await getReactionCounts(songId);
+        }));
+
+        return results;
+    } catch (error) {
+        console.error('Failed to get batch reaction counts:', error);
+        return {};
+    }
+}
+
+// ============ PREDICTIONS GAME ============
+// Users can predict which song will be #1 at the end
+
+const PREDICTIONS_KEY = 'hackathon:predictions';  // Hash: visitorId -> songId
+const PREDICTIONS_LOCKED_KEY = 'hackathon:predictionsLocked';
+
+// Make a prediction
+export async function makePrediction(visitorId: string, songId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const isLocked = await redis.get<boolean>(PREDICTIONS_LOCKED_KEY);
+        if (isLocked) {
+            return { success: false, error: 'Predictions are locked! The reveal is coming soon.' };
+        }
+
+        await redis.hset(PREDICTIONS_KEY, { [visitorId]: songId });
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to make prediction:', error);
+        return { success: false, error: 'Could not save prediction. Please try again.' };
+    }
+}
+
+// Get user's prediction
+export async function getUserPrediction(visitorId: string): Promise<string | null> {
+    try {
+        return await redis.hget<string>(PREDICTIONS_KEY, visitorId);
+    } catch (error) {
+        console.error('Failed to get user prediction:', error);
+        return null;
+    }
+}
+
+// Lock predictions (admin action before reveal)
+export async function lockPredictions(): Promise<void> {
+    await redis.set(PREDICTIONS_LOCKED_KEY, true);
+}
+
+// Unlock predictions
+export async function unlockPredictions(): Promise<void> {
+    await redis.del(PREDICTIONS_LOCKED_KEY);
+}
+
+// Check if predictions are locked
+export async function arePredictionsLocked(): Promise<boolean> {
+    return await redis.get<boolean>(PREDICTIONS_LOCKED_KEY) || false;
+}
+
+// Get prediction stats
+export async function getPredictionStats(): Promise<{ total: number; bySong: Record<string, number> }> {
+    try {
+        const predictions = await redis.hgetall<Record<string, string>>(PREDICTIONS_KEY) || {};
+        const bySong: Record<string, number> = {};
+
+        for (const songId of Object.values(predictions)) {
+            bySong[songId] = (bySong[songId] || 0) + 1;
+        }
+
+        return { total: Object.keys(predictions).length, bySong };
+    } catch (error) {
+        console.error('Failed to get prediction stats:', error);
+        return { total: 0, bySong: {} };
+    }
+}
+
+// Reveal predictions and award karma to winners
+export async function revealPredictions(winningSongId: string): Promise<{ winners: number; losers: number }> {
+    try {
+        const predictions = await redis.hgetall<Record<string, string>>(PREDICTIONS_KEY) || {};
+        let winners = 0;
+        let losers = 0;
+
+        for (const [visitorId, songId] of Object.entries(predictions)) {
+            if (songId === winningSongId) {
+                // Winner! Award bonus karma
+                await addKarma(visitorId, 3);
+                winners++;
+            } else {
+                losers++;
+            }
+        }
+
+        return { winners, losers };
+    } catch (error) {
+        console.error('Failed to reveal predictions:', error);
+        return { winners: 0, losers: 0 };
+    }
+}
+
+// Clear predictions for new session
+export async function clearPredictions(): Promise<void> {
+    await redis.del(PREDICTIONS_KEY);
+    await redis.del(PREDICTIONS_LOCKED_KEY);
+}
+
+// ============ LEADERBOARD ============
+// Track and display top contributors
+
+export interface LeaderboardEntry {
+    visitorId: string;
+    username: string;
+    score: number;  // Sum of upvotes received on their songs
+    songsInTop10: number;
+    hasTopSong: boolean;  // Currently has the #1 song
+}
+
+// Calculate leaderboard from current songs
+export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
+    try {
+        const songs = await getSortedSongs();
+        const userScores: Record<string, { score: number; songsInTop10: number; hasTopSong: boolean; username: string }> = {};
+
+        songs.forEach((song, index) => {
+            const rank = index + 1;
+            const userId = song.addedBy;
+
+            if (!userScores[userId]) {
+                userScores[userId] = {
+                    score: 0,
+                    songsInTop10: 0,
+                    hasTopSong: false,
+                    username: song.addedByName || 'Anonymous',
+                };
+            }
+
+            // Add song score to user's total
+            userScores[userId].score += Math.max(0, song.score);
+
+            // Track top 10 songs
+            if (rank <= 10) {
+                userScores[userId].songsInTop10++;
+            }
+
+            // Track #1 song
+            if (rank === 1) {
+                userScores[userId].hasTopSong = true;
+            }
+        });
+
+        // Convert to array and sort by score
+        return Object.entries(userScores)
+            .map(([visitorId, data]) => ({
+                visitorId,
+                username: data.username,
+                score: data.score,
+                songsInTop10: data.songsInTop10,
+                hasTopSong: data.hasTopSong,
+            }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);  // Top 10 only
+    } catch (error) {
+        console.error('Failed to get leaderboard:', error);
+        return [];
+    }
+}
+
+// ============ MYSTERY SONG MODE ============
+// Admin can mark songs as "mystery" - title/artist hidden until reveal
+
+const MYSTERY_SONGS_KEY = 'hackathon:mysterySongs';  // Set of song IDs that are mystery
+
+// Toggle mystery mode for a song
+export async function toggleMysteryMode(songId: string): Promise<boolean> {
+    try {
+        const isMystery = await redis.sismember(MYSTERY_SONGS_KEY, songId);
+        if (isMystery) {
+            await redis.srem(MYSTERY_SONGS_KEY, songId);
+            return false;
+        } else {
+            await redis.sadd(MYSTERY_SONGS_KEY, songId);
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to toggle mystery mode:', error);
+        return false;
+    }
+}
+
+// Check if a song is in mystery mode
+export async function isMysteryMode(songId: string): Promise<boolean> {
+    try {
+        return await redis.sismember(MYSTERY_SONGS_KEY, songId) === 1;
+    } catch (error) {
+        return false;
+    }
+}
+
+// Get all mystery song IDs
+export async function getMysterysongsIds(): Promise<string[]> {
+    try {
+        return await redis.smembers(MYSTERY_SONGS_KEY) || [];
+    } catch (error) {
+        return [];
+    }
+}
+
+// Reveal all mystery songs
+export async function revealAllMysterySongs(): Promise<number> {
+    try {
+        const count = await redis.scard(MYSTERY_SONGS_KEY);
+        await redis.del(MYSTERY_SONGS_KEY);
+        return count || 0;
+    } catch (error) {
+        console.error('Failed to reveal mystery songs:', error);
+        return 0;
+    }
+}
+
+// ============ RATE LIMITING ============
+// Server-side rate limiting that can't be bypassed
+
+const RATE_LIMIT_PREFIX = 'ratelimit:';
+
+interface RateLimitResult {
+    allowed: boolean;
+    remaining: number;
+    resetIn: number; // seconds until reset
+}
+
+/**
+ * Check if an action is rate limited
+ * @param key - Unique identifier (e.g., "vote:visitorId:songId")
+ * @param limit - Max actions allowed in the window
+ * @param windowSeconds - Time window in seconds
+ */
+export async function checkRateLimit(
+    key: string,
+    limit: number,
+    windowSeconds: number
+): Promise<RateLimitResult> {
+    const redisKey = `${RATE_LIMIT_PREFIX}${key}`;
+
+    try {
+        // Use Redis INCR with EXPIRE for atomic rate limiting
+        const current = await redis.incr(redisKey);
+
+        // First request in window - set expiry
+        if (current === 1) {
+            await redis.expire(redisKey, windowSeconds);
+        }
+
+        // Get TTL for reset time
+        const ttl = await redis.ttl(redisKey);
+
+        return {
+            allowed: current <= limit,
+            remaining: Math.max(0, limit - current),
+            resetIn: ttl > 0 ? ttl : windowSeconds,
+        };
+    } catch (error) {
+        console.error('Rate limit check failed:', error);
+        // Fail open (allow) on Redis errors to not break the app
+        return { allowed: true, remaining: limit, resetIn: 0 };
+    }
+}
+
+/**
+ * Rate limit for votes: 1 vote per song per 3 seconds per user
+ */
+export async function checkVoteRateLimit(visitorId: string, songId: string): Promise<RateLimitResult> {
+    return checkRateLimit(`vote:${visitorId}:${songId}`, 1, 3);
+}
+
+/**
+ * Rate limit for global actions: 30 votes per minute per user
+ */
+export async function checkGlobalVoteLimit(visitorId: string): Promise<RateLimitResult> {
+    return checkRateLimit(`votes:${visitorId}`, 30, 60);
+}
+
+/**
+ * Rate limit for song additions: 3 per minute per user
+ */
+export async function checkAddSongLimit(visitorId: string): Promise<RateLimitResult> {
+    return checkRateLimit(`add:${visitorId}`, 3, 60);
+}
+
+/**
+ * Rate limit for search: 10 per minute per user
+ */
+export async function checkSearchLimit(visitorId: string): Promise<RateLimitResult> {
+    return checkRateLimit(`search:${visitorId}`, 10, 60);
 }

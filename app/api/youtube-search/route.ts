@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
     // Rate limiting - use search limit
     const clientId = getClientIdentifier(request);
-    const rateCheck = checkRateLimit(clientId + ':youtube', RATE_LIMITS.search);
+    const rateCheck = await checkRateLimit(clientId + ':youtube', RATE_LIMITS.search);
     if (!rateCheck.success) {
         const response = NextResponse.json(
             { error: 'Too many requests', videoId: null },
