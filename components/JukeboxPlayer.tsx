@@ -1048,7 +1048,7 @@ export default function JukeboxPlayer({
 
                     <div className="sidebar-section cta-section">
                         <div className="big-cta">
-                            <img src="/crate-hackers-logo.svg" alt="Crate Hackers" className="cta-logo" />
+                            <img src="/crate-hackers-logo.png" alt="Crate Hackers" className="cta-logo" />
                             <span className="cta-label">JOIN NOW!</span>
                         </div>
                     </div>
