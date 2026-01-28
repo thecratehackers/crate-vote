@@ -1458,8 +1458,8 @@ export default function AdminPage() {
                                 <p className="no-activity">Waiting for activity...</p>
                             ) : (
                                 recentActivity.map(activity => {
-                                    const timeStr = new Date(activity.timestamp).toLocaleTimeString('en-US', { 
-                                        hour: 'numeric', 
+                                    const timeStr = new Date(activity.timestamp).toLocaleTimeString('en-US', {
+                                        hour: 'numeric',
                                         minute: '2-digit',
                                         hour12: true,
                                         timeZone: 'America/Chicago'
@@ -1724,6 +1724,39 @@ export default function AdminPage() {
                                 <span className="tool-icon">🎯</span>
                                 <span className="tool-name">{isRevealingPredictions ? 'Revealing...' : 'Reveal Predictions'}</span>
                             </button>
+
+                            {/* 📺 YOUTUBE LIVE STREAM EMBED */}
+                            <div className="youtube-embed-control">
+                                <div className="control-label">
+                                    <span className="tool-icon">📺</span>
+                                    <span className="tool-name">YouTube Live Stream</span>
+                                </div>
+                                <input
+                                    type="text"
+                                    className="youtube-url-input"
+                                    value={youtubeUrl}
+                                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                                    placeholder="Paste YouTube URL or embed code..."
+                                />
+                                <button
+                                    className="tool-btn youtube-save"
+                                    onClick={handleSaveYouTube}
+                                    disabled={isSavingYoutube}
+                                >
+                                    <span className="tool-icon">💾</span>
+                                    <span className="tool-name">{isSavingYoutube ? 'Saving...' : 'Save Stream'}</span>
+                                </button>
+                                {youtubeUrl && (
+                                    <button
+                                        className="tool-btn danger-subtle"
+                                        onClick={() => { setYoutubeUrl(''); handleSaveYouTube(); }}
+                                        disabled={isSavingYoutube}
+                                    >
+                                        <span className="tool-icon">🗑️</span>
+                                        <span className="tool-name">Clear</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
