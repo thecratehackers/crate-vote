@@ -36,14 +36,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No songs in the playlist to export.' }, { status: 400 });
         }
 
-        // Filter: Only export songs with positive score (score > 0)
-        // If all songs have score 0, export all songs instead
-        let validSongs = songs.filter(s => s.score > 0);
-        if (validSongs.length === 0) {
-            // No songs have positive score - export all songs
-            validSongs = songs;
-            console.log('No positive scores - exporting all songs');
-        }
+        // Export ALL songs up to 100, sorted by score (most popular first)
+        // No longer filtering by score - users want the full playlist
+        let validSongs = songs.slice(0, 100);
 
         // Filter to only valid Spotify URIs
         const songsWithValidUri = validSongs.filter(s =>
@@ -68,7 +63,7 @@ export async function POST(request: Request) {
             accessToken,
             user.id,
             name || 'Hackathon Playlist',
-            description || 'Created with Hackathon',
+            description || 'Created with Crate Vote by Crate Hackers. Get your own live voting playlist at www.cratehackers.com 🎧',
             trackUris
         );
 
@@ -97,8 +92,8 @@ export async function GET(request: Request) {
         getPlaylistTitle(),
     ]);
 
-    // Filter: Only export songs with positive score
-    const validSongs = songs.filter(s => s.score > 0);
+    // Export ALL songs up to 100 (sorted by score already)
+    const validSongs = songs.slice(0, 100);
 
     // CSV format for download
     if (format === 'csv') {

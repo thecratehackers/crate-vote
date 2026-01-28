@@ -150,6 +150,18 @@ function generateFacts(songName: string, artistName: string, releaseYear: number
     // Era
     facts.push({ category: 'Era', emoji: '🎭', text: `This song is from ${era.name}.`, id: `era-${Date.now()}` });
 
+    // Additional engaging facts about the artist and voting
+    facts.push({ category: 'Crowd', emoji: '👥', text: `Vote to keep "${songName}" climbing the ranks!`, id: `vote-1` });
+    facts.push({ category: 'Trivia', emoji: '💡', text: `${artistName} has influenced countless artists.`, id: `trivia-1` });
+    facts.push({ category: 'Vibe', emoji: '🔥', text: `This song is heating up the playlist.`, id: `vibe-1` });
+    facts.push({ category: 'Action', emoji: '👆', text: `Upvote to push this track toward #1!`, id: `action-1` });
+    facts.push({ category: 'Fun', emoji: '🎧', text: `Perfect track for the moment.`, id: `fun-1` });
+    facts.push({ category: 'Karma', emoji: '⚡', text: `Watch 60 seconds to earn +1 karma!`, id: `karma-1` });
+    facts.push({ category: 'Tip', emoji: '🎯', text: `Your votes shape what plays next.`, id: `tip-1` });
+    facts.push({ category: 'Music', emoji: '🎶', text: `${artistName} knows how to deliver a hit.`, id: `artist-praise` });
+    facts.push({ category: 'Stats', emoji: '📊', text: `Only the top-voted songs make the final playlist.`, id: `stats-1` });
+    facts.push({ category: 'Competition', emoji: '🏆', text: `Can "${songName}" reach the top 3?`, id: `compete-1` });
+
     // Shuffle
     for (let i = facts.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -256,7 +268,8 @@ export default function JukeboxPlayer({
                     const eraFacts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
 
                     // Combine and shuffle: Genius facts first, then era facts
-                    const allFacts = [...geniusFacts, ...eraFacts.slice(0, 8)];
+                    // Include MORE era facts for richer content - 12 instead of 8
+                    const allFacts = [...geniusFacts, ...eraFacts.slice(0, 12)];
 
                     // Shuffle
                     for (let i = allFacts.length - 1; i > 0; i--) {
@@ -295,15 +308,15 @@ export default function JukeboxPlayer({
             setFactPosition(Math.floor(Math.random() * POPUP_POSITIONS.length));
             setCurrentFact(fact);
 
-            // Hide after 5 seconds
-            setTimeout(() => setCurrentFact(null), 5000);
+            // Hide after 6 seconds (longer visibility)
+            setTimeout(() => setCurrentFact(null), 6000);
         };
 
-        // Show first fact after 3 seconds
-        const initialTimeout = setTimeout(showFact, 3000);
+        // Show first fact after 2 seconds (faster start)
+        const initialTimeout = setTimeout(showFact, 2000);
 
-        // Then show facts every 8 seconds
-        const interval = setInterval(showFact, 8000);
+        // Then show facts every 6 seconds (more frequent)
+        const interval = setInterval(showFact, 6000);
 
         return () => {
             clearTimeout(initialTimeout);
@@ -679,8 +692,45 @@ export default function JukeboxPlayer({
         return () => document.removeEventListener('keydown', handleEscape);
     }, [onClose]);
 
+    // 🔒 Ref to store onClose to avoid effect dependency issues
+    // This prevents the effect from re-running when onClose reference changes due to parent re-renders
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    // 🔒 Track if component is mounted to prevent stale closures
+    const isMountedRef = useRef(true);
+
+    // 🔙 Browser back button support - push state when jukebox opens, pop to close
+    useEffect(() => {
+        isMountedRef.current = true;
+
+        // Push a state so back button can close jukebox
+        window.history.pushState({ jukebox: true }, '');
+
+        const handlePopState = () => {
+            // When back button is pressed, close the jukebox (only if still mounted)
+            if (isMountedRef.current) {
+                onCloseRef.current();
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+
+        return () => {
+            isMountedRef.current = false;
+            window.removeEventListener('popstate', handlePopState);
+            // Note: We don't call history.back() here - let the history stay
+            // This prevents triggering navigation during effect cleanup from re-renders
+        };
+    }, []); // No dependencies - only run on mount/unmount
+
     return (
         <div className="jukebox-overlay" ref={containerRef}>
+            {/* 🔙 FIXED CLOSE BUTTON - Top left for easy exit */}
+            <button className="jukebox-close-fixed" onClick={onClose} aria-label="Close jukebox">
+                ← Back
+            </button>
+
             {/* 🎰 VEGAS-STYLE EMOJI BURST - Full screen celebration */}
             {emojiBurst && (
                 <div className="emoji-burst-container" key={emojiBurst.key}>
@@ -836,9 +886,6 @@ export default function JukeboxPlayer({
                             </span>
                             <span className="vote-label">votes</span>
                         </div>
-                        <button className="jukebox-close" onClick={onClose} aria-label="Close jukebox">
-                            ✕
-                        </button>
                     </div>
 
                     {/* Gamification Tips Banner */}

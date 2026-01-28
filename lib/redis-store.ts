@@ -77,6 +77,9 @@ const USER_LAST_ACTIVITY_KEY = 'hackathon:userLastActivity';  // Track when user
 const DELETE_WINDOW_KEY = 'hackathon:deleteWindow';  // { endTime: timestamp } - when delete window is active
 const DELETE_WINDOW_USED_KEY = 'hackathon:deleteWindowUsed';  // Set of visitorIds who used their delete this window
 const KARMA_RAIN_KEY = 'hackathon:karmaRain';  // { timestamp: number } - when last karma rain happened
+const SESSION_PERMISSIONS_KEY = 'hackathon:sessionPermissions';  // { canVote: boolean, canAddSongs: boolean }
+const YOUTUBE_EMBED_KEY = 'hackathon:youtubeEmbed';  // YouTube URL for live stream embed
+const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } - when double points mode is active
 
 // VERSUS BATTLE KEYS - Head-to-head song battles
 const VERSUS_BATTLE_KEY = 'hackathon:versusBattle';  // Main battle state
@@ -104,6 +107,7 @@ export interface Song {
     previewUrl: string | null;
     addedBy: string;
     addedByName: string;
+    addedByLocation?: string;  // Location display string (e.g., "Austin, TX" or "🇬🇧 London, UK")
     addedAt: number;
     upvotes: string[];
     downvotes: string[];
@@ -186,9 +190,24 @@ export async function getSortedSongs(): Promise<(Song & { score: number })[]> {
                 score: allVotes[index].score,
             }))
             .sort((a, b) => {
+                // Priority 1: Unvoted songs (score === 0) rise to the top
+                // This ensures fresh additions get visibility before being ranked
+                const aIsUnvoted = a.score === 0;
+                const bIsUnvoted = b.score === 0;
+                
+                if (aIsUnvoted && !bIsUnvoted) return -1; // a (unvoted) goes first
+                if (!aIsUnvoted && bIsUnvoted) return 1;  // b (unvoted) goes first
+                
+                // Within unvoted: newest first (most recently added at top)
+                if (aIsUnvoted && bIsUnvoted) {
+                    return b.addedAt - a.addedAt; // Newest first
+                }
+                
+                // Within voted songs: sort by score descending, then oldest first for ties
                 if (b.score !== a.score) return b.score - a.score;
                 return a.addedAt - b.addedAt;
-            });
+            })
+            .slice(0, MAX_PLAYLIST_SIZE);  // Always cap at 100 songs
 
         setCache(cacheKey, result, CACHE_TTL.SONGS);
         return result;
@@ -323,6 +342,12 @@ export async function addSong(
             return { success: false, error: 'The playlist is currently locked. Wait for the host to unlock it.' };
         }
 
+        // Check session permissions - admin may have disabled song adding
+        const permissions = await getSessionPermissions();
+        if (!permissions.canAddSongs) {
+            return { success: false, error: 'Adding songs is currently disabled by the host.' };
+        }
+
         const banned = await redis.sismember(BANNED_KEY, visitorId);
         if (banned) {
             return { success: false, error: 'Your account has been suspended from this session.' };
@@ -406,15 +431,32 @@ export async function addSong(
     }
 }
 
-// Admin add song - unlimited, bypasses lock
+// Admin add song - bypasses lock but respects 100-song cap
 export async function adminAddSong(
     song: Omit<Song, 'upvotes' | 'downvotes' | 'addedAt'>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; displaced?: string }> {
     try {
         // Check if song already exists
         const existing = await redis.hget(SONGS_KEY, song.id);
         if (existing) {
             return { success: false, error: 'This song is already in the playlist.' };
+        }
+
+        // Check playlist size limit - displace lowest-scoring if at cap
+        const allSongs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+        const songCount = Object.keys(allSongs).length;
+        let displacedSong: string | undefined;
+
+        if (songCount >= MAX_PLAYLIST_SIZE) {
+            // Find the lowest-scoring song to displace
+            const sortedSongs = Object.values(allSongs)
+                .map(s => ({ ...s, score: s.upvotes.length - s.downvotes.length }))
+                .sort((a, b) => a.score - b.score);  // Lowest first
+
+            const toRemove = sortedSongs[0];
+            await redis.hdel(SONGS_KEY, toRemove.id);
+            displacedSong = `${toRemove.name} by ${toRemove.artist}`;
+            console.log(`Admin import displaced "${toRemove.name}" (score: ${toRemove.score}) to make room`);
         }
 
         // Add the song
@@ -426,8 +468,9 @@ export async function adminAddSong(
         };
 
         await redis.hset(SONGS_KEY, { [song.id]: newSong });
+        invalidateSongsCache();
 
-        return { success: true };
+        return { success: true, displaced: displacedSong };
     } catch (error) {
         console.error('Failed to admin add song:', error);
         return { success: false, error: 'Something went wrong. Please try again.' };
@@ -483,6 +526,12 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
             return { success: false, error: 'Voting is currently paused. Wait for the host to unlock the playlist.' };
         }
 
+        // Check session permissions - admin may have disabled voting
+        const permissions = await getSessionPermissions();
+        if (!permissions.canVote) {
+            return { success: false, error: 'Voting is currently disabled by the host.' };
+        }
+
         const banned = await redis.sismember(BANNED_KEY, visitorId);
         if (banned) {
             return { success: false, error: 'Your account has been suspended from this session.' };
@@ -513,17 +562,21 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
                 const newUserUpvotes = userUpvotes.filter(id => id !== songId);
                 await redis.hset(USER_UPVOTE_KEY, { [visitorId]: newUserUpvotes });
             } else {
-                // Check limit - include karma bonuses
-                const karmaBonuses = await getKarmaBonuses(visitorId);
-                const maxUpvotes = MAX_UPVOTES_PER_USER + karmaBonuses.bonusVotes;
-                if (userUpvotes.length >= maxUpvotes) {
-                    return { success: false, error: `You've used all ${maxUpvotes} upvotes. Earn karma for more!` };
+                // Check limit - include karma bonuses (God Mode bypasses limits)
+                const godMode = await isGodMode(visitorId);
+                if (!godMode) {
+                    const karmaBonuses = await getKarmaBonuses(visitorId);
+                    const maxUpvotes = MAX_UPVOTES_PER_USER + karmaBonuses.bonusVotes;
+                    if (userUpvotes.length >= maxUpvotes) {
+                        return { success: false, error: `You've used all ${maxUpvotes} upvotes. Earn karma for more!` };
+                    }
                 }
 
                 // Remove any existing downvote on this song first (atomic SREM)
                 const hadDownvote = await redis.sismember(downvotesKey, visitorId);
                 if (hadDownvote) {
                     await redis.srem(downvotesKey, visitorId);
+                    await redis.srem(downvotesKey, `${visitorId}_double`); // Remove bonus too
                     const newUserDownvotes = userDownvotes.filter(id => id !== songId);
                     await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: newUserDownvotes });
                 }
@@ -531,6 +584,12 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
                 // Add upvote using atomic SADD
                 await redis.sadd(upvotesKey, visitorId);
                 await redis.hset(USER_UPVOTE_KEY, { [visitorId]: [...userUpvotes, songId] });
+
+                // ⚡ DOUBLE POINTS - Add bonus vote if active
+                const doublePointsActive = await isDoublePointsActive();
+                if (doublePointsActive) {
+                    await redis.sadd(upvotesKey, `${visitorId}_double`);
+                }
             }
         } else {
             // DOWNVOTING
@@ -543,17 +602,21 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
                 const newUserDownvotes = userDownvotes.filter(id => id !== songId);
                 await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: newUserDownvotes });
             } else {
-                // Check limit - include karma bonuses
-                const karmaBonuses = await getKarmaBonuses(visitorId);
-                const maxDownvotes = MAX_DOWNVOTES_PER_USER + karmaBonuses.bonusVotes;
-                if (userDownvotes.length >= maxDownvotes) {
-                    return { success: false, error: `You've used all ${maxDownvotes} downvotes. Earn karma for more!` };
+                // Check limit - include karma bonuses (God Mode bypasses limits)
+                const godMode = await isGodMode(visitorId);
+                if (!godMode) {
+                    const karmaBonuses = await getKarmaBonuses(visitorId);
+                    const maxDownvotes = MAX_DOWNVOTES_PER_USER + karmaBonuses.bonusVotes;
+                    if (userDownvotes.length >= maxDownvotes) {
+                        return { success: false, error: `You've used all ${maxDownvotes} downvotes. Earn karma for more!` };
+                    }
                 }
 
                 // Remove any existing upvote on this song first (atomic SREM)
                 const hadUpvote = await redis.sismember(upvotesKey, visitorId);
                 if (hadUpvote) {
                     await redis.srem(upvotesKey, visitorId);
+                    await redis.srem(upvotesKey, `${visitorId}_double`); // Remove bonus too
                     const newUserUpvotes = userUpvotes.filter(id => id !== songId);
                     await redis.hset(USER_UPVOTE_KEY, { [visitorId]: newUserUpvotes });
                 }
@@ -561,6 +624,12 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
                 // Add downvote using atomic SADD
                 await redis.sadd(downvotesKey, visitorId);
                 await redis.hset(USER_DOWNVOTE_KEY, { [visitorId]: [...userDownvotes, songId] });
+
+                // ⚡ DOUBLE POINTS - Add bonus vote if active
+                const doublePointsActive = await isDoublePointsActive();
+                if (doublePointsActive) {
+                    await redis.sadd(downvotesKey, `${visitorId}_double`);
+                }
             }
         }
 
@@ -638,6 +707,7 @@ export async function getUserStatus(visitorId: string): Promise<{
     upvotesUsed: number;
     downvotesRemaining: number;
     downvotesUsed: number;
+    isGodMode: boolean;
 }> {
     try {
         const songsAdded = await redis.hget<number>(USER_SONG_COUNTS_KEY, visitorId) || 0;
@@ -651,15 +721,19 @@ export async function getUserStatus(visitorId: string): Promise<{
         const maxUpvotes = MAX_UPVOTES_PER_USER + karmaBonuses.bonusVotes;
         const maxDownvotes = MAX_DOWNVOTES_PER_USER + karmaBonuses.bonusVotes;
 
+        // Check God Mode status
+        const godMode = await isGodMode(visitorId);
+
         return {
             songsRemaining: Math.max(0, maxSongs - songsAdded),
             songsAdded,
             deletesRemaining: Math.max(0, MAX_DELETES_PER_USER - deleteCount),
             deletesUsed: deleteCount,
-            upvotesRemaining: Math.max(0, maxUpvotes - upvotes.length),
+            upvotesRemaining: godMode ? 999 : Math.max(0, maxUpvotes - upvotes.length),
             upvotesUsed: upvotes.length,
-            downvotesRemaining: Math.max(0, maxDownvotes - downvotes.length),
+            downvotesRemaining: godMode ? 999 : Math.max(0, maxDownvotes - downvotes.length),
             downvotesUsed: downvotes.length,
+            isGodMode: godMode,
         };
     } catch (error) {
         console.error('Failed to get user status:', error);
@@ -672,6 +746,7 @@ export async function getUserStatus(visitorId: string): Promise<{
             upvotesUsed: 0,
             downvotesRemaining: MAX_DOWNVOTES_PER_USER,
             downvotesUsed: 0,
+            isGodMode: false,
         };
     }
 }
@@ -690,6 +765,65 @@ export async function isPlaylistLocked(): Promise<boolean> {
     const result = await redis.get<boolean>(LOCKED_KEY) || false;
     setCache(cacheKey, result, CACHE_TTL.LOCKED);
     return result;
+}
+
+// ============ SESSION PERMISSIONS ============
+// Admin can toggle whether users can vote and/or add songs
+export interface SessionPermissions {
+    canVote: boolean;
+    canAddSongs: boolean;
+}
+
+const DEFAULT_PERMISSIONS: SessionPermissions = {
+    canVote: true,
+    canAddSongs: true,
+};
+
+export async function getSessionPermissions(): Promise<SessionPermissions> {
+    try {
+        const permissions = await redis.get<SessionPermissions>(SESSION_PERMISSIONS_KEY);
+        return permissions || DEFAULT_PERMISSIONS;
+    } catch (error) {
+        console.error('Failed to get session permissions:', error);
+        return DEFAULT_PERMISSIONS;
+    }
+}
+
+export async function setSessionPermissions(permissions: Partial<SessionPermissions>): Promise<SessionPermissions> {
+    try {
+        const current = await getSessionPermissions();
+        const updated: SessionPermissions = {
+            ...current,
+            ...permissions,
+        };
+        await redis.set(SESSION_PERMISSIONS_KEY, updated);
+        return updated;
+    } catch (error) {
+        console.error('Failed to set session permissions:', error);
+        return DEFAULT_PERMISSIONS;
+    }
+}
+
+// ============ YOUTUBE EMBED ============
+export async function getYouTubeEmbed(): Promise<string | null> {
+    try {
+        return await redis.get<string>(YOUTUBE_EMBED_KEY);
+    } catch (error) {
+        console.error('Failed to get YouTube embed:', error);
+        return null;
+    }
+}
+
+export async function setYouTubeEmbed(url: string | null): Promise<void> {
+    try {
+        if (url) {
+            await redis.set(YOUTUBE_EMBED_KEY, url);
+        } else {
+            await redis.del(YOUTUBE_EMBED_KEY);
+        }
+    } catch (error) {
+        console.error('Failed to set YouTube embed:', error);
+    }
 }
 
 // ============ BAN FUNCTIONS ============
@@ -838,9 +972,20 @@ export async function canUserDeleteInWindow(visitorId: string): Promise<{ canDel
     }
 
     // Check if user already used their delete this window
-    const hasUsed = await redis.sismember(DELETE_WINDOW_USED_KEY, visitorId);
-    if (hasUsed) {
-        return { canDelete: false, reason: 'You already used your Chaos Mode delete!' };
+    // God Mode users can delete multiple times!
+    const godMode = await isGodMode(visitorId);
+    if (!godMode) {
+        const hasUsed = await redis.sismember(DELETE_WINDOW_USED_KEY, visitorId);
+        if (hasUsed) {
+            return { canDelete: false, reason: 'You already used your Chaos Mode delete!' };
+        }
+    }
+
+    // Check if user is "active" - has added at least one song to the playlist
+    const allSongs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+    const userHasSongs = Object.values(allSongs).some(song => song.addedBy === visitorId);
+    if (!userHasSongs) {
+        return { canDelete: false, reason: 'Add a song to participate! Only active DJs can Purge.' };
     }
 
     return { canDelete: true };
@@ -879,32 +1024,134 @@ export async function useWindowDelete(visitorId: string, songId: string): Promis
     return { success: true };
 }
 
+// ============ DOUBLE POINTS ROUND ============
+// Admin can trigger a 2-minute window where all votes count 2x
+
+interface DoublePointsData {
+    endTime: number;
+}
+
+// Start Double Points Round (admin only)
+export async function startDoublePoints(durationSeconds: number = 120): Promise<{ success: boolean; endTime: number }> {
+    const endTime = Date.now() + (durationSeconds * 1000);
+    await redis.set(DOUBLE_POINTS_KEY, { endTime } as DoublePointsData);
+    console.log(`⚡ DOUBLE POINTS: Started ${durationSeconds}s round, ends at ${new Date(endTime).toISOString()}`);
+    return { success: true, endTime };
+}
+
+// Get Double Points status
+export async function getDoublePointsStatus(): Promise<{ active: boolean; endTime: number | null; remaining: number }> {
+    const data = await redis.get<DoublePointsData>(DOUBLE_POINTS_KEY);
+
+    if (!data) {
+        return { active: false, endTime: null, remaining: 0 };
+    }
+
+    const now = Date.now();
+    if (now >= data.endTime) {
+        return { active: false, endTime: null, remaining: 0 };
+    }
+
+    return {
+        active: true,
+        endTime: data.endTime,
+        remaining: data.endTime - now,
+    };
+}
+
+// Check if double points is currently active (for vote multiplier)
+export async function isDoublePointsActive(): Promise<boolean> {
+    const status = await getDoublePointsStatus();
+    return status.active;
+}
+
 // ============ RESET SESSION ============
 export async function resetSession(): Promise<void> {
     console.log('🗑️ WIPE SESSION: Clearing all data from Redis...');
 
+    // First, scan and delete ALL per-song vote sets
+    // These use the format: hackathon:song:{songId}:upvotes / hackathon:song:{songId}:downvotes
+    // If not cleaned up, votes will persist when the same songs are reimported!
+    console.log('🗑️ WIPE SESSION: Scanning for per-song vote sets...');
+
+    let deletedVoteSets = 0;
+
+    // Scan for UPVOTES keys
+    let cursor = 0;
+    do {
+        const result = await redis.scan(cursor, { match: 'hackathon:song:*:upvotes', count: 100 });
+        cursor = Number(result[0]);
+        const keys = result[1] as string[];
+
+        if (keys.length > 0) {
+            await Promise.all(keys.map(key => redis.del(key)));
+            deletedVoteSets += keys.length;
+            console.log(`🗑️ WIPE SESSION: Deleted ${keys.length} upvote sets...`);
+        }
+    } while (cursor !== 0);
+
+    // Scan for DOWNVOTES keys
+    cursor = 0;
+    do {
+        const result = await redis.scan(cursor, { match: 'hackathon:song:*:downvotes', count: 100 });
+        cursor = Number(result[0]);
+        const keys = result[1] as string[];
+
+        if (keys.length > 0) {
+            await Promise.all(keys.map(key => redis.del(key)));
+            deletedVoteSets += keys.length;
+            console.log(`🗑️ WIPE SESSION: Deleted ${keys.length} downvote sets...`);
+        }
+    } while (cursor !== 0);
+
+    console.log(`🗑️ WIPE SESSION: Deleted ${deletedVoteSets} total vote sets`);
+
+    // Now delete all the standard session keys
     await Promise.all([
+        // Songs & Playlist
         redis.del(SONGS_KEY),
+        redis.del(PLAYLIST_TITLE_KEY),
+
+        // User data
         redis.del(BANNED_KEY),
-        redis.del(LOCKED_KEY),
         redis.del(USER_SONG_COUNTS_KEY),
         redis.del(USER_DELETE_COUNTS_KEY),
         redis.del(USER_UPVOTE_KEY),
         redis.del(USER_DOWNVOTE_KEY),
-        redis.del(TIMER_KEY),
-        redis.del(ACTIVITY_LOG_KEY),
-        redis.del(TOP3_KARMA_GRANTED_KEY),
+        redis.del(USER_KARMA_KEY),
         redis.del(USER_LAST_ACTIVITY_KEY),
+        redis.del(TOP3_KARMA_GRANTED_KEY),
+
+        // Session state
+        redis.del(LOCKED_KEY),
+        redis.del(TIMER_KEY),
+        redis.del(SESSION_PERMISSIONS_KEY),
+        redis.del(ACTIVITY_LOG_KEY),
+
+        // Special modes
         redis.del(DELETE_WINDOW_KEY),
         redis.del(DELETE_WINDOW_USED_KEY),
-        // Versus Battle cleanup
+        redis.del(KARMA_RAIN_KEY),
+        redis.del(DOUBLE_POINTS_KEY),
+
+        // Versus Battle
         redis.del(VERSUS_BATTLE_KEY),
         redis.del(VERSUS_VOTES_A_KEY),
         redis.del(VERSUS_VOTES_B_KEY),
         redis.del(ELIMINATED_SONGS_KEY),
+
+        // Admin heartbeats (reset admin presence tracking)
+        redis.del(ADMIN_HEARTBEAT_KEY),
+
+        // NOTE: We intentionally DO NOT delete VIEWER_HEARTBEAT_KEY
+        // Active viewers should remain visible after a wipe - they're still on the site!
+        // They just get a fresh slate for votes, songs, karma, etc.
     ]);
 
-    console.log('🗑️ WIPE SESSION: Complete!');
+    // Clear in-memory cache as well
+    cache.clear();
+
+    console.log('🗑️ WIPE SESSION: Complete! All votes, users, and session data cleared.');
 }
 
 // ============ DEEP CLEANUP (for storage optimization) ============
@@ -1229,11 +1476,12 @@ export interface ActivityItem {
     userName: string;
     visitorId: string;  // Added for admin quick-ban feature
     songName: string;
+    userLocation?: string;  // Location display string (e.g., "Austin, TX")
     timestamp: number;
 }
 
-const MAX_ACTIVITY_ITEMS = 10;
-const ACTIVITY_TTL_MS = 60000; // 60 seconds - activities older than this are hidden
+const MAX_ACTIVITY_ITEMS = 100; // Keep 100 items for full session history
+const ACTIVITY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours - keep activities for full session
 
 export async function addActivity(activity: Omit<ActivityItem, 'id' | 'timestamp'>): Promise<void> {
     try {
@@ -2137,6 +2385,25 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
     } catch (error) {
         console.error('Failed to get leaderboard:', error);
         return [];
+    }
+}
+
+// ============ GOD MODE ============
+// User with #1 ranked song gets special powers:
+// - Unlimited votes
+// - Extra deletes during Purge
+// - Visual crown distinction
+
+export async function isGodMode(visitorId: string): Promise<boolean> {
+    try {
+        const songs = await getSortedSongs();
+        if (songs.length === 0) return false;
+
+        // Check if this user owns the #1 song
+        return songs[0].addedBy === visitorId;
+    } catch (error) {
+        console.error('Failed to check God Mode:', error);
+        return false;
     }
 }
 

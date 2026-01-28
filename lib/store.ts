@@ -164,7 +164,20 @@ export function getSortedSongs(): (Song & { score: number })[] {
             downvotes: Array.from(song.downvotes) as any,
         }))
         .sort((a, b) => {
-            // Sort by score descending, then by addedAt ascending (older first for ties)
+            // Priority 1: Unvoted songs (score === 0) rise to the top
+            // This ensures fresh additions get visibility before being ranked
+            const aIsUnvoted = a.score === 0;
+            const bIsUnvoted = b.score === 0;
+
+            if (aIsUnvoted && !bIsUnvoted) return -1; // a (unvoted) goes first
+            if (!aIsUnvoted && bIsUnvoted) return 1;  // b (unvoted) goes first
+
+            // Within unvoted: newest first (most recently added at top)
+            if (aIsUnvoted && bIsUnvoted) {
+                return b.addedAt - a.addedAt; // Newest first
+            }
+
+            // Within voted songs: sort by score descending, then oldest first for ties
             if (b.score !== a.score) return b.score - a.score;
             return a.addedAt - b.addedAt;
         });

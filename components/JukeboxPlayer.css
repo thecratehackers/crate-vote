@@ -13,6 +13,37 @@
     animation: jukebox-fade-in 0.3s ease-out;
 }
 
+/* 🔙 FIXED CLOSE BUTTON - Top left for easy exit */
+.jukebox-close-fixed {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 30px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+}
+
+.jukebox-close-fixed:hover {
+    background: rgba(211, 119, 29, 0.8);
+    border-color: #d3771d;
+    transform: scale(1.05);
+}
+
+.jukebox-close-fixed:active {
+    transform: scale(0.95);
+}
+
 @keyframes jukebox-fade-in {
     from {
         opacity: 0;

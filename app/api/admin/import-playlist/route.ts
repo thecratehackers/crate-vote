@@ -50,7 +50,7 @@ export async function POST(request: Request) {
                 albumArt: track.albumArt,
                 previewUrl: track.previewUrl,
                 addedBy: 'admin-import',
-                addedByName: 'Imported',
+                addedByName: '🎧 DJ Pick',
                 popularity: track.popularity,
                 bpm: track.bpm,
                 energy: track.energy,

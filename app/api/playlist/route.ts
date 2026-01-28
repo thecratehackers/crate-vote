@@ -18,6 +18,10 @@ import {
     getRecentActivity,
     removeActivity,
     removeUserActivities,
+    getSessionPermissions,
+    setSessionPermissions,
+    getYouTubeEmbed,
+    setYouTubeEmbed,
 } from '@/lib/redis-store';
 
 // GET - Get playlist status and stats
@@ -31,7 +35,7 @@ export async function GET(request: Request) {
         await adminHeartbeat(adminId);
     }
 
-    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity] = await Promise.all([
+    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity, sessionPermissions, youtubeEmbed] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getStats(),
@@ -39,6 +43,8 @@ export async function GET(request: Request) {
         getActiveAdminCount(),
         getPlaylistTitle(),
         isAdmin ? getRecentActivity() : Promise.resolve([]),  // Only fetch for admins
+        getSessionPermissions(),
+        getYouTubeEmbed(),
     ]);
 
     // Format active users for frontend (check ban status and karma for each)
@@ -62,6 +68,8 @@ export async function GET(request: Request) {
         activeAdminCount,
         playlistTitle,
         recentActivity: isAdmin ? recentActivity : undefined,
+        permissions: sessionPermissions,
+        youtubeEmbed,
     });
 }
 
@@ -132,6 +140,19 @@ export async function POST(request: Request) {
                     deletedKeys: cleanupResult.deletedKeys,
                     freedBytes: cleanupResult.freedBytes
                 });
+            case 'setPermissions':
+                // Set session permissions (canVote, canAddSongs)
+                const { canVote, canAddSongs } = body;
+                const newPermissions = await setSessionPermissions({
+                    ...(canVote !== undefined && { canVote }),
+                    ...(canAddSongs !== undefined && { canAddSongs }),
+                });
+                return NextResponse.json({ success: true, permissions: newPermissions });
+            case 'setYouTubeEmbed':
+                // Set or clear YouTube embed URL
+                const { youtubeUrl } = body;
+                await setYouTubeEmbed(youtubeUrl || null);
+                return NextResponse.json({ success: true, youtubeEmbed: youtubeUrl || null });
             default:
                 return NextResponse.json({ error: 'Unknown action. Please refresh and try again.' }, { status: 400 });
         }

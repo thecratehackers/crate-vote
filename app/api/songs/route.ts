@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch data in parallel - most of these are cached
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
@@ -67,13 +67,17 @@ export async function GET(request: Request) {
         getDeleteWindowStatus(),
         getVersusBattleStatus(visitorId || undefined, false), // Don't include vote counts for users
         getKarmaRainStatus(),
+        getSessionPermissions(),
+        getYouTubeEmbed(),
     ]);
 
     // Check if user can delete during window
     let canDeleteInWindow = false;
+    let deleteWindowReason: string | undefined;
     if (visitorId && deleteWindowStatus.active) {
         const deleteCheck = await canUserDeleteInWindow(visitorId);
         canDeleteInWindow = deleteCheck.canDelete;
+        deleteWindowReason = deleteCheck.reason;
     }
 
     // Compute playlist stats from songs we already have (avoid extra Redis call)
@@ -93,7 +97,7 @@ export async function GET(request: Request) {
     }));
 
     const userVotes = visitorId ? await getUserVotes(visitorId) : { upvotedSongIds: [], downvotedSongIds: [] };
-    const userStatus = visitorId ? await getUserStatus(visitorId) : { songsRemaining: 5, songsAdded: 0, deletesRemaining: 5, deletesUsed: 0, upvotesRemaining: 5, upvotesUsed: 0, downvotesRemaining: 5, downvotesUsed: 0 };
+    const userStatus = visitorId ? await getUserStatus(visitorId) : { songsRemaining: 5, songsAdded: 0, deletesRemaining: 5, deletesUsed: 0, upvotesRemaining: 5, upvotesUsed: 0, downvotesRemaining: 5, downvotesUsed: 0, isGodMode: false };
     const karmaBonuses = visitorId ? await getKarmaBonuses(visitorId) : { karma: 0, bonusVotes: 0, bonusSongAdds: 0 };
 
     return NextResponse.json({
@@ -111,9 +115,12 @@ export async function GET(request: Request) {
             endTime: deleteWindowStatus.endTime,
             remaining: deleteWindowStatus.remaining,
             canDelete: canDeleteInWindow,
+            reason: deleteWindowReason,
         },
         versusBattle: versusBattleStatus,
         karmaRain: karmaRainStatus,
+        permissions: sessionPermissions,
+        youtubeEmbed,
     });
 }
 
@@ -162,7 +169,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { id, spotifyUri, name, artist, album, albumArt, previewUrl, popularity, bpm, energy, valence, danceability, camelotKey, addedByName, addedByAvatar, explicit, durationMs } = body;
+        const { id, spotifyUri, name, artist, album, albumArt, previewUrl, popularity, bpm, energy, valence, danceability, camelotKey, addedByName, addedByAvatar, addedByLocation, explicit, durationMs } = body;
 
         // ============ INPUT VALIDATION & SANITIZATION ============
 
@@ -244,6 +251,7 @@ export async function POST(request: Request) {
             addedBy: visitorId,
             addedByName: isAdmin ? `${sanitizedAddedByName} (admin)` : sanitizedAddedByName,
             addedByAvatar: addedByAvatar || '🎧',
+            addedByLocation: addedByLocation || undefined,  // Location where user is voting from
             // Audio features for DJs
             popularity: popularity || 0,
             bpm: bpm || null,
@@ -269,6 +277,7 @@ export async function POST(request: Request) {
             userName: displayName,
             visitorId: visitorId || 'unknown',
             songName: name,
+            userLocation: addedByLocation || undefined,
         });
 
         return NextResponse.json({ success: true });

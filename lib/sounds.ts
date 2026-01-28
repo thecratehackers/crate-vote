@@ -21,6 +21,12 @@ const SOUNDS = {
     reaction: { freq: [660], duration: 0.05, type: 'sine' as OscillatorType },
     // Error - Buzz
     error: { freq: [200, 180], duration: 0.2, type: 'square' as OscillatorType },
+    // PURGE ALARM - Dramatic warning horn (low, urgent)
+    purge: { freq: [220, 180, 220, 180], duration: 0.3, type: 'sawtooth' as OscillatorType },
+    // WIPE SIREN - Descending alarm
+    wipe: { freq: [880, 660, 440, 330], duration: 0.25, type: 'square' as OscillatorType },
+    // DOUBLE POINTS - Exciting fanfare
+    doublePoints: { freq: [440, 554, 659, 880, 1047], duration: 0.2, type: 'sine' as OscillatorType },
 };
 
 let audioContext: AudioContext | null = null;
@@ -141,5 +147,23 @@ export const SoundEffects = {
     error(): void {
         const s = SOUNDS.error;
         playTone(s.freq, s.duration, s.type, 0.3);
+    },
+
+    // 💀 THE PURGE - Dramatic alarm
+    purgeAlarm(): void {
+        const s = SOUNDS.purge;
+        playTone(s.freq, s.duration, s.type, 0.8);
+    },
+
+    // 💣 WIPE - Descending siren
+    wipeAlarm(): void {
+        const s = SOUNDS.wipe;
+        playTone(s.freq, s.duration, s.type, 0.7);
+    },
+
+    // ⚡ DOUBLE POINTS - Exciting fanfare
+    doublePoints(): void {
+        const s = SOUNDS.doublePoints;
+        playTone(s.freq, s.duration, s.type, 0.7);
     },
 };

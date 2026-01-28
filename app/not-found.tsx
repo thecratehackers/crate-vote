@@ -57,20 +57,20 @@ export default function NotFound() {
                     justify-content: center;
                     gap: 10px;
                     padding: 14px 28px;
-                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.15) 0%, rgba(224, 159, 36, 0.1) 100%);
-                    border: 1px solid rgba(211, 119, 29, 0.4);
-                    color: #e0a030;
+                    background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
+                    border: none;
+                    color: #000;
                     text-decoration: none;
                     border-radius: 50px;
-                    font-weight: 600;
+                    font-weight: 700;
                     font-size: 1rem;
                     transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(211, 119, 29, 0.4);
                 }
                 .home-link:hover {
-                    transform: translateY(-2px);
-                    border-color: #d3771d;
-                    box-shadow: 0 8px 25px rgba(211, 119, 29, 0.25);
-                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.25) 0%, rgba(224, 159, 36, 0.15) 100%);
+                    transform: translateY(-2px) scale(1.02);
+                    box-shadow: 0 8px 30px rgba(211, 119, 29, 0.5);
+                    background: linear-gradient(135deg, #e0a030 0%, #d3771d 100%);
                 }
                 .home-link .link-icon {
                     font-size: 1.2rem;

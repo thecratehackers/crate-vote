@@ -60,7 +60,7 @@ export async function POST(
 
     try {
         const body = await request.json();
-        const { vote: voteDirection, userName, songName } = body;
+        const { vote: voteDirection, userName, songName, userLocation } = body;
 
         if (voteDirection !== 1 && voteDirection !== -1) {
             return NextResponse.json({ error: 'Invalid vote. Please try clicking the vote button again.' }, { status: 400 });
@@ -83,6 +83,7 @@ export async function POST(
                 userName,
                 visitorId,
                 songName,
+                userLocation: userLocation || undefined,
             });
         }
 

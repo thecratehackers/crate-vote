@@ -58,6 +58,34 @@ const fetchWithRetry = async (
     throw lastError || new Error('Request failed after retries');
 };
 
+// Extract YouTube video ID from various URL formats
+const extractYouTubeId = (input: string): string | null => {
+    if (!input) return null;
+
+    // Check if it's an iframe embed code
+    const iframeMatch = input.match(/src=["']([^"']+)["']/);
+    if (iframeMatch) {
+        const srcUrl = iframeMatch[1];
+        const embedMatch = srcUrl.match(/youtube\.com\/embed\/([^?&"']+)/);
+        if (embedMatch) return embedMatch[1];
+    }
+
+    // Check if it's a regular YouTube URL
+    const urlPatterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/\s]+)/,
+        /youtube\.com\/embed\/([^?&/\s]+)/,
+        /youtube\.com\/v\/([^?&/\s]+)/
+    ];
+
+    for (const pattern of urlPatterns) {
+        const match = input.match(pattern);
+        if (match) return match[1];
+    }
+
+    return null;
+};
+
+
 interface Song {
     id: string;
     spotifyUri: string;
@@ -70,6 +98,7 @@ interface Song {
     addedByName: string;
     addedByAvatar?: string;
     addedByColor?: string;
+    addedByLocation?: string;  // Location annotation (e.g., "Austin, TX" or "🇬🇧 London, UK")
     addedAt: number;
     score: number;
     // Audio features for DJs
@@ -108,6 +137,7 @@ interface UserStatus {
     upvotesUsed: number;
     downvotesRemaining: number;
     downvotesUsed: number;
+    isGodMode: boolean;
 }
 
 interface TimerStatus {
@@ -126,7 +156,7 @@ interface UserVotes {
 export default function HomePage() {
     const [songs, setSongs] = useState<Song[]>([]);
     const [userVotes, setUserVotes] = useState<UserVotes>({ upvotedSongIds: [], downvotedSongIds: [] });
-    const [userStatus, setUserStatus] = useState<UserStatus>({ songsRemaining: 5, songsAdded: 0, deletesRemaining: 5, deletesUsed: 0, upvotesRemaining: 5, upvotesUsed: 0, downvotesRemaining: 5, downvotesUsed: 0 });
+    const [userStatus, setUserStatus] = useState<UserStatus>({ songsRemaining: 5, songsAdded: 0, deletesRemaining: 5, deletesUsed: 0, upvotesRemaining: 5, upvotesUsed: 0, downvotesRemaining: 5, downvotesUsed: 0, isGodMode: false });
     const [isLocked, setIsLocked] = useState(false);
     const [visitorId, setVisitorId] = useState<string | null>(null);
     const [isBanned, setIsBanned] = useState(false);
@@ -163,11 +193,35 @@ export default function HomePage() {
     const [noSearchResults, setNoSearchResults] = useState(false);
 
     // Delete window (chaos mode) state
-    const [deleteWindow, setDeleteWindow] = useState<{ active: boolean; endTime: number | null; remaining: number; canDelete: boolean }>({
+    const [deleteWindow, setDeleteWindow] = useState<{ active: boolean; endTime: number | null; remaining: number; canDelete: boolean; reason?: string }>({
         active: false, endTime: null, remaining: 0, canDelete: false
     });
     const [deleteWindowRemaining, setDeleteWindowRemaining] = useState(0);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // 🎚️ SESSION PERMISSIONS - Admin can toggle voting/adding
+    const [permissions, setPermissions] = useState<{ canVote: boolean; canAddSongs: boolean }>({
+        canVote: true,
+        canAddSongs: true,
+    });
+
+    // 🎰 MEGA-ANNOUNCEMENT STATE - Vegas-style full-screen overlays
+    const [showPurgeSplash, setShowPurgeSplash] = useState(false);
+    const [showKarmaRainSplash, setShowKarmaRainSplash] = useState(false);
+    const [showWipeSplash, setShowWipeSplash] = useState(false);
+    const [previousPurgeActive, setPreviousPurgeActive] = useState(false);
+    const [previousSongCount, setPreviousSongCount] = useState<number | null>(null);
+
+    // 🏆 WINNER ANNOUNCEMENT - When user's song is #1 at round end
+    const [showWinnerSplash, setShowWinnerSplash] = useState(false);
+    const [winnerSongName, setWinnerSongName] = useState<string>('');
+    const previousTimerRunning = useRef<boolean>(false);
+
+    // 📺 YOUTUBE EMBED - Admin-controlled live stream
+    const [youtubeEmbed, setYoutubeEmbed] = useState<string | null>(null);
+    const [youtubeMinimized, setYoutubeMinimized] = useState(false);
+    const youtubePlayerRef = useRef<HTMLIFrameElement | null>(null);
+    const youtubeWasUnmuted = useRef<boolean>(false);  // Track if user had audio on
 
     // ⚔️ Versus Battle state
     interface VersusBattleSong {
@@ -233,6 +287,20 @@ export default function HomePage() {
     // Sort songs by score - BUT respect interaction lock to prevent jumping
     const sortedSongs = useMemo(() => {
         const sorted = [...songs].sort((a, b) => {
+            // Priority 1: Unvoted songs (score === 0) rise to the top
+            // This ensures fresh additions get visibility before being ranked
+            const aIsUnvoted = a.score === 0;
+            const bIsUnvoted = b.score === 0;
+
+            if (aIsUnvoted && !bIsUnvoted) return -1; // a (unvoted) goes first
+            if (!aIsUnvoted && bIsUnvoted) return 1;  // b (unvoted) goes first
+
+            // Within unvoted: newest first (most recently added at top)
+            if (aIsUnvoted && bIsUnvoted) {
+                return b.addedAt - a.addedAt; // Newest first
+            }
+
+            // Within voted songs: sort by score descending, then oldest first for ties
             if (b.score !== a.score) return b.score - a.score;
             return a.addedAt - b.addedAt; // Older first for ties
         });
@@ -270,6 +338,7 @@ export default function HomePage() {
     const [avatarInput, setAvatarInput] = useState<string>('🎧');
     const [userColor, setUserColor] = useState<string>('#ffffff');
     const [colorInput, setColorInput] = useState<string>('#ffffff');
+    const [userLocation, setUserLocation] = useState<string | null>(null);  // User's location for tracking
 
     // Color options for user name
     // Color options for user name - limited to readable colors on dark background
@@ -363,6 +432,7 @@ export default function HomePage() {
             const savedAvatar = localStorage.getItem('crate-avatar');
             const savedColor = localStorage.getItem('crate-color');
             const savedSounds = localStorage.getItem('crate-sounds');
+            const savedLocation = localStorage.getItem('crate-location');
 
             if (savedName) {
                 setUsername(savedName);
@@ -378,12 +448,32 @@ export default function HomePage() {
             if (savedSounds === 'off') {
                 setSoundsEnabled(false);
             }
+            if (savedLocation) {
+                setUserLocation(savedLocation);
+            }
             if (!savedName) {
                 setShowUsernameModal(true);
             }
 
             // Initialize sound effects on first interaction
             SoundEffects.init();
+
+            // Fetch user location (IP-based)
+            try {
+                const geoRes = await fetch('/api/geolocation');
+                const geoData = await geoRes.json();
+                if (geoData.success && geoData.location?.displayLocation) {
+                    const locationDisplay = geoData.location.displayLocation;
+                    setUserLocation(locationDisplay);
+                    try {
+                        localStorage.setItem('crate-location', locationDisplay);
+                    } catch (e) {
+                        // localStorage full or disabled
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not fetch location:', err);
+            }
         }
         init();
     }, []);
@@ -450,8 +540,21 @@ export default function HomePage() {
             const newRanks: Record<string, number> = {};
             const rankChanges: Record<string, 'up' | 'down' | 'new'> = {};
 
-            // Sort to get current ranks
+            // Sort to get current ranks (matching main sorting logic)
             const sorted = [...newSongs].sort((a, b) => {
+                // Priority 1: Unvoted songs (score === 0) rise to the top
+                const aIsUnvoted = a.score === 0;
+                const bIsUnvoted = b.score === 0;
+
+                if (aIsUnvoted && !bIsUnvoted) return -1;
+                if (!aIsUnvoted && bIsUnvoted) return 1;
+
+                // Within unvoted: newest first
+                if (aIsUnvoted && bIsUnvoted) {
+                    return b.addedAt - a.addedAt;
+                }
+
+                // Within voted: score descending, then oldest first
                 if (b.score !== a.score) return b.score - a.score;
                 return a.addedAt - b.addedAt;
             });
@@ -499,6 +602,18 @@ export default function HomePage() {
                 if (data.deleteWindow.active && data.deleteWindow.remaining > 0) {
                     setDeleteWindowRemaining(data.deleteWindow.remaining);
                 }
+            }
+
+            // 🎚️ Sync session permissions
+            if (data.permissions) {
+                setPermissions(data.permissions);
+            }
+
+            // 📺 Sync YouTube embed URL - extract video ID
+            if (data.youtubeEmbed !== undefined) {
+                // Extract video ID from various URL formats (full URLs, embed codes, etc.)
+                const videoId = data.youtubeEmbed ? extractYouTubeId(data.youtubeEmbed) : null;
+                setYoutubeEmbed(videoId);
             }
 
             // ⚔️ Handle Versus Battle data
@@ -753,6 +868,47 @@ export default function HomePage() {
         return () => clearInterval(interval);
     }, [timerRunning, timerEndTime]);
 
+    // 🏆 WINNER DETECTION - When round ends, check if user won
+    useEffect(() => {
+        // Detect transition from running to stopped (round ended)
+        if (previousTimerRunning.current && !timerRunning && songs.length > 0) {
+            // Get the #1 song
+            const topSong = songs[0];
+            // Check if current user added the winning song
+            if (topSong && topSong.addedBy === visitorId) {
+                setWinnerSongName(topSong.name);
+                setShowWinnerSplash(true);
+            }
+        }
+        previousTimerRunning.current = timerRunning;
+    }, [timerRunning, songs, visitorId]);
+
+    // 📺 YOUTUBE/JUKEBOX SYNC - Mute YouTube when Jukebox opens, restore when it closes
+    useEffect(() => {
+        const iframe = youtubePlayerRef.current;
+        if (!iframe) return;
+
+        const postMessage = (cmd: string) => {
+            try {
+                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: cmd, args: [] }), '*');
+            } catch (e) {
+                // Cross-origin posting may fail silently, that's ok
+            }
+        };
+
+        if (jukeboxState) {
+            // Jukebox opened - record current state and mute
+            // We check if user had unmuted by testing if they interacted
+            // For simplicity, assume they may have unmuted and restore on close
+            youtubeWasUnmuted.current = true; // Assume user might have audio on
+            postMessage('mute');
+        } else if (youtubeWasUnmuted.current) {
+            // Jukebox closed - restore audio if user had it on
+            postMessage('unMute');
+            youtubeWasUnmuted.current = false;
+        }
+    }, [jukeboxState]);
+
     // 🔥 DELETE WINDOW COUNTDOWN - local countdown for chaos mode
     useEffect(() => {
         if (!deleteWindow.active || !deleteWindow.endTime) {
@@ -772,6 +928,40 @@ export default function HomePage() {
 
         return () => clearInterval(interval);
     }, [deleteWindow.active, deleteWindow.endTime, fetchPlaylist]);
+
+    // 🎰 PURGE SPLASH - Show full-screen announcement when Purge first activates
+    useEffect(() => {
+        if (deleteWindow.active && !previousPurgeActive) {
+            // Purge just started! Show the mega splash
+            setShowPurgeSplash(true);
+            // 🔊 Play dramatic alarm sound
+            SoundEffects.purgeAlarm();
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => setShowPurgeSplash(false), 3000);
+        }
+        setPreviousPurgeActive(deleteWindow.active);
+    }, [deleteWindow.active, previousPurgeActive]);
+
+    // 🌧️ KARMA RAIN SPLASH - Enhanced full-screen celebration
+    useEffect(() => {
+        if (showKarmaRain) {
+            setShowKarmaRainSplash(true);
+            // 🔊 Play magical karma sound
+            SoundEffects.karmaRain();
+            // Auto-dismiss after 4 seconds
+            setTimeout(() => setShowKarmaRainSplash(false), 4000);
+        }
+    }, [showKarmaRain]);
+
+    // 🗑️ WIPE DETECTION - Show splash when playlist is wiped
+    useEffect(() => {
+        if (previousSongCount !== null && previousSongCount > 5 && songs.length === 0) {
+            // Playlist was wiped! Show the mega splash
+            setShowWipeSplash(true);
+            setTimeout(() => setShowWipeSplash(false), 3000);
+        }
+        setPreviousSongCount(songs.length);
+    }, [songs.length, previousSongCount]);
 
     // 🗑️ Handle window delete (chaos mode delete)
     const handleWindowDelete = async (songId: string) => {
@@ -927,7 +1117,7 @@ export default function HomePage() {
                     'Content-Type': 'application/json',
                     'x-visitor-id': visitorId,
                 },
-                body: JSON.stringify({ ...track, addedByName: username, addedByAvatar: userAvatar, addedByColor: userColor }),
+                body: JSON.stringify({ ...track, addedByName: username, addedByAvatar: userAvatar, addedByColor: userColor, addedByLocation: userLocation || undefined }),
             });
 
             const data = await res.json();
@@ -1289,6 +1479,7 @@ export default function HomePage() {
                     vote,
                     userName: username || 'Anonymous',
                     songName: votedSong?.name || 'Unknown',
+                    userLocation: userLocation || undefined,
                 }),
             });
 
@@ -1461,6 +1652,103 @@ export default function HomePage() {
                 </div>
             )}
 
+            {/* 🎰 MEGA-ANNOUNCEMENT: PURGE SPLASH */}
+            {showPurgeSplash && (
+                <div className="mega-announcement purge">
+                    <div className="purge-particles">
+                        {[...Array(12)].map((_, i) => (
+                            <span
+                                key={i}
+                                className="purge-particle"
+                                style={{
+                                    left: `${10 + Math.random() * 80}%`,
+                                    top: `${10 + Math.random() * 80}%`,
+                                    animationDelay: `${Math.random() * 2}s`,
+                                }}
+                            >
+                                {['💀', '🔥', '⚡', '💥'][i % 4]}
+                            </span>
+                        ))}
+                    </div>
+                    <span className="mega-icon">💀</span>
+                    <h1 className="mega-title">THE PURGE</h1>
+                    <p className="mega-subtitle">Delete ANY song! Choose wisely...</p>
+                    <div className="mega-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</div>
+                </div>
+            )}
+
+            {/* 🎰 MEGA-ANNOUNCEMENT: KARMA RAIN SPLASH */}
+            {showKarmaRainSplash && (
+                <div className="mega-announcement karma-rain">
+                    <div className="karma-rain-enhanced">
+                        {[...Array(20)].map((_, i) => (
+                            <span
+                                key={i}
+                                className="karma-drop"
+                                style={{
+                                    left: `${Math.random() * 100}%`,
+                                    animationDelay: `${Math.random() * 2}s`,
+                                }}
+                            >
+                                {['✨', '💫', '⭐', '🌟', '💎'][i % 5]}
+                            </span>
+                        ))}
+                    </div>
+                    <span className="mega-icon">🌧️</span>
+                    <h1 className="mega-title">KARMA RAIN!</h1>
+                    <p className="mega-subtitle">+1 Karma for everyone! 🎉</p>
+                </div>
+            )}
+
+            {/* 🎰 MEGA-ANNOUNCEMENT: WIPE SPLASH */}
+            {showWipeSplash && (
+                <div className="mega-announcement wipe">
+                    <span className="mega-icon">🗑️</span>
+                    <h1 className="mega-title">PLAYLIST WIPED!</h1>
+                    <p className="mega-subtitle">Fresh start! Add your songs now.</p>
+                </div>
+            )}
+
+            {/* 🏆 WINNER ANNOUNCEMENT - Promo code popup */}
+            {showWinnerSplash && (
+                <div className="winner-announcement" onClick={(e) => e.target === e.currentTarget && setShowWinnerSplash(false)}>
+                    <div className="winner-modal">
+                        <button className="winner-close" onClick={() => setShowWinnerSplash(false)}>✕</button>
+                        <div className="winner-confetti">🎉</div>
+                        <h1 className="winner-title">YOU WON! 🏆</h1>
+                        <p className="winner-song">Your song "{winnerSongName}" hit #1!</p>
+                        <div className="winner-prize">
+                            <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
+                            <div className="prize-details">
+                                <h2>FREE HAT!</h2>
+                                <p className="promo-code">Use code: <strong>HACKATHONWINNER</strong></p>
+                            </div>
+                        </div>
+                        <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
+                        <a
+                            href="https://dj.style/discount/HACKATHONWINNER?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="claim-prize-btn"
+                        >
+                            🎁 CLAIM YOUR FREE HAT
+                        </a>
+                        <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
+                    </div>
+                </div>
+            )}
+
+            {/* 🔴 PERSISTENT PURGE INDICATOR (after splash) */}
+            {deleteWindow.active && !showPurgeSplash && (
+                <div className={`purge-persistent-indicator ${!deleteWindow.canDelete ? 'inactive-user' : ''}`}>
+                    <span className="purge-icon">💀</span>
+                    <span className="purge-text">PURGE ACTIVE</span>
+                    <span className="purge-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</span>
+                    {!deleteWindow.canDelete && deleteWindow.reason && (
+                        <span className="purge-restriction">{deleteWindow.reason}</span>
+                    )}
+                </div>
+            )}
 
             {/* ═══════════════════════════════════════════════════════════
                 COMPACT TOP BAR - Everything important on 1-2 lines
@@ -1487,22 +1775,34 @@ export default function HomePage() {
                 <div className="header-right">
                     {!isBanned && isSessionActive && (
                         <div className="action-stats">
-                            {/* Songs remaining */}
-                            <span className="stat-counter songs" data-tooltip={`You can add ${userStatus.songsRemaining} more song${userStatus.songsRemaining !== 1 ? 's' : ''}`} tabIndex={0}>
-                                💿 {userStatus.songsRemaining}
-                            </span>
-                            {/* Upvotes remaining */}
-                            <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvote${userStatus.upvotesRemaining !== 1 ? 's' : ''} left — boost songs you like!`} tabIndex={0}>
-                                👍 {userStatus.upvotesRemaining}
-                            </span>
-                            {/* Downvotes remaining */}
-                            <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvote${userStatus.downvotesRemaining !== 1 ? 's' : ''} left — sink songs you don't want`} tabIndex={0}>
-                                👎 {userStatus.downvotesRemaining}
-                            </span>
+                            {/* Songs remaining - hide if adding disabled */}
+                            {permissions.canAddSongs && (
+                                <span className="stat-counter songs" data-tooltip={`You can add ${userStatus.songsRemaining} more song${userStatus.songsRemaining !== 1 ? 's' : ''}`} tabIndex={0}>
+                                    💿 {userStatus.songsRemaining}
+                                </span>
+                            )}
+                            {/* Upvotes remaining - hide if voting disabled */}
+                            {permissions.canVote && (
+                                <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvote${userStatus.upvotesRemaining !== 1 ? 's' : ''} left — boost songs you like!`} tabIndex={0}>
+                                    👍 {userStatus.upvotesRemaining}
+                                </span>
+                            )}
+                            {/* Downvotes remaining - hide if voting disabled */}
+                            {permissions.canVote && (
+                                <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvote${userStatus.downvotesRemaining !== 1 ? 's' : ''} left — sink songs you don't want`} tabIndex={0}>
+                                    👎 {userStatus.downvotesRemaining}
+                                </span>
+                            )}
                             {/* Karma - only show if > 0 */}
                             {karmaBonuses.karma > 0 && (
                                 <span className="stat-counter karma" data-tooltip="Karma points! Each gives +1 song & +1 vote" tabIndex={0}>
                                     ✨ {karmaBonuses.karma}
+                                </span>
+                            )}
+                            {/* 👑 GOD MODE - User's song is #1 (unlimited votes, extra purge deletes) */}
+                            {userStatus.isGodMode && (
+                                <span className="god-mode-badge" data-tooltip="Your song is #1! Unlimited votes + extra Purge power!" tabIndex={0}>
+                                    👑 GOD MODE
                                 </span>
                             )}
                         </div>
@@ -1615,34 +1915,49 @@ export default function HomePage() {
                 </div>
             )}
 
-            {/* 🎧 YOUR REQUESTS - Show songs added by this user */}
-            {(() => {
-                const mySongs = sortedSongs.filter(s => s.addedBy === visitorId);
-                if (mySongs.length === 0) return null;
-                return (
-                    <div className="your-requests-section">
-                        <div className="your-requests-header">
-                            <span className="your-requests-label">🎧 Your Requests</span>
-                            <span className="your-requests-count">{mySongs.length} song{mySongs.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div className="your-requests-row">
-                            {mySongs.map((song, idx) => {
-                                const rank = sortedSongs.findIndex(s => s.id === song.id) + 1;
-                                return (
-                                    <div key={song.id} className={`your-song-card ${rank <= 3 ? 'top-three' : ''}`}>
-                                        <img src={song.albumArt || '/placeholder.svg'} alt="" className="your-song-art" />
-                                        <div className="your-song-info">
-                                            <span className="your-song-name">{song.name.length > 20 ? song.name.slice(0, 20) + '…' : song.name}</span>
-                                            <span className="your-song-rank">#{rank} • {song.score > 0 ? '+' : ''}{song.score}</span>
-                                        </div>
-                                        {rank <= 3 && <span className="top-badge">{rank === 1 ? '👑' : rank === 2 ? '🥈' : '🥉'}</span>}
-                                    </div>
-                                );
-                            })}
+            {/* 🎧 YOUR REQUESTS - REMOVED: Now using in-playlist highlighting instead */}
+
+            {/* 📺 YOUTUBE LIVE STREAM EMBED - Admin-controlled live video */}
+            {youtubeEmbed && !youtubeMinimized && (
+                <div className="youtube-embed-container">
+                    <div className="youtube-embed-header">
+                        <span className="live-stream-badge">🔴 LIVE STREAM</span>
+                        <div className="youtube-controls">
+                            <button
+                                className="youtube-minimize-btn"
+                                onClick={() => setYoutubeMinimized(true)}
+                                title="Minimize stream"
+                            >
+                                ▼
+                            </button>
                         </div>
                     </div>
-                );
-            })()}
+                    <div className="youtube-responsive-wrapper">
+                        <iframe
+                            ref={youtubePlayerRef}
+                            src={`https://www.youtube.com/embed/${youtubeEmbed}?autoplay=1&mute=1&enablejsapi=1`}
+                            title="Live Stream"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* 📺 MINIMIZED YOUTUBE - Show restore button when minimized */}
+            {youtubeEmbed && youtubeMinimized && (
+                <div className="youtube-minimized-bar">
+                    <span>🔴 Stream minimized</span>
+                    <button
+                        className="youtube-restore-btn"
+                        onClick={() => setYoutubeMinimized(false)}
+                        title="Restore stream"
+                    >
+                        ▲ Restore Stream
+                    </button>
+                </div>
+            )}
 
             {/* 📦 PLAYLIST HEADER - Title + Activity ticker in fixed-height banner */}
             <div className="playlist-header-bar">
@@ -1670,31 +1985,20 @@ export default function HomePage() {
                 </div>
 
                 <button
-                    className={`export-inline-btn ${timerRunning ? 'locked' : ''}`}
+                    className="export-inline-btn"
                     onClick={handleExport}
-                    disabled={timerRunning || isExporting}
-                    title={timerRunning ? 'Available after voting ends' : 'Export playlist to Spotify'}
+                    disabled={isExporting}
+                    title="Export playlist to Spotify anytime!"
                 >
                     <img src="/spotify-logo.png" alt="" className="spotify-icon-sm" />
-                    {isExporting ? '...' : timerRunning ? 'After' : 'Export'}
+                    {isExporting ? '...' : 'Export'}
                 </button>
             </div>
 
-            {/* 💀 THE PURGE BANNER - Active purge window */}
-            {deleteWindow.active && (
-                <div className="chaos-banner">
-                    <div className="chaos-content">
-                        <span className="chaos-icon">💀</span>
-                        <span className="chaos-title">THE PURGE IS OPEN!</span>
-                        <span className="chaos-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</span>
-                    </div>
-                    <div className="chaos-message">
-                        {deleteWindow.canDelete
-                            ? '💀 You can PURGE one song! Tap the skull on any song.'
-                            : '✓ You already used your purge this window.'}
-                    </div>
-                </div>
-            )}
+
+            {/* 💀 THE PURGE - Now handled by mega-announcement splash + persistent indicator above */}
+
+
 
             {/* ⚔️ VERSUS BATTLE COMPONENT - Show when battle is active */}
             {versusBattle.active && versusBattle.songA && versusBattle.songB && (
@@ -1711,10 +2015,10 @@ export default function HomePage() {
             {isBanned && <div className="banned-banner">🚫 You've been banned from this session</div>}
 
             {/* ═══════════════════════════════════════════════════════════
-                SEARCH BAR - Only when session active
+                SEARCH BAR - Only when session active and adding is enabled
                ═══════════════════════════════════════════════════════════ */}
             {
-                canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0) && (
+                permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0) && (
                     <div className="search-bar-container">
                         <input
                             id="search-input"
@@ -1815,84 +2119,40 @@ export default function HomePage() {
                                 {/* Song Info - super compact */}
                                 <div className="song-info-stream">
                                     <span className="song-title">{song.name}</span>
-                                    <span className="song-artist">{song.artist} <span className="by-user" style={{ color: isMyComment ? userColor : (song.addedByColor || '#9ca3af'), opacity: 1 }}>• {song.addedByName}{isMyComment && ' (you)'}</span></span>
-                                </div>
-
-                                {/* Voting - inline thumbs up/down with score */}
-                                <div className="vote-inline">
-                                    <button
-                                        className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
-                                        onClick={() => handleVote(song.id, 1)}
-                                        disabled={!canParticipate || votingInProgress.has(song.id)}
-                                        data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote this song'}
-                                    >
-                                        {votingInProgress.has(song.id) ? '⏳' : '👍'}
-                                    </button>
-                                    <span
-                                        className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
-                                        data-tooltip={`Net score: ${song.score > 0 ? '+' : ''}${song.score}`}
-                                        tabIndex={0}
-                                    >
-                                        {song.score > 0 ? '+' : ''}{song.score}
+                                    <span className="song-artist">
+                                        {song.artist} <span className="by-user" style={{ color: isMyComment ? userColor : (song.addedByColor || '#9ca3af'), opacity: 1 }}>• {song.addedByName}{isMyComment && ' (you)'}</span>
+                                        {song.addedByLocation && <span className="location-badge" title={`From ${song.addedByLocation}`}>📍{song.addedByLocation}</span>}
                                     </span>
-                                    <button
-                                        className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
-                                        onClick={() => handleVote(song.id, -1)}
-                                        disabled={!canParticipate || votingInProgress.has(song.id)}
-                                        data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote this song'}
-                                    >
-                                        {votingInProgress.has(song.id) ? '⏳' : '👎'}
-                                    </button>
                                 </div>
 
-                                {/* 🔥 QUICK REACTIONS - Hidden by default, reveal on hover */}
-                                {(() => {
-                                    const reactions = songReactions[song.id];
-                                    const reactionCounts = {
-                                        fire: reactions?.fire || 0,
-                                        skull: reactions?.skull || 0,
-                                        laugh: reactions?.laugh || 0,
-                                        heart: reactions?.heart || 0,
-                                    };
-                                    const totalReactions = reactionCounts.fire + reactionCounts.skull + reactionCounts.laugh + reactionCounts.heart;
-
-                                    // Find the dominant emoji (most votes)
-                                    const emojiMap = { fire: '🔥', skull: '💀', laugh: '😂', heart: '❤️' };
-                                    let dominantEmoji = '😄'; // default when no reactions
-                                    let maxCount = 0;
-                                    for (const [key, count] of Object.entries(reactionCounts)) {
-                                        if (count > maxCount) {
-                                            maxCount = count;
-                                            dominantEmoji = emojiMap[key as keyof typeof emojiMap];
-                                        }
-                                    }
-
-                                    return (
-                                        <div className={`reaction-trigger-container ${totalReactions > 0 ? 'has-reactions' : ''}`}>
-                                            <button className="reaction-trigger" title="React to this song">
-                                                {dominantEmoji}{totalReactions > 0 && <span className="trigger-count">{totalReactions}</span>}
-                                            </button>
-                                            <div className="reaction-flyout">
-                                                {(['fire', 'skull', 'laugh', 'heart'] as ReactionType[]).map((reaction) => {
-                                                    const emoji = emojiMap[reaction];
-                                                    const count = reactionCounts[reaction];
-                                                    const isActive = userReactions[song.id] === reaction;
-                                                    return (
-                                                        <button
-                                                            key={reaction}
-                                                            className={`reaction-btn ${isActive ? 'active' : ''}`}
-                                                            onClick={() => handleReaction(song.id, reaction)}
-                                                            disabled={reactingTo === song.id}
-                                                            title={`${reaction} reaction`}
-                                                        >
-                                                            {emoji}{count > 0 && <span className="reaction-count">{count}</span>}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
+                                {/* Voting - inline thumbs down/up with score (hidden if voting disabled) */}
+                                {permissions.canVote && (
+                                    <div className="vote-inline">
+                                        <button
+                                            className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
+                                            onClick={() => handleVote(song.id, -1)}
+                                            disabled={!canParticipate || votingInProgress.has(song.id)}
+                                            data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote this song'}
+                                        >
+                                            {votingInProgress.has(song.id) ? '⏳' : '👎'}
+                                        </button>
+                                        <span
+                                            className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
+                                            data-tooltip={`Net score: ${song.score > 0 ? '+' : ''}${song.score}`}
+                                            tabIndex={0}
+                                        >
+                                            {song.score > 0 ? '+' : ''}{song.score}
+                                        </span>
+                                        <button
+                                            className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
+                                            onClick={() => handleVote(song.id, 1)}
+                                            disabled={!canParticipate || votingInProgress.has(song.id)}
+                                            data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote this song'}
+                                        >
+                                            {votingInProgress.has(song.id) ? '⏳' : '👍'}
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* 💀 THE PURGE - Only visible during purge window */}
                                 {deleteWindow.active && deleteWindow.canDelete && (

@@ -44,6 +44,7 @@ interface ActivityItem {
     userName: string;
     visitorId: string;
     songName: string;
+    userLocation?: string;  // Location annotation (e.g., "Austin, TX")
     timestamp: number;
 }
 
@@ -66,6 +67,10 @@ export default function AdminPage() {
     const [adminVotes, setAdminVotes] = useState<Record<string, 1 | -1>>({});
     const [activeAdminCount, setActiveAdminCount] = useState(0);
     const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+
+    // Session permissions state
+    const [permissionCanVote, setPermissionCanVote] = useState(true);
+    const [permissionCanAddSongs, setPermissionCanAddSongs] = useState(true);
 
 
     // Unique admin ID for this session
@@ -104,7 +109,18 @@ export default function AdminPage() {
     const [isBanningUser, setIsBanningUser] = useState<string | null>(null);
     const [isWiping, setIsWiping] = useState(false);
     const [isRainingKarma, setIsRainingKarma] = useState(false);
+    const [isStartingDoublePoints, setIsStartingDoublePoints] = useState(false);
+    const [doublePointsActive, setDoublePointsActive] = useState(false);
     const [isAddingSong, setIsAddingSong] = useState<string | null>(null);
+
+    // 🤖 AUTO-PILOT - Random surprise events during live sessions
+    const [autoPilotEnabled, setAutoPilotEnabled] = useState(false);
+    const lastAutoEventTime = useRef<number>(0);
+
+    // 📺 YOUTUBE EMBED - Live stream display
+    const [youtubeUrl, setYoutubeUrl] = useState('');
+    const [isSavingYoutube, setIsSavingYoutube] = useState(false);
+    const autoPilotTimeouts = useRef<NodeJS.Timeout[]>([]);
 
     // Delete window (chaos mode) state
     const [isStartingDeleteWindow, setIsStartingDeleteWindow] = useState(false);
@@ -188,6 +204,15 @@ export default function AdminPage() {
             if (data.playlistTitle) {
                 setPlaylistTitle(data.playlistTitle);
                 if (!isEditingTitle) setTitleInput(data.playlistTitle);
+            }
+            // Sync session permissions
+            if (data.permissions) {
+                setPermissionCanVote(data.permissions.canVote);
+                setPermissionCanAddSongs(data.permissions.canAddSongs);
+            }
+            // Sync YouTube embed URL
+            if (data.youtubeEmbed !== undefined) {
+                setYoutubeUrl(data.youtubeEmbed || '');
             }
         } catch (error) {
             console.error('Failed to fetch playlist:', error);
@@ -767,6 +792,60 @@ export default function AdminPage() {
         }
     };
 
+    // Toggle session permissions (voting/song adding)
+    const handleTogglePermission = async (permissionType: 'canVote' | 'canAddSongs', newValue: boolean) => {
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'setPermissions',
+                    [permissionType]: newValue
+                }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.permissions) {
+                    setPermissionCanVote(data.permissions.canVote);
+                    setPermissionCanAddSongs(data.permissions.canAddSongs);
+                }
+                const label = permissionType === 'canVote' ? 'Voting' : 'Song Adding';
+                setMessage({
+                    type: 'success',
+                    text: `${newValue ? '✓' : '🚫'} ${label} ${newValue ? 'enabled' : 'disabled'}`
+                });
+            } else {
+                setMessage({ type: 'error', text: 'Failed to update permissions' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to update permissions' });
+        }
+    };
+
+    // Save YouTube embed URL
+    const handleSaveYouTube = async () => {
+        setIsSavingYoutube(true);
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'setYouTubeEmbed',
+                    youtubeUrl: youtubeUrl.trim() || null,
+                }),
+            });
+            if (res.ok) {
+                setMessage({
+                    type: 'success',
+                    text: youtubeUrl.trim() ? '📺 YouTube stream saved!' : '📺 YouTube stream cleared'
+                });
+            } else {
+                setMessage({ type: 'error', text: 'Failed to save YouTube URL' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to save YouTube URL' });
+        } finally {
+            setIsSavingYoutube(false);
+        }
+    };
 
     // Shuffle all songs in the playlist
     const handleShufflePlaylist = async () => {
@@ -795,31 +874,31 @@ export default function AdminPage() {
         }
     };
 
-    // Start THE PURGE - grants everyone ONE delete for 30 seconds
+    // Start THE PURGE - grants everyone ONE delete for 60 seconds
     const handleStartDeleteWindow = () => {
         showConfirmModal(
             '💀 START THE PURGE?',
-            'This grants EVERY USER the ability to PURGE ONE song for 30 seconds.\n\nAll crimes are legal - use wisely!',
+            'This grants EVERY USER the ability to PURGE ONE song for 60 seconds.\n\nAll crimes are legal - use wisely!',
             async () => {
                 setIsStartingDeleteWindow(true);
                 try {
                     const res = await adminFetch('/api/admin/delete-window', {
                         method: 'POST',
-                        body: JSON.stringify({ duration: 30 }),
+                        body: JSON.stringify({ duration: 60 }),
                     });
 
                     if (res.ok) {
                         const data = await res.json();
                         setDeleteWindowActive(true);
                         setDeleteWindowEndTime(data.endTime);
-                        setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 30 seconds to purge ONE song!' });
+                        setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 60 seconds to purge ONE song!' });
 
                         // Auto-refresh when window ends
                         setTimeout(() => {
                             setDeleteWindowActive(false);
                             setDeleteWindowEndTime(null);
                             fetchPlaylist();
-                        }, 30000);
+                        }, 60000);
                     } else {
                         const data = await res.json();
                         setMessage({ type: 'error', text: data.error || 'Failed to start The Purge' });
@@ -852,6 +931,169 @@ export default function AdminPage() {
             setIsRainingKarma(false);
         }
     };
+
+    // ⚡ Double Points - votes count 2x for 2 minutes!
+    const handleDoublePoints = async () => {
+        setIsStartingDoublePoints(true);
+        try {
+            const res = await adminFetch('/api/admin/double-points', {
+                method: 'POST',
+                body: JSON.stringify({ duration: 120 }), // 2 minutes
+            });
+
+            if (res.ok) {
+                setDoublePointsActive(true);
+                setMessage({ type: 'success', text: '⚡ DOUBLE POINTS! All votes count 2X for 2 minutes!' });
+
+                // Auto-clear after window ends
+                setTimeout(() => {
+                    setDoublePointsActive(false);
+                    fetchPlaylist();
+                }, 120000);
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.error || 'Failed to start Double Points' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to start Double Points - network error' });
+        } finally {
+            setIsStartingDoublePoints(false);
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 🤖 AUTO-PILOT - Silent event triggers for automation
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Silent Purge - no confirmation dialog
+    const triggerPurgeSilent = async () => {
+        try {
+            const res = await adminFetch('/api/admin/delete-window', {
+                method: 'POST',
+                body: JSON.stringify({ duration: 60 }),
+            });
+            if (res.ok) {
+                setDeleteWindowActive(true);
+                const data = await res.json();
+                setDeleteWindowEndTime(data.endTime);
+                setMessage({ type: 'success', text: '💀 AUTO-PILOT: THE PURGE HAS BEGUN!' });
+                setTimeout(() => {
+                    setDeleteWindowActive(false);
+                    setDeleteWindowEndTime(null);
+                    fetchPlaylist();
+                }, 60000);
+            }
+        } catch (error) {
+            console.error('Auto-pilot purge failed:', error);
+        }
+    };
+
+    // Silent Shuffle - no confirmation
+    const triggerShuffleSilent = async () => {
+        if (songs.length < 2) return;
+        try {
+            const res = await adminFetch('/api/admin/shuffle-playlist', { method: 'POST' });
+            if (res.ok) {
+                setMessage({ type: 'success', text: '🔀 AUTO-PILOT: Playlist shuffled!' });
+                fetchPlaylist();
+            }
+        } catch (error) {
+            console.error('Auto-pilot shuffle failed:', error);
+        }
+    };
+
+    // Silent Karma Rain - no confirmation
+    const triggerKarmaRainSilent = async () => {
+        try {
+            const res = await adminFetch('/api/admin/karma-rain', { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                setMessage({ type: 'success', text: `🌧️ AUTO-PILOT: Karma Rain! ${data.usersRained} users blessed!` });
+            }
+        } catch (error) {
+            console.error('Auto-pilot karma rain failed:', error);
+        }
+    };
+
+    // 🤖 AUTO-PILOT EFFECT - Schedule random events when enabled
+    useEffect(() => {
+        // Clear any existing timeouts
+        autoPilotTimeouts.current.forEach(t => clearTimeout(t));
+        autoPilotTimeouts.current = [];
+
+        if (!autoPilotEnabled || !timerRunning || !timerEndTime) {
+            return;
+        }
+
+        const remainingMs = timerEndTime - Date.now();
+        if (remainingMs <= 0) return;
+
+        // Calculate how many events to schedule based on timer duration
+        // ~1 event per 3-5 minutes, but at least 1 event if timer > 2 min
+        const remainingMinutes = remainingMs / 60000;
+        let numEvents = Math.floor(remainingMinutes / 4); // 1 event every 4 minutes
+        numEvents = Math.max(1, Math.min(numEvents, 10)); // Between 1-10 events
+
+        // Event pool (weighted: Shuffle 40%, Karma Rain 40%, Purge 20%)
+        const eventPool = [
+            { type: 'shuffle', weight: 40 },
+            { type: 'karma', weight: 40 },
+            { type: 'purge', weight: 20 },
+        ];
+
+        const pickRandomEvent = () => {
+            const total = eventPool.reduce((sum, e) => sum + e.weight, 0);
+            let rand = Math.random() * total;
+            for (const event of eventPool) {
+                rand -= event.weight;
+                if (rand <= 0) return event.type;
+            }
+            return 'shuffle';
+        };
+
+        // Schedule events at random times throughout the session
+        // Leave buffer at start (30s) and end (60s)
+        const minDelay = 30000; // 30 seconds from now
+        const maxDelay = remainingMs - 60000; // 1 minute before end
+
+        if (maxDelay <= minDelay) return; // Not enough time
+
+        for (let i = 0; i < numEvents; i++) {
+            const delay = minDelay + Math.random() * (maxDelay - minDelay);
+            const eventType = pickRandomEvent();
+
+            const timeout = setTimeout(async () => {
+                // Check if auto-pilot is still enabled
+                if (!autoPilotEnabled) return;
+
+                // Minimum 60s between events
+                if (Date.now() - lastAutoEventTime.current < 60000) return;
+
+                lastAutoEventTime.current = Date.now();
+
+                switch (eventType) {
+                    case 'purge':
+                        await triggerPurgeSilent();
+                        break;
+                    case 'shuffle':
+                        await triggerShuffleSilent();
+                        break;
+                    case 'karma':
+                        await triggerKarmaRainSilent();
+                        break;
+                }
+            }, delay);
+
+            autoPilotTimeouts.current.push(timeout);
+        }
+
+        setMessage({ type: 'success', text: `🤖 Auto-Pilot: ${numEvents} surprise events scheduled!` });
+
+        return () => {
+            autoPilotTimeouts.current.forEach(t => clearTimeout(t));
+            autoPilotTimeouts.current = [];
+        };
+    }, [autoPilotEnabled, timerRunning, timerEndTime]);
 
     // ============ PREDICTIONS HANDLERS ============
 
@@ -1034,105 +1276,88 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* Timer Control Panel */}
-            <div className="timer-control-panel">
-                <div className="timer-display-large">
+            {/* Compact Admin Control Strip - Timer + Stats + Quick Actions in one row */}
+            <div className="admin-control-strip">
+                {/* Timer Section - Compact */}
+                <div className="timer-compact">
                     {timerRunning ? (
                         <>
-                            <div className="timer-label">Session Active</div>
-                            <div className={`timer-value-large ${timerRemaining < 60000 ? 'urgent' : ''}`}>
+                            <span className="timer-status-dot active" />
+                            <span className={`timer-value-compact ${timerRemaining < 60000 ? 'urgent' : ''}`}>
                                 {formatTime(timerRemaining)}
-                            </div>
+                            </span>
                         </>
                     ) : (
-                        <div className="timer-label">Session Inactive</div>
+                        <>
+                            <span className="timer-status-dot inactive" />
+                            <span className="timer-value-compact inactive">Stopped</span>
+                        </>
                     )}
-                </div>
-
-                <div className="timer-controls">
-                    <div className="timer-duration-select">
-                        <label>Duration:</label>
+                    {/* Inline timer controls */}
+                    <div className="timer-controls-inline">
                         <select
                             value={selectedDuration}
                             onChange={(e) => setSelectedDuration(Number(e.target.value))}
                             disabled={timerRunning}
+                            className="duration-select-mini"
                         >
-                            <option value={5}>5 min</option>
-                            <option value={10}>10 min</option>
-                            <option value={15}>15 min</option>
-                            <option value={30}>30 min</option>
-                            <option value={45}>45 min</option>
-                            <option value={60}>1 hour</option>
-                            <option value={120}>2 hours</option>
-                            <option value={240}>4 hours</option>
-                            <option value={480}>8 hours</option>
-                            <option value={720}>12 hours</option>
-                            <option value={1440}>24 hours</option>
-                            <option value={10080}>7 days</option>
+                            <option value={5}>5m</option>
+                            <option value={10}>10m</option>
+                            <option value={15}>15m</option>
+                            <option value={30}>30m</option>
+                            <option value={60}>1h</option>
+                            <option value={120}>2h</option>
+                            <option value={240}>4h</option>
+                            <option value={480}>8h</option>
+                            <option value={1440}>24h</option>
+                            <option value={10080}>7d</option>
                         </select>
-                    </div>
-
-                    <div className="timer-buttons">
                         {!timerRunning ? (
-                            <button className="admin-btn success" onClick={handleStartTimer} disabled={isTimerAction}>
-                                {isTimerAction ? '⏳ Starting...' : '▶️ Start Session'}
+                            <button className="timer-btn start" onClick={handleStartTimer} disabled={isTimerAction}>
+                                {isTimerAction ? '...' : '▶'}
                             </button>
                         ) : (
-                            <button className="admin-btn danger" onClick={handleStopTimer} disabled={isTimerAction}>
-                                {isTimerAction ? '⏳ Stopping...' : '⏹️ Stop Session'}
+                            <button className="timer-btn stop" onClick={handleStopTimer} disabled={isTimerAction}>
+                                {isTimerAction ? '...' : '⏹'}
                             </button>
                         )}
-                        <button className="admin-btn" onClick={handleResetTimer} disabled={isTimerAction}>
-                            {isTimerAction ? '⏳...' : '🔄 Reset Timer'}
+                        <button className="timer-btn reset" onClick={handleResetTimer} disabled={isTimerAction} title="Reset Timer">
+                            🔄
                         </button>
                     </div>
                 </div>
-            </div>
 
-            {/* Compact Stats Bar - Always visible */}
-            <div className="admin-stats-bar">
-                <div className="stat-mini" data-tooltip="Total tracks in playlist">
-                    <span className="stat-value">{stats.totalSongs}</span>
-                    <span className="stat-label">🎵 Songs</span>
+                {/* Stats - Inline pills */}
+                <div className="stats-inline">
+                    <span className="stat-pill-mini" data-tooltip="Songs"><span className="val">{stats.totalSongs}</span>🎵</span>
+                    <span className="stat-pill-mini" data-tooltip="Votes"><span className="val">{stats.totalVotes}</span>🗳️</span>
+                    <span className="stat-pill-mini" data-tooltip="Users"><span className="val">{stats.uniqueVoters}</span>👥</span>
+                    <span className="stat-pill-mini live" data-tooltip="Live Now"><span className="val">{activeUsers.length}</span>🟢</span>
                 </div>
-                <div className="stat-mini" data-tooltip="Total votes cast">
-                    <span className="stat-value">{stats.totalVotes}</span>
-                    <span className="stat-label">🗳️ Votes</span>
-                </div>
-                <div className="stat-mini" data-tooltip="Unique participants">
-                    <span className="stat-value">{stats.uniqueVoters}</span>
-                    <span className="stat-label">👥 Users</span>
-                </div>
-                <div className="stat-mini" data-tooltip="Active users now">
-                    <span className="stat-value">{activeUsers.length}</span>
-                    <span className="stat-label">🟢 Live</span>
-                </div>
-            </div>
 
-            {/* Quick Actions - Always visible with labels */}
-            <div className="admin-quick-actions">
-                <button
-                    className={`quick-action-btn labeled ${isLocked ? 'locked' : 'unlocked'}`}
-                    onClick={handleToggleLock}
-                    disabled={isTogglingLock}
-                >
-                    <span className="btn-icon">{isTogglingLock ? '⏳' : isLocked ? '🔒' : '🔓'}</span>
-                    <span className="btn-label">{isLocked ? 'Locked' : 'Open'}</span>
-                </button>
-                <button
-                    className="quick-action-btn labeled spotify"
-                    onClick={handleExportSpotify}
-                    disabled={songs.length === 0 || isExportingSpotify}
-                >
-                    <span className="btn-icon">
+                {/* Quick Actions - Primary buttons */}
+                <div className="quick-actions-inline">
+                    <button
+                        className={`action-btn-mini ${isLocked ? 'locked' : 'unlocked'}`}
+                        onClick={handleToggleLock}
+                        disabled={isTogglingLock}
+                        title={isLocked ? 'Unlock playlist' : 'Lock playlist'}
+                    >
+                        {isTogglingLock ? '⏳' : isLocked ? '🔒' : '🔓'}
+                    </button>
+                    <button
+                        className="action-btn-mini spotify"
+                        onClick={handleExportSpotify}
+                        disabled={songs.length === 0 || isExportingSpotify}
+                        title="Export to Spotify"
+                    >
                         {isExportingSpotify ? '⏳' : (
-                            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="#1DB954">
                                 <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                             </svg>
                         )}
-                    </span>
-                    <span className="btn-label">Export</span>
-                </button>
+                    </button>
+                </div>
             </div>
 
             {/* 🔒 CONFIRMATION MODAL */}
@@ -1233,14 +1458,19 @@ export default function AdminPage() {
                                 <p className="no-activity">Waiting for activity...</p>
                             ) : (
                                 recentActivity.map(activity => {
-                                    const timeAgo = Math.floor((Date.now() - activity.timestamp) / 1000);
-                                    const timeStr = timeAgo < 5 ? 'now' : timeAgo < 60 ? `${timeAgo}s` : `${Math.floor(timeAgo / 60)}m`;
+                                    const timeStr = new Date(activity.timestamp).toLocaleTimeString('en-US', { 
+                                        hour: 'numeric', 
+                                        minute: '2-digit',
+                                        hour12: true,
+                                        timeZone: 'America/Chicago'
+                                    });
                                     return (
                                         <div key={activity.id} className={`activity-log-item ${activity.type}`}>
                                             <span className="activity-type-icon">
                                                 {activity.type === 'add' ? '💿' : activity.type === 'upvote' ? '👍' : '👎'}
                                             </span>
                                             <span className="activity-user">{activity.userName}</span>
+                                            {activity.userLocation && <span className="activity-location" title={`From ${activity.userLocation}`}>📍{activity.userLocation}</span>}
                                             <span className="activity-song">"{activity.songName.length > 20 ? activity.songName.slice(0, 20) + '…' : activity.songName}"</span>
                                             <span className="activity-time">{timeStr}</span>
                                             <div className="activity-actions">
@@ -1352,9 +1582,9 @@ export default function AdminPage() {
                                             <span className="song-artist">{song.artist}</span>
                                         </div>
                                         <div className="vote-controls-mini">
-                                            <button className={`vote-mini up ${adminVotes[song.id] === 1 ? 'active' : ''}`} onClick={() => handleAdminVote(song.id, 1)}>👍</button>
-                                            <span className={`score-mini ${song.score > 0 ? 'pos' : song.score < 0 ? 'neg' : ''}`}>{song.score > 0 ? '+' : ''}{song.score}</span>
                                             <button className={`vote-mini down ${adminVotes[song.id] === -1 ? 'active' : ''}`} onClick={() => handleAdminVote(song.id, -1)}>👎</button>
+                                            <span className={`score-mini ${song.score > 0 ? 'pos' : song.score < 0 ? 'neg' : ''}`}>{song.score > 0 ? '+' : ''}{song.score}</span>
+                                            <button className={`vote-mini up ${adminVotes[song.id] === 1 ? 'active' : ''}`} onClick={() => handleAdminVote(song.id, 1)}>👍</button>
                                         </div>
                                         <button className="delete-mini" onClick={() => handleRemoveSong(song.id)} disabled={isDeletingSong === song.id}>
                                             {isDeletingSong === song.id ? '⏳' : '🗑️'}
@@ -1375,7 +1605,11 @@ export default function AdminPage() {
                                 className="tool-btn import-spotify"
                                 onClick={() => setShowImportPanel(!showImportPanel)}
                             >
-                                <span className="tool-icon">📥</span>
+                                <span className="tool-icon">
+                                    <svg viewBox="0 0 24 24" width="24" height="24" fill="#1DB954">
+                                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                                    </svg>
+                                </span>
                                 <span className="tool-name">Import Spotify Playlist</span>
                             </button>
 
@@ -1426,8 +1660,46 @@ export default function AdminPage() {
                             )}
                         </div>
 
+                        {/* User Permissions */}
+                        <div className="permissions-section">
+                            <h4>User Permissions</h4>
+                            <div className="permissions-toggles">
+                                <label className="permission-toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={permissionCanVote}
+                                        onChange={(e) => handleTogglePermission('canVote', e.target.checked)}
+                                    />
+                                    <span className="toggle-label">
+                                        <span className="toggle-icon">{permissionCanVote ? '✅' : '🚫'}</span>
+                                        Allow Voting
+                                    </span>
+                                </label>
+                                <label className="permission-toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={permissionCanAddSongs}
+                                        onChange={(e) => handleTogglePermission('canAddSongs', e.target.checked)}
+                                    />
+                                    <span className="toggle-label">
+                                        <span className="toggle-icon">{permissionCanAddSongs ? '✅' : '🚫'}</span>
+                                        Allow Song Adding
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
                         {/* Quick Tools */}
                         <div className="tools-grid">
+                            <button
+                                className={`tool-btn autopilot ${autoPilotEnabled ? 'active' : ''}`}
+                                onClick={() => setAutoPilotEnabled(!autoPilotEnabled)}
+                                disabled={!timerRunning}
+                                title={timerRunning ? 'Toggle automatic surprise events' : 'Start a session first'}
+                            >
+                                <span className="tool-icon">🤖</span>
+                                <span className="tool-name">{autoPilotEnabled ? 'Auto-Pilot ON' : 'Auto-Pilot'}</span>
+                            </button>
                             <button className="tool-btn shuffle" onClick={handleShufflePlaylist} disabled={isShuffling || songs.length < 2}>
                                 <span className="tool-icon">🔀</span>
                                 <span className="tool-name">{isShuffling ? 'Shuffling...' : 'Shuffle'}</span>
@@ -1443,6 +1715,10 @@ export default function AdminPage() {
                             <button className="tool-btn karma-rain" onClick={handleKarmaRain} disabled={isRainingKarma}>
                                 <span className="tool-icon">🌧️</span>
                                 <span className="tool-name">{isRainingKarma ? 'Raining...' : 'Karma Rain'}</span>
+                            </button>
+                            <button className="tool-btn double-points" onClick={handleDoublePoints} disabled={isStartingDoublePoints || doublePointsActive}>
+                                <span className="tool-icon">⚡</span>
+                                <span className="tool-name">{doublePointsActive ? '2X ACTIVE!' : 'Double Points'}</span>
                             </button>
                             <button className="tool-btn predictions" onClick={handleRevealPredictions} disabled={isRevealingPredictions}>
                                 <span className="tool-icon">🎯</span>

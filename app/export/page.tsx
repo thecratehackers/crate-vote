@@ -265,25 +265,26 @@ export default function ExportPage() {
                         justify-content: center;
                         gap: 10px;
                         padding: 14px 28px;
-                        background: linear-gradient(135deg, rgba(211, 119, 29, 0.15) 0%, rgba(224, 159, 36, 0.1) 100%);
-                        border: 1px solid rgba(211, 119, 29, 0.4);
+                        background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
+                        border: 2px solid #d3771d;
                         border-radius: 50px;
-                        color: var(--gold, #e0a030);
-                        font-weight: 600;
-                        font-size: 1rem;
+                        color: white;
+                        font-weight: 700;
+                        font-size: 1.05rem;
                         text-decoration: none;
                         transition: all 0.3s ease;
                         width: 100%;
                         max-width: 280px;
+                        box-shadow: 0 4px 12px rgba(211, 119, 29, 0.3);
                     }
                     .back-to-home-btn:hover {
-                        transform: translateY(-2px);
-                        border-color: var(--orange-primary);
-                        box-shadow: 0 8px 25px rgba(211, 119, 29, 0.25);
-                        background: linear-gradient(135deg, rgba(211, 119, 29, 0.25) 0%, rgba(224, 159, 36, 0.15) 100%);
+                        transform: translateY(-2px) scale(1.02);
+                        border-color: #e0a030;
+                        box-shadow: 0 8px 25px rgba(211, 119, 29, 0.45);
+                        background: linear-gradient(135deg, #e0a030 0%, #d3771d 100%);
                     }
                     .back-to-home-btn .btn-icon {
-                        font-size: 1.2rem;
+                        font-size: 1.3rem;
                     }
                     .back-to-home-btn .btn-text {
                         letter-spacing: 0.5px;
@@ -311,15 +312,15 @@ export default function ExportPage() {
 
             {/* CLEAR EXPLANATION */}
             <div className="export-explainer">
-                <div className="explainer-icon">✨</div>
+                <div className="explainer-icon">🎧</div>
                 <div className="explainer-text">
-                    <strong>Only the good stuff!</strong>
-                    <span>Songs with positive votes only — no duds, no clutter.</span>
+                    <strong>Export anytime!</strong>
+                    <span>Get up to 100 songs, sorted by votes — export whenever you want.</span>
                 </div>
             </div>
 
             <div className="export-preview">
-                <p className="preview-label">👍 {tracks.length} upvoted songs ready to export</p>
+                <p className="preview-label">🎵 {tracks.length} songs ready to export</p>
 
                 <div className="track-list">
                     {tracks.map((track, index) => (
@@ -388,21 +389,21 @@ export default function ExportPage() {
                     display: inline-flex;
                     align-items: center;
                     gap: 8px;
-                    padding: 8px 16px;
-                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.15) 0%, rgba(224, 159, 36, 0.1) 100%);
-                    border: 1px solid rgba(211, 119, 29, 0.4);
+                    padding: 10px 18px;
+                    background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
+                    border: none;
                     border-radius: 50px;
-                    color: #e0a030;
+                    color: #000;
                     font-size: 0.9rem;
                     text-decoration: none;
                     transition: all 0.3s ease;
-                    font-weight: 600;
+                    font-weight: 700;
+                    box-shadow: 0 4px 15px rgba(211, 119, 29, 0.4);
                 }
                 .back-btn:hover {
-                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.25) 0%, rgba(224, 159, 36, 0.15) 100%);
-                    border-color: #d3771d;
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 15px rgba(211, 119, 29, 0.2);
+                    background: linear-gradient(135deg, #e0a030 0%, #d3771d 100%);
+                    transform: translateY(-2px) scale(1.02);
+                    box-shadow: 0 8px 25px rgba(211, 119, 29, 0.5);
                 }
                 .back-btn .back-icon {
                     font-size: 1rem;
@@ -442,8 +443,8 @@ export default function ExportPage() {
                     align-items: center;
                     gap: 12px;
                     padding: 16px 20px;
-                    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
-                    border: 1px solid rgba(34, 197, 94, 0.3);
+                    background: linear-gradient(135deg, rgba(211, 119, 29, 0.1) 0%, rgba(211, 119, 29, 0.05) 100%);
+                    border: 1px solid rgba(211, 119, 29, 0.3);
                     border-radius: 12px;
                     margin-bottom: 20px;
                 }
@@ -456,7 +457,7 @@ export default function ExportPage() {
                     gap: 2px;
                 }
                 .explainer-text strong {
-                    color: #22c55e;
+                    color: #d3771d;
                     font-size: 0.95rem;
                 }
                 .explainer-text span {
