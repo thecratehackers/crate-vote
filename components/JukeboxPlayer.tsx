@@ -192,7 +192,7 @@ export default function JukeboxPlayer({
     visitorId,
 }: JukeboxPlayerProps) {
     const [isPlaying, setIsPlaying] = useState(true);
-    const [isMuted, setIsMuted] = useState(false);
+    const [isMuted, setIsMuted] = useState(true);
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
     const [isPlayerReady, setIsPlayerReady] = useState(false);
@@ -572,6 +572,7 @@ export default function JukeboxPlayer({
             videoId: videoId,
             playerVars: {
                 autoplay: 1,
+                mute: 1,
                 controls: 1,
                 modestbranding: 1,
                 rel: 0,

@@ -22,6 +22,8 @@ import {
     setSessionPermissions,
     getYouTubeEmbed,
     setYouTubeEmbed,
+    getStreamConfig,
+    setStreamConfig,
 } from '@/lib/redis-store';
 
 // GET - Get playlist status and stats
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
         await adminHeartbeat(adminId);
     }
 
-    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity, sessionPermissions, youtubeEmbed] = await Promise.all([
+    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity, sessionPermissions, youtubeEmbed, streamConfig] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getStats(),
@@ -45,6 +47,7 @@ export async function GET(request: Request) {
         isAdmin ? getRecentActivity() : Promise.resolve([]),  // Only fetch for admins
         getSessionPermissions(),
         getYouTubeEmbed(),
+        getStreamConfig(),
     ]);
 
     // Format active users for frontend (check ban status and karma for each)
@@ -70,6 +73,7 @@ export async function GET(request: Request) {
         recentActivity: isAdmin ? recentActivity : undefined,
         permissions: sessionPermissions,
         youtubeEmbed,
+        streamConfig,
     });
 }
 
@@ -153,6 +157,16 @@ export async function POST(request: Request) {
                 const { youtubeUrl } = body;
                 await setYouTubeEmbed(youtubeUrl || null);
                 return NextResponse.json({ success: true, youtubeEmbed: youtubeUrl || null });
+            case 'setStreamConfig':
+                // Set stream platform config (YouTube / Twitch / Off)
+                const { streamPlatform, streamYoutubeUrl, streamTwitchChannel } = body;
+                const newConfig = {
+                    platform: streamPlatform || null,
+                    youtubeUrl: streamYoutubeUrl || undefined,
+                    twitchChannel: streamTwitchChannel || undefined,
+                };
+                await setStreamConfig(newConfig);
+                return NextResponse.json({ success: true, streamConfig: newConfig });
             default:
                 return NextResponse.json({ error: 'Unknown action. Please refresh and try again.' }, { status: 400 });
         }

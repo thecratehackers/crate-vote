@@ -78,7 +78,8 @@ const DELETE_WINDOW_KEY = 'hackathon:deleteWindow';  // { endTime: timestamp } -
 const DELETE_WINDOW_USED_KEY = 'hackathon:deleteWindowUsed';  // Set of visitorIds who used their delete this window
 const KARMA_RAIN_KEY = 'hackathon:karmaRain';  // { timestamp: number } - when last karma rain happened
 const SESSION_PERMISSIONS_KEY = 'hackathon:sessionPermissions';  // { canVote: boolean, canAddSongs: boolean }
-const YOUTUBE_EMBED_KEY = 'hackathon:youtubeEmbed';  // YouTube URL for live stream embed
+const YOUTUBE_EMBED_KEY = 'hackathon:youtubeEmbed';  // YouTube URL for live stream embed (legacy)
+const STREAM_CONFIG_KEY = 'hackathon:streamConfig';  // { platform, youtubeUrl?, twitchChannel? }
 const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } - when double points mode is active
 
 // VERSUS BATTLE KEYS - Head-to-head song battles
@@ -194,15 +195,15 @@ export async function getSortedSongs(): Promise<(Song & { score: number })[]> {
                 // This ensures fresh additions get visibility before being ranked
                 const aIsUnvoted = a.score === 0;
                 const bIsUnvoted = b.score === 0;
-                
+
                 if (aIsUnvoted && !bIsUnvoted) return -1; // a (unvoted) goes first
                 if (!aIsUnvoted && bIsUnvoted) return 1;  // b (unvoted) goes first
-                
+
                 // Within unvoted: newest first (most recently added at top)
                 if (aIsUnvoted && bIsUnvoted) {
                     return b.addedAt - a.addedAt; // Newest first
                 }
-                
+
                 // Within voted songs: sort by score descending, then oldest first for ties
                 if (b.score !== a.score) return b.score - a.score;
                 return a.addedAt - b.addedAt;
@@ -804,25 +805,52 @@ export async function setSessionPermissions(permissions: Partial<SessionPermissi
     }
 }
 
-// ============ YOUTUBE EMBED ============
-export async function getYouTubeEmbed(): Promise<string | null> {
+// ============ STREAM CONFIG (YouTube + Twitch) ============
+export interface StreamConfig {
+    platform: 'youtube' | 'twitch' | null;
+    youtubeUrl?: string;
+    twitchChannel?: string;
+}
+
+export async function getStreamConfig(): Promise<StreamConfig> {
     try {
-        return await redis.get<string>(YOUTUBE_EMBED_KEY);
+        const config = await redis.get<StreamConfig>(STREAM_CONFIG_KEY);
+        if (config) return config;
+        // Backward compat: check legacy YouTube key
+        const legacyYt = await redis.get<string>(YOUTUBE_EMBED_KEY);
+        if (legacyYt) return { platform: 'youtube', youtubeUrl: legacyYt };
+        return { platform: null };
     } catch (error) {
-        console.error('Failed to get YouTube embed:', error);
-        return null;
+        console.error('Failed to get stream config:', error);
+        return { platform: null };
     }
 }
 
-export async function setYouTubeEmbed(url: string | null): Promise<void> {
+export async function setStreamConfig(config: StreamConfig): Promise<void> {
     try {
-        if (url) {
-            await redis.set(YOUTUBE_EMBED_KEY, url);
+        if (config.platform) {
+            await redis.set(STREAM_CONFIG_KEY, config);
         } else {
-            await redis.del(YOUTUBE_EMBED_KEY);
+            await redis.del(STREAM_CONFIG_KEY);
         }
+        // Clear legacy key when using new config
+        await redis.del(YOUTUBE_EMBED_KEY);
     } catch (error) {
-        console.error('Failed to set YouTube embed:', error);
+        console.error('Failed to set stream config:', error);
+    }
+}
+
+// Legacy compat wrappers
+export async function getYouTubeEmbed(): Promise<string | null> {
+    const config = await getStreamConfig();
+    return config.platform === 'youtube' ? (config.youtubeUrl || null) : null;
+}
+
+export async function setYouTubeEmbed(url: string | null): Promise<void> {
+    if (url) {
+        await setStreamConfig({ platform: 'youtube', youtubeUrl: url });
+    } else {
+        await setStreamConfig({ platform: null });
     }
 }
 

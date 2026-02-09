@@ -29,13 +29,13 @@ export function middleware(request: NextRequest) {
     // Content Security Policy - allow Spotify, YouTube, and essential services
     const csp = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com https://player.twitch.tv https://embed.twitch.tv https://static.twitchcdn.net https://cdn.addevent.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "img-src 'self' data: https: blob:",
-        "media-src 'self' https://www.youtube.com",
-        "frame-src 'self' https://www.youtube.com https://open.spotify.com",
-        "connect-src 'self' https://api.spotify.com https://*.upstash.io https://api.qrserver.com",
+        "media-src 'self' https://www.youtube.com https://player.twitch.tv https://*.twitchcdn.net",
+        "frame-src 'self' https://www.youtube.com https://open.spotify.com https://player.twitch.tv https://www.twitch.tv https://embed.twitch.tv https://www.addevent.com",
+        "connect-src 'self' https://api.spotify.com https://*.upstash.io https://api.qrserver.com https://api.twitch.tv https://gql.twitch.tv https://*.twitchcdn.net https://www.addevent.com https://cdn.addevent.com",
         "worker-src 'self' blob:",
     ].join('; ');
 

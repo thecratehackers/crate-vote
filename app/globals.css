@@ -2476,7 +2476,281 @@ body::before {
   }
 }
 
-/* Username modal */
+/* ── Join Overlay (glassmorphism over live page) ── */
+.join-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: joinFadeIn 0.4s ease;
+}
+
+@keyframes joinFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.join-card {
+  background: rgba(20, 16, 12, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(211, 119, 29, 0.35);
+  border-radius: 20px;
+  padding: 36px 32px 28px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.5),
+    0 0 60px rgba(211, 119, 29, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: joinCardSlide 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes joinCardSlide {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.join-logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  display: block;
+  filter: drop-shadow(0 2px 8px rgba(211, 119, 29, 0.3));
+}
+
+.join-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+  line-height: 1.25;
+}
+
+.join-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+  line-height: 1.4;
+}
+
+.join-name-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.join-name-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: var(--text-primary);
+  text-align: center;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.join-name-input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.join-name-input::placeholder {
+  color: var(--text-muted);
+}
+
+.join-go-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s, box-shadow 0.2s;
+  letter-spacing: 0.3px;
+}
+
+.join-go-btn:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 4px 20px rgba(211, 119, 29, 0.35);
+}
+
+.join-go-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.join-rsvp-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+  margin-top: 4px;
+}
+
+.join-rsvp-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.join-rsvp-btn {
+  display: inline-block;
+  padding: 10px 24px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+
+.join-rsvp-btn:hover {
+  background: rgba(211, 119, 29, 0.15);
+  border-color: var(--orange-primary);
+  color: var(--orange-primary);
+  transform: scale(1.03);
+}
+
+/* ── Rules Popover (from ℹ️ icon) ── */
+.rules-popover-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.rules-info-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.rules-info-btn:hover {
+  opacity: 1;
+}
+
+.rules-popover {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background: rgba(20, 16, 12, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(211, 119, 29, 0.3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  min-width: 200px;
+  z-index: 999;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: popoverIn 0.2s ease;
+}
+
+@keyframes popoverIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.rules-popover-arrow {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  background: rgba(20, 16, 12, 0.95);
+  border-left: 1px solid rgba(211, 119, 29, 0.3);
+  border-top: 1px solid rgba(211, 119, 29, 0.3);
+}
+
+.rules-popover h4 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.rules-popover ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.rules-popover ul li {
+  padding: 4px 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.rules-popover-close {
+  width: 100%;
+  padding: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--accent-gradient);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.rules-popover-close:hover {
+  transform: scale(1.03);
+}
+
+@media (max-width: 640px) {
+  .join-card {
+    padding: 28px 20px 22px;
+    margin: 0 12px;
+  }
+
+  .join-title {
+    font-size: 1.15rem;
+  }
+}
+
+/* Username modal (legacy, kept for profile editing) */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -5720,6 +5994,19 @@ body::before {
   color: var(--text-muted);
 }
 
+.stat-pill.rsvp-pill {
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 4px 8px;
+}
+
+.stat-pill.rsvp-pill:hover {
+  border-color: var(--orange-primary, #d3771d);
+  background: rgba(255, 107, 0, 0.1);
+  transform: scale(1.1);
+}
+
 .user-pill {
   display: inline-flex;
   align-items: center;
@@ -8177,102 +8464,13 @@ input:disabled {
   margin: 8px 0 0 0;
 }
 
-/* YouTube Embed Display (Frontend) - Floating Bottom-Left Widget */
-.youtube-embed-container {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  width: 280px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #000;
-  border: 2px solid var(--orange-primary);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 4px 20px rgba(255, 107, 0, 0.3);
-  z-index: 1000;
-  transition: all 0.3s ease;
-}
+/* YouTube Embed Display (Frontend) - OLD floating styles removed.
+   Inline styles are defined later in the file (search: "YOUTUBE LIVE STREAM EMBED") */
 
-.youtube-embed-container.minimized {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  cursor: pointer;
-}
 
-.youtube-embed-container.minimized .youtube-embed-wrapper,
-.youtube-embed-container.minimized .youtube-close-btn {
-  display: none;
-}
+/* Old floating YouTube widget styles have been removed.
+   All YouTube embed styles are now defined in the premium inline section below. */
 
-.youtube-embed-container.minimized .youtube-restore-btn {
-  display: flex;
-}
-
-.youtube-embed-controls {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: flex;
-  gap: 4px;
-  z-index: 10;
-}
-
-.youtube-close-btn,
-.youtube-minimize-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.youtube-close-btn:hover,
-.youtube-minimize-btn:hover {
-  background: rgba(255, 107, 0, 0.8);
-  transform: scale(1.1);
-}
-
-.youtube-restore-btn {
-  display: none;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  background: linear-gradient(135deg, var(--orange-primary), #ff4500);
-}
-
-.youtube-embed-wrapper {
-  position: relative;
-  width: 100%;
-  padding-bottom: 56.25%;
-  /* 16:9 aspect ratio */
-}
-
-.youtube-embed-wrapper iframe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-
-/* Mobile: smaller and more compact */
-@media (max-width: 480px) {
-  .youtube-embed-container {
-    width: 200px;
-    bottom: 10px;
-    left: 10px;
-  }
-}
 
 /* Import Spotify Playlist Panel */
 .import-section {
@@ -9650,40 +9848,123 @@ input:disabled {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   📺 YOUTUBE LIVE STREAM EMBED
-   Premium glassmorphism container with responsive 16:9 aspect ratio
+   📺 LIVE STREAM HOST — Dual-mode: PiP (bottom-right) ↔ Expanded (sticky top)
+   Supports YouTube + Twitch
    ═══════════════════════════════════════════════════════════════════════ */
 
-.youtube-embed-container {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+/* ── Shared base ── */
+.stream-host {
   border-radius: var(--radius-lg);
-  padding: 12px;
-  margin: 16px 0;
-  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(255, 68, 68, 0.1);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 900;
 }
 
-.youtube-embed-header {
+/* Twitch variant — purple accents */
+.stream-host.twitch-host {
+  border-color: rgba(145, 70, 255, 0.3);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(145, 70, 255, 0.1);
+}
+
+/* ── PiP mode: floating bottom-right, compact ── */
+.stream-host.pip-mode {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 300px;
+  border-radius: 12px;
+  z-index: 1000;
+  cursor: default;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 16px rgba(255, 68, 68, 0.15);
+}
+
+.stream-host.twitch-host.pip-mode {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 16px rgba(145, 70, 255, 0.15);
+}
+
+.stream-host.pip-mode:hover {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(255, 68, 68, 0.25);
+  transform: translateY(-2px);
+}
+
+.stream-host.twitch-host.pip-mode:hover {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(145, 70, 255, 0.25);
+}
+
+/* ── Expanded mode: sticky top-center ── */
+.stream-host.expanded-mode {
+  position: sticky;
+  top: 0;
+  max-width: 640px;
+  margin: 12px auto;
+  z-index: 950;
+  border: 1px solid rgba(255, 68, 68, 0.35);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(255, 68, 68, 0.12);
+}
+
+/* Twitch expanded is wider to fit player + chat side-by-side */
+.stream-host.twitch-host.expanded-mode {
+  max-width: 960px;
+  border-color: rgba(145, 70, 255, 0.35);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(145, 70, 255, 0.12);
+}
+
+/* ── Header bar ── */
+.stream-host-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding: 0 4px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.5);
 }
 
-.live-stream-badge {
+.pip-mode .stream-host-header {
+  padding: 6px 10px;
+}
+
+.live-host-badge {
   font-family: 'Rubik', sans-serif;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #ff4444;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   animation: pulse-live 2s ease-in-out infinite;
+}
+
+.live-host-badge.twitch-badge {
+  color: #9146ff;
+}
+
+.live-host-badge.replay-badge {
+  color: #ff9800;
+  animation: none;
+  opacity: 0.85;
+}
+
+.expanded-mode .live-host-badge {
+  font-size: 0.85rem;
 }
 
 @keyframes pulse-live {
@@ -9694,120 +9975,298 @@ input:disabled {
   }
 
   50% {
-    opacity: 0.7;
+    opacity: 0.6;
   }
 }
 
-.youtube-controls {
+.stream-host-controls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
-.youtube-minimize-btn {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  padding: 6px 12px;
+.stream-toggle-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  padding: 4px 10px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   transition: all 0.2s;
-  font-weight: 600;
+  line-height: 1;
 }
 
-.youtube-minimize-btn:hover {
-  background: var(--bg-elevated);
+.stream-toggle-btn:hover {
+  background: rgba(255, 107, 0, 0.4);
   border-color: var(--orange-primary);
-  color: var(--orange-primary);
-  transform: translateY(-1px);
+  transform: scale(1.05);
 }
 
-/* Responsive 16:9 aspect ratio container */
-.youtube-responsive-wrapper {
+.twitch-host .stream-toggle-btn:hover {
+  background: rgba(145, 70, 255, 0.4);
+  border-color: #9146ff;
+}
+
+/* ── Video container (16:9 aspect ratio) ── */
+.stream-host-video {
   position: relative;
   padding-bottom: 56.25%;
-  /* 16:9 aspect ratio */
+  /* 16:9 */
   height: 0;
   overflow: hidden;
-  border-radius: var(--radius-md);
   background: #000;
 }
 
-.youtube-responsive-wrapper iframe {
+.stream-host-video iframe {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   border: none;
-  border-radius: var(--radius-md);
 }
 
-/* Minimized state - compact bar */
-.youtube-minimized-bar {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
-  margin: 16px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-sm);
+
+.twitch-expanded-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 0;
 }
 
-.youtube-minimized-bar span {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  font-weight: 500;
+.twitch-chat-container {
+  background: #18181b;
+  border-left: 1px solid rgba(145, 70, 255, 0.2);
 }
 
-.youtube-restore-btn {
-  background: var(--accent-gradient);
+.twitch-chat-container iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
   border: none;
-  color: white;
-  padding: 8px 16px;
-  border-radius: 6px;
+}
+
+/* ── PiP "Tap for sound" overlay ── */
+.pip-expand-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.3));
+  border: none;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s ease;
+  border-radius: 0 0 12px 12px;
+}
+
+.pip-expand-overlay:hover {
+  background: linear-gradient(to top, rgba(255, 107, 0, 0.35), rgba(0, 0, 0, 0.4));
+}
+
+.pip-expand-overlay.twitch-pip-overlay:hover {
+  background: linear-gradient(to top, rgba(145, 70, 255, 0.35), rgba(0, 0, 0, 0.4));
+}
+
+.pip-sound-prompt {
   font-family: 'Rubik', sans-serif;
-  font-weight: 600;
-  font-size: 0.875rem;
-  transition: all 0.2s;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  animation: pip-pulse 2s ease-in-out infinite;
+}
+
+@keyframes pip-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+/* ── RSVP Button in stream header ── */
+.stream-rsvp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 107, 0, 0.15);
+  border: 1px solid rgba(255, 107, 0, 0.3);
+  color: var(--orange-primary, #d3771d);
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-decoration: none;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
 }
 
-.youtube-restore-btn:hover {
-  background: var(--accent-gradient-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-glow);
+.stream-rsvp-btn:hover {
+  background: rgba(255, 107, 0, 0.3);
+  border-color: var(--orange-primary, #d3771d);
+  transform: scale(1.05);
 }
 
-/* Mobile responsive */
+.stream-rsvp-btn.twitch-rsvp {
+  background: rgba(145, 70, 255, 0.15);
+  border-color: rgba(145, 70, 255, 0.3);
+  color: #b388ff;
+}
+
+.stream-rsvp-btn.twitch-rsvp:hover {
+  background: rgba(145, 70, 255, 0.3);
+  border-color: #9146ff;
+}
+
+/* ── Mobile responsive ── */
 @media (max-width: 640px) {
-  .youtube-embed-container {
-    margin: 12px 0;
-    padding: 10px;
+
+  /* PiP: wider on mobile for better touch & visibility */
+  .stream-host.pip-mode {
+    width: 55vw;
+    max-width: 260px;
+    bottom: 12px;
+    right: 12px;
   }
 
-  .live-stream-badge {
-    font-size: 0.75rem;
+  .pip-expand-overlay {
+    height: 52px;
   }
 
-  .youtube-minimized-bar {
-    padding: 10px 12px;
+  .pip-sound-prompt {
+    font-size: 0.8rem;
   }
 
-  .youtube-restore-btn {
-    padding: 6px 12px;
-    font-size: 0.75rem;
+  /* Expanded: full-width, no side margins */
+  .stream-host.expanded-mode {
+    max-width: 100%;
+    margin: 8px 0;
+    border-radius: var(--radius-md);
   }
+
+  .stream-host.twitch-host.expanded-mode {
+    max-width: 100%;
+  }
+
+  /* Stack player + chat on mobile */
+  .twitch-expanded-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .twitch-chat-container {
+    border-left: none;
+    border-top: 1px solid rgba(145, 70, 255, 0.2);
+  }
+
+  .twitch-chat-container iframe {
+    min-height: 300px;
+  }
+
+  .live-host-badge {
+    font-size: 0.65rem;
+  }
+
+  .stream-rsvp-btn {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+  }
+}
+
+@media (max-width: 400px) {
+  .stream-host.pip-mode {
+    width: 60vw;
+    max-width: 220px;
+    bottom: 8px;
+    right: 8px;
+  }
+}
+
+/* ── Admin: Stream Platform Toggle ── */
+.stream-platform-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.platform-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 2px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: 'Rubik', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.platform-btn:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.platform-btn.active.youtube-active {
+  border-color: #ff4444;
+  background: rgba(255, 68, 68, 0.15);
+  color: #ff4444;
+  box-shadow: 0 0 12px rgba(255, 68, 68, 0.15);
+}
+
+.platform-btn.active.twitch-active {
+  border-color: #9146ff;
+  background: rgba(145, 70, 255, 0.15);
+  color: #9146ff;
+  box-shadow: 0 0 12px rgba(145, 70, 255, 0.15);
+}
+
+.stream-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 👁️ Admin local stream hide toggle */
+.stream-hide-toggle {
+  width: 100%;
+  margin-top: 4px;
+  justify-content: center;
+  border: 1px dashed var(--border-color) !important;
+  opacity: 0.8;
+  transition: all 0.2s ease;
+}
+
+.stream-hide-toggle:hover {
+  opacity: 1;
+  border-color: var(--orange) !important;
+}
+
+.stream-hide-toggle.active {
+  border-color: var(--orange) !important;
+  border-style: solid !important;
+  background: rgba(255, 107, 0, 0.08) !important;
+  opacity: 1;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   📺 YOUTUBE ADMIN CONTROLS - Admin panel UI for setting stream URL
+   📺 STREAM ADMIN CONTROLS - Admin panel UI for setting stream URL
    ═══════════════════════════════════════════════════════════════════════ */
 
 .youtube-embed-control {
@@ -9881,4 +10340,246 @@ input:disabled {
 
 .tool-btn.danger-subtle:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   🎧 DJ SIGNUP GATE — Professional DJ opt-in before participation
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.dj-signup-gate {
+  max-width: 440px;
+  text-align: center;
+  animation: gateSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes gateSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dj-signup-gate h2 {
+  font-family: 'Rubik', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 12px 0 8px;
+}
+
+.gate-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 16px;
+  padding: 0 8px;
+}
+
+/* ── Event Info Badge ── */
+.gate-event-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.gate-event-badge {
+  font-family: 'Rubik', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--orange-primary);
+}
+
+.gate-event-time {
+  font-family: 'Rubik', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+/* ── AddEvent Embed Container ── */
+.gate-addevent-container {
+  margin-bottom: 16px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+/* Placeholder (remove once AddEvent embed code is added) */
+.gate-addevent-placeholder {
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.gate-addevent-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.gate-addevent-placeholder p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.gate-addevent-btn {
+  display: inline-block;
+  padding: 10px 24px;
+  background: var(--accent-gradient);
+  color: white;
+  font-family: 'Rubik', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-decoration: none;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.gate-addevent-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-glow);
+}
+
+.gate-addevent-hint {
+  color: var(--text-muted) !important;
+  font-size: 0.7rem !important;
+  font-style: italic;
+  margin-top: 10px !important;
+  opacity: 0.6;
+}
+
+/* ── AddEvent iframe (when embedded) ── */
+.gate-addevent-container iframe {
+  width: 100%;
+  min-height: 320px;
+  border: none;
+  background: var(--bg-tertiary);
+}
+
+/* ── DJ Confirmation Checkbox ── */
+.gate-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(249, 115, 22, 0.06);
+  border: 1px solid rgba(249, 115, 22, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  margin-bottom: 16px;
+}
+
+.gate-checkbox-label:hover {
+  border-color: rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.gate-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border: 2px solid rgba(249, 115, 22, 0.4);
+  border-radius: 5px;
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  position: relative;
+  margin-top: 2px;
+  transition: all 0.2s;
+}
+
+.gate-checkbox:checked {
+  background: var(--orange-primary);
+  border-color: var(--orange-primary);
+}
+
+.gate-checkbox:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.gate-checkbox-label span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+/* ── Unlock Button ── */
+.gate-unlock-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--accent-gradient);
+  color: white;
+  font-family: 'Rubik', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s;
+  letter-spacing: 0.5px;
+}
+
+.gate-unlock-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+.gate-unlock-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.gate-fine-print {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin: 12px 0 0;
+  opacity: 0.6;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .dj-signup-gate {
+    max-width: 100%;
+    margin: 0 12px;
+  }
+
+  .dj-signup-gate h2 {
+    font-size: 1.3rem;
+  }
+
+  .gate-event-info {
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+
+  .gate-checkbox-label span {
+    font-size: 0.78rem;
+  }
 }

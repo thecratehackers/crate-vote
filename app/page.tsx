@@ -68,13 +68,21 @@ const extractYouTubeId = (input: string): string | null => {
         const srcUrl = iframeMatch[1];
         const embedMatch = srcUrl.match(/youtube\.com\/embed\/([^?&"']+)/);
         if (embedMatch) return embedMatch[1];
+        // Playlist embed: videoseries?list=PLAYLIST_ID
+        const playlistEmbedMatch = srcUrl.match(/youtube\.com\/embed\/videoseries\?list=([^&"']+)/);
+        if (playlistEmbedMatch) return `playlist:${playlistEmbedMatch[1]}`;
     }
 
-    // Check if it's a regular YouTube URL
+    // Check if it's a playlist URL (must check before video patterns)
+    const playlistMatch = input.match(/youtube\.com\/playlist\?list=([^&?/\s]+)/);
+    if (playlistMatch) return `playlist:${playlistMatch[1]}`;
+
+    // Check if it's a regular YouTube URL (video or live)
     const urlPatterns = [
         /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/\s]+)/,
         /youtube\.com\/embed\/([^?&/\s]+)/,
-        /youtube\.com\/v\/([^?&/\s]+)/
+        /youtube\.com\/v\/([^?&/\s]+)/,
+        /youtube\.com\/live\/([^?&/\s]+)/
     ];
 
     for (const pattern of urlPatterns) {
@@ -83,6 +91,15 @@ const extractYouTubeId = (input: string): string | null => {
     }
 
     return null;
+};
+
+// Build the correct YouTube embed src for videos vs playlists
+const getYouTubeEmbedSrc = (embedId: string): string => {
+    if (embedId.startsWith('playlist:')) {
+        const listId = embedId.replace('playlist:', '');
+        return `https://www.youtube.com/embed/videoseries?list=${listId}&autoplay=1&mute=1&enablejsapi=1`;
+    }
+    return `https://www.youtube.com/embed/${embedId}?autoplay=1&mute=1&enablejsapi=1`;
 };
 
 
@@ -161,6 +178,10 @@ export default function HomePage() {
     const [visitorId, setVisitorId] = useState<string | null>(null);
     const [isBanned, setIsBanned] = useState(false);
 
+    // 🔑 ADMIN MODE - Bypass participation gates when admin is on front page
+    const [isAdminOnFrontPage, setIsAdminOnFrontPage] = useState(false);
+    const [adminKey, setAdminKey] = useState<string>('');
+
     // 🍞 TOAST NOTIFICATIONS
     const toast = useToast();
 
@@ -217,9 +238,13 @@ export default function HomePage() {
     const [winnerSongName, setWinnerSongName] = useState<string>('');
     const previousTimerRunning = useRef<boolean>(false);
 
-    // 📺 YOUTUBE EMBED - Admin-controlled live stream
+    // 📺 STREAM EMBED - Admin-controlled live stream (YouTube or Twitch)
+    const [streamPlatform, setStreamPlatform] = useState<'youtube' | 'twitch' | null>(null);
     const [youtubeEmbed, setYoutubeEmbed] = useState<string | null>(null);
-    const [youtubeMinimized, setYoutubeMinimized] = useState(false);
+    const [twitchChannel, setTwitchChannel] = useState<string | null>(null);
+    const [streamMinimized, setStreamMinimized] = useState(true); // Start as PiP
+    const [twitchParent, setTwitchParent] = useState('localhost');
+    const [hideStreamLocally, setHideStreamLocally] = useState(false); // Admin screen-share mirror prevention
     const youtubePlayerRef = useRef<HTMLIFrameElement | null>(null);
     const youtubeWasUnmuted = useRef<boolean>(false);  // Track if user had audio on
 
@@ -337,7 +362,11 @@ export default function HomePage() {
     const [userAvatar, setUserAvatar] = useState<string>('🎧'); // Default avatar
     const [avatarInput, setAvatarInput] = useState<string>('🎧');
     const [userColor, setUserColor] = useState<string>('#ffffff');
-    const [colorInput, setColorInput] = useState<string>('#ffffff');
+    const [colorInput, setColorInput] = useState<string>(() => {
+        const colors = ['#ffffff', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#a855f7'];
+        return colors[Math.floor(Math.random() * colors.length)];
+    });
+    const [showRulesPopover, setShowRulesPopover] = useState(false);
     const [userLocation, setUserLocation] = useState<string | null>(null);  // User's location for tracking
 
     // Color options for user name
@@ -427,6 +456,33 @@ export default function HomePage() {
             const id = await getVisitorId();
             setVisitorId(id);
 
+            // Set Twitch parent domain for embed validation
+            setTwitchParent(window.location.hostname);
+
+            // 🔑 Check for admin session (set by admin page login)
+            try {
+                const storedAdminKey = sessionStorage.getItem('crate-admin-key');
+                if (storedAdminKey) {
+                    // Validate the key against the backend
+                    const authRes = await fetch('/api/admin/auth', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: storedAdminKey }),
+                    });
+                    const authData = await authRes.json();
+                    if (authData.success) {
+                        setIsAdminOnFrontPage(true);
+                        setAdminKey(storedAdminKey);
+                        console.log('🔑 Admin mode activated on front page');
+                    } else {
+                        // Invalid key, clean up
+                        sessionStorage.removeItem('crate-admin-key');
+                    }
+                }
+            } catch (e) {
+                // sessionStorage not available or auth failed — not admin
+            }
+
             // Load saved username and avatar from localStorage
             const savedName = localStorage.getItem('crate-username');
             const savedAvatar = localStorage.getItem('crate-avatar');
@@ -450,6 +506,11 @@ export default function HomePage() {
             }
             if (savedLocation) {
                 setUserLocation(savedLocation);
+            }
+            // Check if admin wants to hide the stream embed on this screen
+            const hideStream = localStorage.getItem('crate-admin-hide-stream');
+            if (hideStream === 'true') {
+                setHideStreamLocally(true);
             }
             if (!savedName) {
                 setShowUsernameModal(true);
@@ -609,11 +670,25 @@ export default function HomePage() {
                 setPermissions(data.permissions);
             }
 
-            // 📺 Sync YouTube embed URL - extract video ID
-            if (data.youtubeEmbed !== undefined) {
-                // Extract video ID from various URL formats (full URLs, embed codes, etc.)
+            // 📺 Sync stream config (YouTube / Twitch)
+            if (data.streamConfig) {
+                setStreamPlatform(data.streamConfig.platform || null);
+                if (data.streamConfig.platform === 'youtube' && data.streamConfig.youtubeUrl) {
+                    const videoId = extractYouTubeId(data.streamConfig.youtubeUrl);
+                    setYoutubeEmbed(videoId);
+                    setTwitchChannel(null);
+                } else if (data.streamConfig.platform === 'twitch' && data.streamConfig.twitchChannel) {
+                    setTwitchChannel(data.streamConfig.twitchChannel);
+                    setYoutubeEmbed(null);
+                } else {
+                    setYoutubeEmbed(null);
+                    setTwitchChannel(null);
+                }
+            } else if (data.youtubeEmbed !== undefined) {
+                // Legacy compat
                 const videoId = data.youtubeEmbed ? extractYouTubeId(data.youtubeEmbed) : null;
                 setYoutubeEmbed(videoId);
+                setStreamPlatform(videoId ? 'youtube' : null);
             }
 
             // ⚔️ Handle Versus Battle data
@@ -897,11 +972,13 @@ export default function HomePage() {
         };
 
         if (jukeboxState) {
-            // Jukebox opened - record current state and mute
-            // We check if user had unmuted by testing if they interacted
-            // For simplicity, assume they may have unmuted and restore on close
+            // Jukebox opened - record current state and mute YouTube stream
             youtubeWasUnmuted.current = true; // Assume user might have audio on
             postMessage('mute');
+            // Auto-minimize stream to PiP so jukebox has focus
+            if (!streamMinimized) {
+                setStreamMinimized(true);
+            }
         } else if (youtubeWasUnmuted.current) {
             // Jukebox closed - restore audio if user had it on
             postMessage('unMute');
@@ -1101,7 +1178,7 @@ export default function HomePage() {
 
     // Add song with loading feedback
     const handleAddSong = async (track: SearchResult) => {
-        if (!visitorId || !username) {
+        if (!visitorId || (!username && !isAdminOnFrontPage)) {
             setMessage({ type: 'error', text: 'Please enter your name first' });
             return;
         }
@@ -1116,8 +1193,9 @@ export default function HomePage() {
                 headers: {
                     'Content-Type': 'application/json',
                     'x-visitor-id': visitorId,
+                    ...(isAdminOnFrontPage && adminKey ? { 'x-admin-key': adminKey } : {}),
                 },
-                body: JSON.stringify({ ...track, addedByName: username, addedByAvatar: userAvatar, addedByColor: userColor, addedByLocation: userLocation || undefined }),
+                body: JSON.stringify({ ...track, addedByName: username || 'Admin', addedByAvatar: userAvatar, addedByColor: userColor, addedByLocation: userLocation || undefined }),
             });
 
             const data = await res.json();
@@ -1539,8 +1617,9 @@ export default function HomePage() {
 
     // Can user participate?
     // Session must be active (timer running) to participate
+    // Admins bypass all gates (lock, ban, session, permissions)
     const isSessionActive = timerRunning && timerRemaining > 0;
-    const canParticipate = !isBanned && !isLocked && !!username && isSessionActive;
+    const canParticipate = isAdminOnFrontPage || (!isBanned && !isLocked && !!username && isSessionActive);
 
     // Loading state - show skeleton UI
     if (isLoading || !visitorId) {
@@ -1566,55 +1645,7 @@ export default function HomePage() {
         );
     }
 
-    // Username modal - condensed for stream viewing
-    if (showUsernameModal) {
-        return (
-            <div className="modal-overlay">
-                <div className="modal-card welcome-modal compact">
-                    <img src="/logo.png" alt="Logo" className="welcome-logo-small" />
-                    <h2>🎧 Join the Hackathon!</h2>
-
-                    {/* Compact name input */}
-                    <div className="name-input-section compact">
-                        <input
-                            type="text"
-                            placeholder="Your name"
-                            value={usernameInput}
-                            onChange={(e) => setUsernameInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSetUsername()}
-                            autoFocus
-                            maxLength={20}
-                            disabled={isSavingUsername}
-                            style={{ color: colorInput }}
-                        />
-                        {/* Color picker row */}
-                        <div className="color-picker-row">
-                            {COLOR_OPTIONS.map((color) => (
-                                <span
-                                    key={color}
-                                    className={`color-dot ${colorInput === color ? 'selected' : ''}`}
-                                    style={{ background: color }}
-                                    onClick={() => setColorInput(color)}
-                                    role="button"
-                                    tabIndex={0}
-                                />
-                            ))}
-                        </div>
-                        <button onClick={handleSetUsername} disabled={!usernameInput.trim() || isSavingUsername}>
-                            {isSavingUsername ? 'Joining...' : "Let's Go! 🚀"}
-                        </button>
-                    </div>
-
-                    {/* Lively rules with emojis */}
-                    <div className="rules-compact lively">
-                        <span className="rule-item">💿 5 songs</span>
-                        <span className="rule-item">🗳️ 10 votes</span>
-                        <span className="rule-item">🏆 Top 3 wins!</span>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    // Username modal is now rendered as an overlay inside the main return (see below)
 
     // Export to Spotify - redirect to export page for OAuth flow
     const handleExport = () => {
@@ -1625,6 +1656,51 @@ export default function HomePage() {
 
     return (
         <div className="stream-layout">
+
+            {/* 🔒 JOIN OVERLAY — glassmorphism over live page */}
+            {showUsernameModal && (
+                <div className="join-overlay">
+                    <div className="join-card">
+                        <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
+                        <h2 className="join-title">Join the Crate Hackers Hackathon</h2>
+                        <p className="join-subtitle">Pick songs, vote, and collaborate live with DJs worldwide.
+                            Every Tuesday at 8 PM ET.</p>
+
+                        <div className="join-name-section">
+                            <input
+                                type="text"
+                                className="join-name-input"
+                                placeholder="Your name"
+                                value={usernameInput}
+                                onChange={(e) => setUsernameInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleSetUsername()}
+                                autoFocus
+                                maxLength={20}
+                                disabled={isSavingUsername}
+                            />
+                            <button
+                                className="join-go-btn"
+                                onClick={handleSetUsername}
+                                disabled={!usernameInput.trim() || isSavingUsername}
+                            >
+                                {isSavingUsername ? 'Joining...' : "Let's Go! 🚀"}
+                            </button>
+                        </div>
+
+                        <div className="join-rsvp-section">
+                            <p className="join-rsvp-label">📅 RSVP — Tuesdays at 8 PM ET</p>
+                            <a
+                                href="https://www.addevent.com/event/Kc25151651"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="join-rsvp-btn"
+                            >
+                                RSVP — Get on the List
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 🎉 CONFETTI CELEBRATION OVERLAY */}
             {showConfetti && (
@@ -1763,6 +1839,28 @@ export default function HomePage() {
                     <Link href="/admin" className="admin-link-subtle" title="Admin Panel">
                         ⚙️
                     </Link>
+                    {/* Rules info popover */}
+                    <div className="rules-popover-wrapper">
+                        <button
+                            className="admin-link-subtle rules-info-btn"
+                            title="How to play"
+                            onClick={() => setShowRulesPopover(!showRulesPopover)}
+                        >
+                            ℹ️
+                        </button>
+                        {showRulesPopover && (
+                            <div className="rules-popover">
+                                <div className="rules-popover-arrow" />
+                                <h4>🎶 How to Play</h4>
+                                <ul>
+                                    <li>💿 Add up to 5 songs</li>
+                                    <li>🗳️ 10 upvotes & 10 downvotes</li>
+                                    <li>🏆 Top 3 songs win!</li>
+                                </ul>
+                                <button className="rules-popover-close" onClick={() => setShowRulesPopover(false)}>Got it!</button>
+                            </div>
+                        )}
+                    </div>
                     {/* LIVE badge integrated into header with viewer count */}
                     {timerRunning && (
                         <span className="live-badge-inline">
@@ -1807,6 +1905,15 @@ export default function HomePage() {
                             )}
                         </div>
                     )}
+                    <a
+                        href="https://www.addevent.com/event/Kc25151651"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="stat-pill rsvp-pill"
+                        data-tooltip="RSVP — Live every Tuesday at 8 PM ET"
+                    >
+                        📅
+                    </a>
                     <span className="stat-pill capacity" data-tooltip={`Playlist: ${playlistStats.current} of ${playlistStats.max} songs`} tabIndex={0}>
                         {playlistStats.current}/{playlistStats.max}
                     </span>
@@ -1866,7 +1973,119 @@ export default function HomePage() {
                 </div>
             )}
 
-            {/* 🏆 LEADERBOARD PANEL - Collapsible */}
+            {/* 📺 LIVE STREAM HOST - Dual mode: PiP (bottom-right) / Expanded (sticky top) */}
+            {/* YouTube Mode */}
+            {!hideStreamLocally && streamPlatform === 'youtube' && youtubeEmbed && (
+                <div className={`stream-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
+                    <div className="stream-host-header">
+                        <span className="live-host-badge replay-badge">🎬 REPLAY</span>
+                        <div className="stream-host-controls">
+                            {!streamMinimized && (
+                                <a
+                                    href="https://www.addevent.com/event/Kc25151651"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="stream-rsvp-btn"
+                                    title="RSVP for the next event"
+                                >
+                                    📅 RSVP
+                                </a>
+                            )}
+                            <button
+                                className="stream-toggle-btn"
+                                onClick={() => setStreamMinimized(!streamMinimized)}
+                                title={streamMinimized ? 'Expand stream' : 'Minimize to PiP'}
+                            >
+                                {streamMinimized ? '⬜ ᴇxᴘᴀɴᴅ' : '➖'}
+                            </button>
+                        </div>
+                    </div>
+                    <div className="stream-host-video">
+                        <iframe
+                            ref={youtubePlayerRef}
+                            src={getYouTubeEmbedSrc(youtubeEmbed)}
+                            title="Live Host Stream"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        />
+                    </div>
+                    {/* PiP tap-to-expand overlay */}
+                    {streamMinimized && (
+                        <button
+                            className="pip-expand-overlay"
+                            onClick={() => setStreamMinimized(false)}
+                            aria-label="Expand and unmute stream"
+                        >
+                            <span className="pip-sound-prompt">🔊 Tap for sound</span>
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* Twitch Mode */}
+            {!hideStreamLocally && streamPlatform === 'twitch' && twitchChannel && (
+                <div className={`stream-host twitch-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
+                    <div className="stream-host-header twitch-header">
+                        <span className="live-host-badge twitch-badge">🟣 LIVE</span>
+                        <div className="stream-host-controls">
+                            {!streamMinimized && (
+                                <a
+                                    href="https://www.addevent.com/event/Kc25151651"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="stream-rsvp-btn twitch-rsvp"
+                                    title="RSVP for the next event"
+                                >
+                                    📅 RSVP
+                                </a>
+                            )}
+                            <button
+                                className="stream-toggle-btn"
+                                onClick={() => setStreamMinimized(!streamMinimized)}
+                                title={streamMinimized ? 'Expand stream' : 'Minimize to PiP'}
+                            >
+                                {streamMinimized ? '⬜ ᴇxᴘᴀɴᴅ' : '➖'}
+                            </button>
+                        </div>
+                    </div>
+                    <div className={`twitch-content ${streamMinimized ? '' : 'twitch-expanded-layout'}`}>
+                        <div className="stream-host-video">
+                            <iframe
+                                src={`https://player.twitch.tv/?channel=${twitchChannel}&parent=${twitchParent}&muted=true`}
+                                title="Twitch Stream"
+                                frameBorder="0"
+                                allowFullScreen
+                                scrolling="no"
+                            />
+                        </div>
+                        {/* Chat only in expanded mode */}
+                        {!streamMinimized && (
+                            <div className="twitch-chat-container">
+                                <iframe
+                                    src={`https://www.twitch.tv/embed/${twitchChannel}/chat?parent=${twitchParent}&darkpopout`}
+                                    title="Twitch Chat"
+                                    frameBorder="0"
+                                    scrolling="no"
+                                />
+                            </div>
+                        )}
+                    </div>
+                    {/* PiP tap-to-expand overlay */}
+                    {streamMinimized && (
+                        <button
+                            className="pip-expand-overlay twitch-pip-overlay"
+                            onClick={() => setStreamMinimized(false)}
+                            aria-label="Expand and unmute stream"
+                        >
+                            <span className="pip-sound-prompt">🔊 Tap for sound</span>
+                        </button>
+                    )}
+                </div>
+            )}
+
+
+
             {showLeaderboard && (
                 <div className="leaderboard-panel">
                     <div className="leaderboard-header">
@@ -1916,48 +2135,6 @@ export default function HomePage() {
             )}
 
             {/* 🎧 YOUR REQUESTS - REMOVED: Now using in-playlist highlighting instead */}
-
-            {/* 📺 YOUTUBE LIVE STREAM EMBED - Admin-controlled live video */}
-            {youtubeEmbed && !youtubeMinimized && (
-                <div className="youtube-embed-container">
-                    <div className="youtube-embed-header">
-                        <span className="live-stream-badge">🔴 LIVE STREAM</span>
-                        <div className="youtube-controls">
-                            <button
-                                className="youtube-minimize-btn"
-                                onClick={() => setYoutubeMinimized(true)}
-                                title="Minimize stream"
-                            >
-                                ▼
-                            </button>
-                        </div>
-                    </div>
-                    <div className="youtube-responsive-wrapper">
-                        <iframe
-                            ref={youtubePlayerRef}
-                            src={`https://www.youtube.com/embed/${youtubeEmbed}?autoplay=1&mute=1&enablejsapi=1`}
-                            title="Live Stream"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                        />
-                    </div>
-                </div>
-            )}
-
-            {/* 📺 MINIMIZED YOUTUBE - Show restore button when minimized */}
-            {youtubeEmbed && youtubeMinimized && (
-                <div className="youtube-minimized-bar">
-                    <span>🔴 Stream minimized</span>
-                    <button
-                        className="youtube-restore-btn"
-                        onClick={() => setYoutubeMinimized(false)}
-                        title="Restore stream"
-                    >
-                        ▲ Restore Stream
-                    </button>
-                </div>
-            )}
 
             {/* 📦 PLAYLIST HEADER - Title + Activity ticker in fixed-height banner */}
             <div className="playlist-header-bar">
@@ -2018,7 +2195,7 @@ export default function HomePage() {
                 SEARCH BAR - Only when session active and adding is enabled
                ═══════════════════════════════════════════════════════════ */}
             {
-                permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0) && (
+                (isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) && (
                     <div className="search-bar-container">
                         <input
                             id="search-input"

@@ -117,9 +117,20 @@ export default function AdminPage() {
     const [autoPilotEnabled, setAutoPilotEnabled] = useState(false);
     const lastAutoEventTime = useRef<number>(0);
 
-    // 📺 YOUTUBE EMBED - Live stream display
+    // 📺 STREAM EMBED - YouTube / Twitch platform
+    const [streamPlatform, setStreamPlatform] = useState<'youtube' | 'twitch' | null>(null);
     const [youtubeUrl, setYoutubeUrl] = useState('');
-    const [isSavingYoutube, setIsSavingYoutube] = useState(false);
+    const [twitchChannel, setTwitchChannel] = useState('');
+    const [isSavingStream, setIsSavingStream] = useState(false);
+    const [hideStreamLocally, setHideStreamLocally] = useState(() => {
+        if (typeof window !== 'undefined') {
+            try { return localStorage.getItem('crate-admin-hide-stream') === 'true'; } catch { return false; }
+        }
+        return false;
+    });
+    const isEditingStream = useRef(false);
+    const editingStreamTimeout = useRef<NodeJS.Timeout | null>(null);
+    const streamConfigLoaded = useRef(false);
     const autoPilotTimeouts = useRef<NodeJS.Timeout[]>([]);
 
     // Delete window (chaos mode) state
@@ -210,9 +221,18 @@ export default function AdminPage() {
                 setPermissionCanVote(data.permissions.canVote);
                 setPermissionCanAddSongs(data.permissions.canAddSongs);
             }
-            // Sync YouTube embed URL
-            if (data.youtubeEmbed !== undefined) {
-                setYoutubeUrl(data.youtubeEmbed || '');
+            // Sync stream config ONLY on initial load (never during polling)
+            if (!streamConfigLoaded.current) {
+                streamConfigLoaded.current = true;
+                if (data.streamConfig) {
+                    setStreamPlatform(data.streamConfig.platform || null);
+                    setYoutubeUrl(data.streamConfig.youtubeUrl || '');
+                    setTwitchChannel(data.streamConfig.twitchChannel || '');
+                } else if (data.youtubeEmbed !== undefined) {
+                    // Legacy compat
+                    setStreamPlatform(data.youtubeEmbed ? 'youtube' : null);
+                    setYoutubeUrl(data.youtubeEmbed || '');
+                }
             }
         } catch (error) {
             console.error('Failed to fetch playlist:', error);
@@ -760,6 +780,8 @@ export default function AdminPage() {
 
             if (data.success) {
                 setIsAuthenticated(true);
+                // Persist admin key so front page can detect admin mode
+                try { sessionStorage.setItem('crate-admin-key', adminPassword); } catch (e) { }
             } else {
                 setLoginError(data.error || 'Incorrect password');
             }
@@ -821,30 +843,54 @@ export default function AdminPage() {
         }
     };
 
-    // Save YouTube embed URL
-    const handleSaveYouTube = async () => {
-        setIsSavingYoutube(true);
+    // Mark stream config as being actively edited (prevents polling overwrite)
+    const markStreamEditing = () => {
+        isEditingStream.current = true;
+        // Auto-reset after 10 seconds of inactivity
+        if (editingStreamTimeout.current) clearTimeout(editingStreamTimeout.current);
+        editingStreamTimeout.current = setTimeout(() => {
+            isEditingStream.current = false;
+        }, 10000);
+    };
+
+    // Save stream platform config
+    const handleSaveStream = async (platformOverride?: 'youtube' | 'twitch' | null) => {
+        const effectivePlatform = platformOverride !== undefined ? platformOverride : streamPlatform;
+        setIsSavingStream(true);
         try {
             const res = await adminFetch('/api/playlist', {
                 method: 'POST',
                 body: JSON.stringify({
-                    action: 'setYouTubeEmbed',
-                    youtubeUrl: youtubeUrl.trim() || null,
+                    action: 'setStreamConfig',
+                    streamPlatform: effectivePlatform,
+                    streamYoutubeUrl: effectivePlatform === 'youtube' ? youtubeUrl.trim() : undefined,
+                    streamTwitchChannel: effectivePlatform === 'twitch' ? twitchChannel.trim() : undefined,
                 }),
             });
             if (res.ok) {
+                const label = effectivePlatform === 'youtube' ? '📺 YouTube' : effectivePlatform === 'twitch' ? '🟣 Twitch' : '📺 Stream';
                 setMessage({
                     type: 'success',
-                    text: youtubeUrl.trim() ? '📺 YouTube stream saved!' : '📺 YouTube stream cleared'
+                    text: effectivePlatform ? `${label} stream saved!` : '📺 Stream cleared'
                 });
             } else {
-                setMessage({ type: 'error', text: 'Failed to save YouTube URL' });
+                setMessage({ type: 'error', text: 'Failed to save stream config' });
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to save YouTube URL' });
+            setMessage({ type: 'error', text: 'Failed to save stream config' });
         } finally {
-            setIsSavingYoutube(false);
+            setIsSavingStream(false);
+            // Reset editing flag after save completes
+            isEditingStream.current = false;
+            if (editingStreamTimeout.current) clearTimeout(editingStreamTimeout.current);
         }
+    };
+
+    // Legacy compat: save just YouTube
+    const handleSaveYouTube = async () => {
+        setStreamPlatform('youtube');
+        markStreamEditing(); // Mark as editing when platform is changed
+        handleSaveStream('youtube');
     };
 
     // Shuffle all songs in the playlist
@@ -1725,35 +1771,107 @@ export default function AdminPage() {
                                 <span className="tool-name">{isRevealingPredictions ? 'Revealing...' : 'Reveal Predictions'}</span>
                             </button>
 
-                            {/* 📺 YOUTUBE LIVE STREAM EMBED */}
-                            <div className="youtube-embed-control">
+                            {/* 📺 STREAM PLATFORM SELECTOR */}
+                            <div className="youtube-embed-control stream-config-panel">
                                 <div className="control-label">
                                     <span className="tool-icon">📺</span>
-                                    <span className="tool-name">YouTube Live Stream</span>
+                                    <span className="tool-name">Live Stream</span>
                                 </div>
-                                <input
-                                    type="text"
-                                    className="youtube-url-input"
-                                    value={youtubeUrl}
-                                    onChange={(e) => setYoutubeUrl(e.target.value)}
-                                    placeholder="Paste YouTube URL or embed code..."
-                                />
-                                <button
-                                    className="tool-btn youtube-save"
-                                    onClick={handleSaveYouTube}
-                                    disabled={isSavingYoutube}
-                                >
-                                    <span className="tool-icon">💾</span>
-                                    <span className="tool-name">{isSavingYoutube ? 'Saving...' : 'Save Stream'}</span>
-                                </button>
-                                {youtubeUrl && (
+
+                                {/* Platform Toggle */}
+                                <div className="stream-platform-toggle">
                                     <button
-                                        className="tool-btn danger-subtle"
-                                        onClick={() => { setYoutubeUrl(''); handleSaveYouTube(); }}
-                                        disabled={isSavingYoutube}
+                                        className={`platform-btn ${streamPlatform === 'youtube' ? 'active youtube-active' : ''}`}
+                                        onClick={() => {
+                                            markStreamEditing();
+                                            if (streamPlatform === 'youtube') {
+                                                setStreamPlatform(null);
+                                            } else {
+                                                setStreamPlatform('youtube');
+                                                if (!youtubeUrl) setYoutubeUrl('https://youtube.com/playlist?list=PLhHOzEAFc1RhNtCgvwyhmi25X2dJzODXX');
+                                            }
+                                        }}
                                     >
-                                        <span className="tool-icon">🗑️</span>
-                                        <span className="tool-name">Clear</span>
+                                        ▶️ YouTube
+                                    </button>
+                                    <button
+                                        className={`platform-btn ${streamPlatform === 'twitch' ? 'active twitch-active' : ''}`}
+                                        onClick={() => {
+                                            markStreamEditing();
+                                            if (streamPlatform === 'twitch') {
+                                                setStreamPlatform(null);
+                                            } else {
+                                                setStreamPlatform('twitch');
+                                                if (!twitchChannel) setTwitchChannel('thecratehackers');
+                                            }
+                                        }}
+                                    >
+                                        🟣 Twitch
+                                    </button>
+                                </div>
+
+                                {/* YouTube Input */}
+                                {streamPlatform === 'youtube' && (
+                                    <input
+                                        type="text"
+                                        className="youtube-url-input"
+                                        value={youtubeUrl}
+                                        onChange={(e) => { markStreamEditing(); setYoutubeUrl(e.target.value); }}
+                                        placeholder="Default: Forgot About Pop playlist"
+                                    />
+                                )}
+
+                                {/* Twitch Input */}
+                                {streamPlatform === 'twitch' && (
+                                    <input
+                                        type="text"
+                                        className="youtube-url-input twitch-channel-input"
+                                        value={twitchChannel}
+                                        onChange={(e) => { markStreamEditing(); setTwitchChannel(e.target.value); }}
+                                        placeholder="Default: thecratehackers"
+                                    />
+                                )}
+
+                                {/* Save / Clear buttons */}
+                                <div className="stream-actions">
+                                    <button
+                                        className="tool-btn youtube-save"
+                                        onClick={() => handleSaveStream()}
+                                        disabled={isSavingStream}
+                                    >
+                                        <span className="tool-icon">💾</span>
+                                        <span className="tool-name">{isSavingStream ? 'Saving...' : 'Save Stream'}</span>
+                                    </button>
+                                    {streamPlatform && (
+                                        <button
+                                            className="tool-btn danger-subtle"
+                                            onClick={() => { setStreamPlatform(null); setYoutubeUrl(''); setTwitchChannel(''); handleSaveStream(null); }}
+                                            disabled={isSavingStream}
+                                        >
+                                            <span className="tool-icon">🗑️</span>
+                                            <span className="tool-name">Clear</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* 👁️ Admin-only: hide stream on MY screen (prevents infinite mirror when broadcasting) */}
+                                {streamPlatform && (
+                                    <button
+                                        className={`tool-btn stream-hide-toggle ${hideStreamLocally ? 'active danger-subtle' : ''}`}
+                                        onClick={() => {
+                                            const newVal = !hideStreamLocally;
+                                            setHideStreamLocally(newVal);
+                                            try {
+                                                if (newVal) {
+                                                    localStorage.setItem('crate-admin-hide-stream', 'true');
+                                                } else {
+                                                    localStorage.removeItem('crate-admin-hide-stream');
+                                                }
+                                            } catch (e) { /* localStorage unavailable */ }
+                                        }}
+                                    >
+                                        <span className="tool-icon">{hideStreamLocally ? '👁️‍🗨️' : '🙈'}</span>
+                                        <span className="tool-name">{hideStreamLocally ? 'Stream Hidden (My Screen)' : 'Hide Stream (My Screen)'}</span>
                                     </button>
                                 )}
                             </div>
