@@ -67,10 +67,10 @@ export default function VersusBattle({ battle, visitorId, onVote, isVoting }: Ve
             <div className="battle-header">
                 <h2 className="battle-title">
                     {battle.phase === 'resolved'
-                        ? '🏆 BATTLE RESULTS 🏆'
+                        ? '🏆 BATTLE RESULTS'
                         : battle.isLightningRound
-                            ? '⚡ LIGHTNING ROUND ⚡'
-                            : '⚔️ VERSUS BATTLE ⚔️'}
+                            ? '⚡ LIGHTNING ROUND'
+                            : '⚔️ VERSUS BATTLE'}
                 </h2>
                 {battle.phase !== 'resolved' && (
                     <div className={`battle-countdown ${isUrgent ? 'urgent' : ''}`}>
@@ -149,12 +149,12 @@ export default function VersusBattle({ battle, visitorId, onVote, isVoting }: Ve
             {/* Instructions */}
             {battle.phase !== 'resolved' && !battle.userVote && (
                 <div className="battle-instructions">
-                    Tap a song to cast your vote! One vote only.
+                    Tap a song to vote. One chance.
                 </div>
             )}
             {battle.userVote && battle.phase !== 'resolved' && (
                 <div className="battle-instructions voted">
-                    ✓ Vote locked in! Waiting for results...
+                    ✓ Vote locked in — results coming...
                 </div>
             )}
         </div>

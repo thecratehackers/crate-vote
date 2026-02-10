@@ -225,15 +225,11 @@ export default function JukeboxPlayer({
     // Dopamine-inducing gamification tips
     const gameTips = [
         { icon: '🔥', text: 'Vote for your favorites to push them to #1!' },
-        { icon: '⚡', text: 'Earn karma by watching - 60 secs = +1 karma!' },
-        { icon: '🎯', text: 'Top 3 songs get extra visibility!' },
-        { icon: '💥', text: 'Downvote songs you want to skip!' },
+        { icon: '⚡', text: 'Watch 60 secs to earn +1 karma!' },
+        { icon: '🎯', text: 'Top 3 songs earn extra karma!' },
         { icon: '🏆', text: 'Your karma unlocks bonus votes!' },
         { icon: '🎵', text: 'Add your own songs to the queue!' },
-        { icon: '⬆️', text: 'Upvote to save songs from elimination!' },
         { icon: '🎉', text: 'Stay active for surprise karma bonuses!' },
-        { icon: '📈', text: 'The more you vote, the more power you have!' },
-        { icon: '💎', text: 'High karma = playlist VIP status!' },
     ];
 
     // 🎬 FETCH FACTS FROM GENIUS API + ERA DATA
@@ -793,7 +789,7 @@ export default function JukeboxPlayer({
                 <div className="jukebox-sidebar left">
                     {/* Top Contributors - actual users */}
                     <div className="sidebar-section">
-                        <h3 className="sidebar-title">👥 Active DJs</h3>
+                        <h3 className="sidebar-title">👥 Active Voters</h3>
                         <div className="mini-leaderboard">
                             {(() => {
                                 // Get unique contributors with song counts
@@ -843,7 +839,7 @@ export default function JukeboxPlayer({
                         <h3 className="sidebar-title">⚡ Live Activity</h3>
                         <div className="sidebar-activity">
                             {activityFeed.length === 0 ? (
-                                <p className="activity-empty">Waiting for votes...</p>
+                                <p className="activity-empty">No activity yet</p>
                             ) : (
                                 activityFeed.map((item) => (
                                     <div key={item.id} className="sidebar-toast">
@@ -862,10 +858,10 @@ export default function JukeboxPlayer({
                     <div className="crowdsource-banner">
                         <div className="crowdsource-label">
                             <span className="live-dot" />
-                            <span>LIVE CROWDSOURCING</span>
+                            <span>LIVE VOTING</span>
                         </div>
-                        <h2 className="crowdsource-title">Building the Perfect Playlist</h2>
-                        <p className="crowdsource-subtitle">Real-time votes from the crowd determine what plays next</p>
+                        <h2 className="crowdsource-title">Building the Playlist</h2>
+                        <p className="crowdsource-subtitle">Votes decide what plays next</p>
                     </div>
 
                     {/* Header */}
@@ -906,7 +902,7 @@ export default function JukeboxPlayer({
                                 alt="Scan to vote"
                                 className="jukebox-qr-img"
                             />
-                            <span className="jukebox-qr-label">Vote Now!</span>
+                            <span className="jukebox-qr-label">Scan to Vote</span>
                         </div>
 
                         {/* 🎬 POP-UP VIDEO FACT BUBBLE */}
@@ -978,7 +974,7 @@ export default function JukeboxPlayer({
                             <div className="jukebox-cta-flash">
                                 <div className="cta-content">
                                     <span className="cta-arrow">👉</span>
-                                    <span className="cta-text">Join the vote at <strong>crateoftheweek.com</strong></span>
+                                    <span className="cta-text">Vote now at <strong>crateoftheweek.com</strong></span>
                                     <span className="cta-arrow">👈</span>
                                 </div>
                             </div>
@@ -1031,7 +1027,7 @@ export default function JukeboxPlayer({
                                 <span className="karma-earned">✨ +1 Karma earned!</span>
                             ) : (
                                 <span className="karma-progress">
-                                    🎧 Watching: {watchTime}s / 60s for karma
+                                    🎧 Watch 60s for +1 karma: {watchTime}/60
                                 </span>
                             )}
                         </div>
@@ -1103,7 +1099,7 @@ export default function JukeboxPlayer({
                     )}
 
                     {/* Small corner hint */}
-                    <button className="jukebox-corner-close" onClick={onClose} title="Return to voting (ESC)">
+                    <button className="jukebox-corner-close" onClick={onClose} title="Back to playlist (ESC)">
                         ✕
                     </button>
                 </div>
@@ -1121,7 +1117,7 @@ export default function JukeboxPlayer({
                             <div className="vote-url">crateoftheweek.com</div>
                             <div className="vote-step">
                                 <span className="step-num">2</span>
-                                <span>Enter your name</span>
+                                <span>Pick a name</span>
                             </div>
                             <div className="vote-step">
                                 <span className="step-num">3</span>
@@ -1129,7 +1125,7 @@ export default function JukeboxPlayer({
                             </div>
                             <div className="vote-step">
                                 <span className="step-num">4</span>
-                                <span>👎 Downvote skips</span>
+                                <span>👎 Downvote songs you don't want</span>
                             </div>
                         </div>
                     </div>
@@ -1137,9 +1133,9 @@ export default function JukeboxPlayer({
                     <div className="sidebar-section">
                         <h3 className="sidebar-title">📋 Rules</h3>
                         <ul className="rules-list">
-                            <li>🎵 Add up to 3 songs</li>
-                            <li>⬆️ Top songs get exported</li>
-                            <li>⬇️ Low votes = eliminated</li>
+                            <li>🎵 Add up to 5 songs</li>
+                            <li>⬆️ Top songs make the final playlist</li>
+                            <li>⬇️ Low votes = dropped</li>
                             <li>⚡ Earn karma by voting</li>
                             <li>🏆 Top DJs get bragging rights</li>
                         </ul>

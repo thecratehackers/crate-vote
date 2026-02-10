@@ -80,14 +80,13 @@ export const BLOCKED_WORDS = new Set([
 
 // ============ GAME TIPS ============
 export const GAME_TIPS = [
-    '🏆 Get your song in the Top 3 to earn +5 karma!',
-    '✨ Each karma = +1 song AND +1 upvote AND +1 downvote!',
-    '💀 Watch for THE PURGE — 30 seconds to eliminate songs!',
-    '👑 The #1 song gets the crown — fight for it!',
-    '🎧 Export to Spotify when voting ends!',
-    '⬆️ Upvote songs you want played, downvote the rest!',
-    '🔥 Songs with negative scores can get bumped!',
-    '⏳ Stay 5 min for +1 karma (loyalty bonus)!',
+    '🏆 Top 3 songs earn +5 karma!',
+    '✨ Each karma = +1 song, +1 upvote, +1 downvote',
+    '💀 THE PURGE lets you delete any song for 30 seconds',
+    '👑 Push your song to #1 for the crown',
+    '🎧 Export the playlist to Spotify anytime',
+    '⬆️ Upvote songs you love, downvote ones you don\'t',
+    '⏳ Stay 5 minutes to earn +1 karma',
 ] as const;
 
 // Type helpers

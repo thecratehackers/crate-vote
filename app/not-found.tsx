@@ -5,13 +5,13 @@ export default function NotFound() {
         <div className="notfound-page">
             <div className="notfound-card">
                 <div className="notfound-icon">💿</div>
-                <h1>404 - Page Not Found</h1>
+                <h1>Page Not Found</h1>
                 <p className="notfound-message">
-                    Looks like this track got lost in the shuffle.
+                    This page doesn't exist.
                 </p>
                 <Link href="/" className="home-link">
                     <span className="link-icon">🎵</span>
-                    <span>Back to the Playlist</span>
+                    <span>Back to Playlist</span>
                 </Link>
             </div>
 

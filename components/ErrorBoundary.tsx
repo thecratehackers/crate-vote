@@ -39,7 +39,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                     textAlign: 'center',
                     color: '#ef5050'
                 }}>
-                    <span>⚠️ Something went wrong. Refresh to try again.</span>
+                    <span>⚠️ Something went wrong. Refresh to reload.</span>
                 </div>
             );
         }

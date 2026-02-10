@@ -19,7 +19,7 @@ export default function Error({ error, reset }: ErrorProps) {
                 <div className="error-icon">⚠️</div>
                 <h1>Something went wrong</h1>
                 <p className="error-message">
-                    Don't worry, your data is safe. Try refreshing the page.
+                    Your data is safe. Refresh to continue.
                 </p>
                 <div className="error-actions">
                     <button onClick={reset} className="retry-btn">

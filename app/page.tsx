@@ -26,7 +26,7 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutM
     } catch (error: any) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            throw new Error('Request timed out - please check your connection');
+            throw new Error('Connection timed out — check your internet');
         }
         throw error;
     }
@@ -747,7 +747,7 @@ export default function HomePage() {
         const email = emailInput.trim();
 
         if (!email || !isValidEmail(email)) {
-            setKartraError('Please enter a valid email address (e.g. you@example.com)');
+            setKartraError('Enter a valid email address');
             return;
         }
 
@@ -789,7 +789,7 @@ export default function HomePage() {
         setIsSubmittingKartra(false);
         setShowUsernameModal(false);
         setOnboardingStep(1); // Reset for next time
-        setMessage({ type: 'success', text: `Welcome to the community, ${name}! 🎧` });
+        setMessage({ type: 'success', text: `Welcome, ${name}! You're in. 🎧` });
 
         // Mark RSVP as done to suppress duplicate email capture on waiting screen
         setWaitingRsvpAlreadyDone(true);
@@ -858,7 +858,7 @@ export default function HomePage() {
         }
         setIsSavingUsername(false);
         setShowUsernameModal(false);
-        setMessage({ type: 'success', text: `Welcome, ${name}!` });
+        setMessage({ type: 'success', text: 'Profile updated!' });
     };
 
     // Fetch playlist data with rank tracking for dopamine effects
@@ -1002,7 +1002,7 @@ export default function HomePage() {
             if (data.karmaRain && data.karmaRain.active && data.karmaRain.timestamp > lastKarmaRainTimestamp) {
                 setLastKarmaRainTimestamp(data.karmaRain.timestamp);
                 setShowKarmaRain(true);
-                setConfettiMessage(`🌧️ KARMA RAIN! +1 karma for everyone!`);
+                setConfettiMessage(`🌧️ Karma Rain! +1 karma for everyone`);
                 setShowConfetti(true);
                 setTimeout(() => {
                     setShowKarmaRain(false);
@@ -1238,7 +1238,7 @@ export default function HomePage() {
 
                 const data = await res.json();
                 if (data.success) {
-                    setMessage({ type: 'success', text: 'Thanks for hanging out! +1 Karma' });
+                    setMessage({ type: 'success', text: '+1 Karma for being active!' });
                     setConfettiMessage('🎉 +1 Karma for being active!');
                     setShowConfetti(true);
                     setTimeout(() => setShowConfetti(false), 4000);
@@ -1385,7 +1385,7 @@ export default function HomePage() {
 
             const data = await res.json();
             if (res.ok) {
-                setMessage({ type: 'success', text: '💥 Song deleted!' });
+                setMessage({ type: 'success', text: '💥 Song removed' });
                 setDeleteWindow(prev => ({ ...prev, canDelete: false }));
                 fetchPlaylist();
             } else {
@@ -1444,12 +1444,12 @@ export default function HomePage() {
                 setVersusBattle(prev => ({ ...prev, userVote: previousVote }));
                 setMessage({ type: 'error', text: data.error || 'Failed to vote' });
             } else {
-                setMessage({ type: 'success', text: `⚔️ Voted for Song ${choice}!` });
+                setMessage({ type: 'success', text: '⚔️ Vote locked in!' });
             }
         } catch (error) {
             // Revert optimistic update on network error
             setVersusBattle(prev => ({ ...prev, userVote: previousVote }));
-            setMessage({ type: 'error', text: 'Network error - try again quickly!' });
+            setMessage({ type: 'error', text: 'Connection issue — try again' });
         } finally {
             setIsVotingInBattle(false);
         }
@@ -1495,7 +1495,7 @@ export default function HomePage() {
                 }
             } catch (error) {
                 console.error('Search failed:', error);
-                setMessage({ type: 'error', text: 'Search failed - please try again' });
+                setMessage({ type: 'error', text: 'Search failed — try again' });
             } finally {
                 setIsSearching(false);
             }
@@ -1507,7 +1507,7 @@ export default function HomePage() {
     // Add song with loading feedback
     const handleAddSong = async (track: SearchResult) => {
         if (!visitorId || (!username && !isAdminOnFrontPage)) {
-            setMessage({ type: 'error', text: 'Please enter your name first' });
+            setMessage({ type: 'error', text: 'Set your name first' });
             return;
         }
 
@@ -1529,11 +1529,11 @@ export default function HomePage() {
             const data = await res.json();
 
             if (!res.ok) {
-                setMessage({ type: 'error', text: data.error || 'Failed to add song' });
+                setMessage({ type: 'error', text: data.error || 'Couldn\'t add that song — try again' });
                 return;
             }
 
-            setMessage({ type: 'success', text: `✓ Added "${track.name}"!` });
+            setMessage({ type: 'success', text: `✓ "${track.name}" added to playlist` });
             setSearchQuery('');
             setShowResults(false);
             setNoSearchResults(false);
@@ -1549,7 +1549,7 @@ export default function HomePage() {
                 SoundEffects.addSong();
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Network error - please try again' });
+            setMessage({ type: 'error', text: 'Couldn\'t connect — try adding again' });
         } finally {
             setIsAddingSong(null);
         }
@@ -1621,12 +1621,12 @@ export default function HomePage() {
             if (data.success) {
                 setUserPrediction(songId);
                 setShowPredictionModal(false);
-                setMessage({ type: 'success', text: '🎯 Prediction locked in! Good luck!' });
+                setMessage({ type: 'success', text: '🎯 Prediction locked in!' });
             } else {
-                setMessage({ type: 'error', text: data.error || 'Could not save prediction' });
+                setMessage({ type: 'error', text: data.error || 'Couldn\'t save your prediction — try again' });
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Network error - please try again' });
+            setMessage({ type: 'error', text: 'Connection issue — try again' });
         }
     };
 
@@ -1689,15 +1689,15 @@ export default function HomePage() {
                     videoId: data.videoId,
                     song: song,
                 });
-                setMessage({ type: 'success', text: '🎵 Jukebox mode activated! Enjoy the music.' });
+                setMessage({ type: 'success', text: '🎵 Now playing music videos' });
             } else {
                 // No video found - show brief message
-                setMessage({ type: 'error', text: 'No music video found for this song' });
+                setMessage({ type: 'error', text: 'No video found for this song' });
                 setTimeout(() => setMessage(null), 2000);
             }
         } catch (error) {
             console.error('Failed to load video:', error);
-            setMessage({ type: 'error', text: 'Failed to load video preview' });
+            setMessage({ type: 'error', text: 'Couldn\'t load the video' });
         } finally {
             setIsLoadingVideo(null);
         }
@@ -1770,11 +1770,11 @@ export default function HomePage() {
     // Vote on song - NEW MODEL: user gets ONE upvote and ONE downvote total
     const handleVote = async (songId: string, vote: 1 | -1) => {
         if (!visitorId) {
-            toast.info('Please wait — loading your session...');
+            toast.info('Loading...');
             return;
         }
         if (isBanned) {
-            toast.error('Your access was paused by a moderator for this session');
+            toast.error('A moderator paused your access');
             return;
         }
 
@@ -1782,14 +1782,14 @@ export default function HomePage() {
         const sessionActive = timerRunning && timerRemaining > 0;
         if (!isAdminOnFrontPage && !((!isBanned && !isLocked && !!username && sessionActive))) {
             if (!sessionActive) {
-                toast.info('⏸️ Voting opens when the session starts');
+                toast.info('⏸️ Voting opens when we go live');
             } else if (isLocked) {
-                toast.info('🔒 The host has locked participation');
+                toast.info('🔒 Voting is paused by the host');
             } else if (!username) {
-                toast.info('👤 Set your DJ name first to vote');
+                toast.info('👤 Set your name first to vote');
                 setShowUsernameModal(true);
             } else {
-                toast.info('Voting is not available right now');
+                toast.info('Voting is paused');
             }
             return;
         }
@@ -1797,7 +1797,7 @@ export default function HomePage() {
         // ⏱️ RATE LIMITING - Check if too soon since last vote on this song
         const lastVoteTime = voteTimestamps.current.get(songId);
         if (lastVoteTime && Date.now() - lastVoteTime < VOTE_COOLDOWN_MS) {
-            toast.info('One vote per song every few seconds — keeps it fair for everyone 🎯');
+            toast.info('Too fast — wait a few seconds');
             return;
         }
         voteTimestamps.current.set(songId, Date.now());
@@ -1830,7 +1830,7 @@ export default function HomePage() {
             if (hasUpvoted) {
                 // Remove upvote (toggle off)
                 const removedSong = songs.find(s => s.id === songId);
-                if (removedSong) toast.info(`Vote removed from "${removedSong.name}"`);
+                if (removedSong) toast.info('Vote removed');
                 setUserVotes(prev => ({
                     ...prev,
                     upvotedSongIds: prev.upvotedSongIds.filter(id => id !== songId)
@@ -1858,7 +1858,7 @@ export default function HomePage() {
                     s.id === songId ? { ...s, score: s.score + 1 } : s
                 ));
             } else {
-                toast.info('All upvotes used! Earn karma by staying active for 5 min 🎧');
+                toast.info('All upvotes used');
                 setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
@@ -1867,7 +1867,7 @@ export default function HomePage() {
             if (hasDownvoted) {
                 // Remove downvote (toggle off)
                 const removedSong = songs.find(s => s.id === songId);
-                if (removedSong) toast.info(`Vote removed from "${removedSong.name}"`);
+                if (removedSong) toast.info('Vote removed');
                 setUserVotes(prev => ({
                     ...prev,
                     downvotedSongIds: prev.downvotedSongIds.filter(id => id !== songId)
@@ -1895,7 +1895,7 @@ export default function HomePage() {
                     s.id === songId ? { ...s, score: s.score - 1 } : s
                 ));
             } else {
-                toast.info('All downvotes used! Earn karma by staying active for 5 min 🎧');
+                toast.info('All downvotes used');
                 setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
@@ -1924,21 +1924,21 @@ export default function HomePage() {
                 const data = await res.json();
                 if (data.error?.includes('banned')) {
                     setIsBanned(true);
-                    toast.error('You have been banned');
+                    toast.error('A moderator paused your access');
                 } else if (data.error?.includes('not found') || data.error?.includes('locked')) {
                     // Song was deleted or playlist was locked - refresh to sync
-                    toast.info('Song was modified - refreshing...');
+                    toast.info('Song was removed — refreshing...');
                     fetchPlaylist();
                 } else if (res.status === 429) {
                     // Rate limited — friendly countdown
                     const retryAfter = res.headers.get('Retry-After') || '10';
-                    toast.info(`Cooling down... ready in ${retryAfter}s — keeps it fair for everyone 🎯`);
+                    toast.info(`Rate limited — try again in ${retryAfter}s`);
                 } else {
-                    toast.error(data.error || 'Vote failed');
+                    toast.error(data.error || 'Vote failed — try again');
                 }
             } else {
                 // Success — always confirm so users know their vote counted
-                toast.success(vote === 1 ? '👍 Vote counted!' : '👎 Vote counted!');
+                toast.success(vote === 1 ? '👍 Upvote counted' : '👎 Downvote counted');
                 // Dismiss vote coach mark on first successful vote
                 if (showCoachMark === 'vote') {
                     setShowCoachMark(null);
@@ -1947,7 +1947,7 @@ export default function HomePage() {
             }
         } catch (error) {
             console.error('Vote failed:', error);
-            toast.error('Vote failed - check your connection');
+            toast.error('Vote failed — check your connection');
             // On network error, refresh to ensure sync
             fetchPlaylist();
         } finally {
@@ -2027,7 +2027,7 @@ export default function HomePage() {
     // Export to Spotify - redirect to export page for OAuth flow
     const handleExport = () => {
         setIsExporting(true);
-        setMessage({ type: 'success', text: 'Redirecting to Spotify...' });
+        setMessage({ type: 'success', text: 'Opening Spotify...' });
         window.location.href = '/export';
     };
 
@@ -2049,20 +2049,20 @@ export default function HomePage() {
                         {onboardingStep === 1 && (
                             <>
                                 <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
-                                <h2 className="join-title">Welcome to the Crate Hackathon</h2>
+                                <h2 className="join-title">Join the Live Playlist</h2>
                                 <p className="join-subtitle">
-                                    Search songs. Vote them up. Build the ultimate playlist — together.
+                                    Search songs. Vote your favorites up. Build the playlist together.
                                 </p>
                                 {viewerCount > 0 && (
                                     <p className="join-social-proof">
-                                        👁 {viewerCount} {viewerCount === 1 ? 'person' : 'people'} voting right now
+                                        🟢 {viewerCount} {viewerCount === 1 ? 'person' : 'people'} here now
                                     </p>
                                 )}
                                 <div className="join-name-section">
                                     <input
                                         type="text"
                                         className="join-name-input"
-                                        placeholder="What should we call you?"
+                                        placeholder="Your display name"
                                         value={usernameInput}
                                         onChange={(e) => setUsernameInput(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleStep1Next()}
@@ -2084,9 +2084,9 @@ export default function HomePage() {
                         {onboardingStep === 2 && (
                             <>
                                 <div className="step2-emoji"><img src="/logo.png" alt="Crate Hackers" className="step2-crate-icon" /></div>
-                                <h2 className="join-title">What&apos;s your vibe?</h2>
+                                <h2 className="join-title">Are you a DJ?</h2>
                                 <p className="join-subtitle">
-                                    DJs get extra tools like BPM and key matching. This helps us tailor your experience.
+                                    DJs see BPM and key data alongside each song.
                                 </p>
                                 <div className="dj-type-buttons">
                                     <button
@@ -2094,16 +2094,16 @@ export default function HomePage() {
                                         onClick={() => handleStep2Next(true)}
                                     >
                                         <span className="dj-type-icon">🎧</span>
-                                        <span className="dj-type-label">I spin tracks</span>
-                                        <span className="dj-type-hint">Any level — bedroom to main stage</span>
+                                        <span className="dj-type-label">Yes, I DJ</span>
+                                        <span className="dj-type-hint">Any level</span>
                                     </button>
                                     <button
                                         className="dj-type-btn fan"
                                         onClick={() => handleStep2Next(false)}
                                     >
                                         <span className="dj-type-icon">🎶</span>
-                                        <span className="dj-type-label">I discover music</span>
-                                        <span className="dj-type-hint">I know what sounds good</span>
+                                        <span className="dj-type-label">No, I'm here for the music</span>
+                                        <span className="dj-type-hint">I've got great taste</span>
                                     </button>
                                 </div>
                                 <button className="step-back-btn" onClick={() => setOnboardingStep(1)}>
@@ -2116,27 +2116,27 @@ export default function HomePage() {
                         {onboardingStep === 3 && (
                             <>
                                 <div className="step3-emoji">🚀</div>
-                                <h2 className="join-title">Want Session Alerts?</h2>
+                                <h2 className="join-title">Get Notified When We Go Live</h2>
                                 <p className="join-subtitle">
-                                    We&apos;ll let you know when the next session goes live. No spam, ever.
+                                    One email before each live event. That's it.
                                 </p>
                                 <div className="join-capture-section">
                                     <input
                                         type="email"
                                         className={`join-name-input ${emailInput && !isValidEmail(emailInput) ? 'input-invalid' : ''}`}
-                                        placeholder="Email address *"
+                                        placeholder="you@email.com"
                                         value={emailInput}
                                         onChange={(e) => { setEmailInput(e.target.value); setKartraError(null); }}
                                         onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
                                         autoFocus
                                     />
                                     {emailInput && !isValidEmail(emailInput) && (
-                                        <p className="inline-validation-hint">Double-check your email format (e.g. you@example.com)</p>
+                                        <p className="inline-validation-hint">Enter a valid email</p>
                                     )}
                                     <input
                                         type="tel"
                                         className="join-name-input"
-                                        placeholder="Phone (optional — for text alerts)"
+                                        placeholder="Phone (optional)"
                                         value={phoneInput}
                                         onChange={(e) => setPhoneInput(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
@@ -2149,7 +2149,7 @@ export default function HomePage() {
                                         onClick={handleOnboardingComplete}
                                         disabled={!isValidEmail(emailInput) || isSubmittingKartra}
                                     >
-                                        {isSubmittingKartra ? 'Joining...' : "Let's Go! 🎉"}
+                                        {isSubmittingKartra ? 'Joining...' : 'Join & Enter →'}
                                     </button>
                                 </div>
                                 <button className="skip-onboarding-btn" onClick={handleSkipOnboarding}>
@@ -2193,7 +2193,7 @@ export default function HomePage() {
                                     onClick={handleSetUsername}
                                     disabled={!usernameInput.trim() || isSavingUsername}
                                 >
-                                    {isSavingUsername ? 'Saving...' : 'Save ✓'}
+                                    {isSavingUsername ? 'Saving...' : 'Save'}
                                 </button>
                             </div>
                             <button className="step-back-btn" onClick={() => setShowUsernameModal(false)}>
@@ -2255,7 +2255,7 @@ export default function HomePage() {
                         </div>
                         <span className="mega-icon">💀</span>
                         <h1 className="mega-title">THE PURGE</h1>
-                        <p className="mega-subtitle">Delete ANY song! Choose wisely...</p>
+                        <p className="mega-subtitle">Delete any song — one shot!</p>
                         <div className="mega-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</div>
                     </div>
                 )
@@ -2291,8 +2291,8 @@ export default function HomePage() {
                 showWipeSplash && (
                     <div className="mega-announcement wipe">
                         <span className="mega-icon">🗑️</span>
-                        <h1 className="mega-title">PLAYLIST WIPED!</h1>
-                        <p className="mega-subtitle">Fresh start! Add your songs now.</p>
+                        <h1 className="mega-title">PLAYLIST RESET!</h1>
+                        <p className="mega-subtitle">Add your songs now.</p>
                     </div>
                 )
             }
@@ -2305,7 +2305,7 @@ export default function HomePage() {
                             <button className="winner-close" onClick={() => setShowWinnerSplash(false)}>✕</button>
                             <div className="winner-confetti">🎉</div>
                             <h1 className="winner-title">YOU WON! 🏆</h1>
-                            <p className="winner-song">Your song "{winnerSongName}" hit #1!</p>
+                            <p className="winner-song">"{winnerSongName}" finished #1!</p>
                             <div className="winner-prize">
                                 <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
                                 <div className="prize-details">
@@ -2320,9 +2320,9 @@ export default function HomePage() {
                                 rel="noopener noreferrer"
                                 className="claim-prize-btn"
                             >
-                                🎁 CLAIM YOUR FREE HAT
+                                🎁 Claim Your Free Hat
                             </a>
-                            <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
+                            <p className="winner-note">Opens DJ.style — code applies automatically</p>
                         </div>
                     </div>
                 )
@@ -2350,7 +2350,7 @@ export default function HomePage() {
                                 </div>
                                 <span className="prize-drop-mega-icon">🎰</span>
                                 <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
-                                <p className="prize-drop-subtitle">You were randomly selected — you win a FREE HAT!</p>
+                                <p className="prize-drop-subtitle">You've been selected — you win a free hat!</p>
                                 <div className="winner-prize">
                                     <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
                                     <div className="prize-details">
@@ -2365,9 +2365,9 @@ export default function HomePage() {
                                     rel="noopener noreferrer"
                                     className="claim-prize-btn"
                                 >
-                                    🎁 CLAIM YOUR FREE HAT
+                                    🎁 Claim Your Free Hat
                                 </a>
-                                <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
+                                <p className="winner-note">Opens DJ.style — code applies automatically</p>
                             </div>
                         ) : (
                             <div className="prize-drop-broadcast">
@@ -2384,7 +2384,7 @@ export default function HomePage() {
                                 </div>
                                 <span className="prize-drop-mega-icon">🎰</span>
                                 <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
-                                <p className="prize-drop-winner-name">🎉 {prizeDropWinnerName} just won a FREE HAT!</p>
+                                <p className="prize-drop-winner-name">🎉 {prizeDropWinnerName} just won a free hat!</p>
                                 <p className="prize-drop-hint">Stay active — you could be next! 🎯</p>
                             </div>
                         )}
@@ -2414,7 +2414,7 @@ export default function HomePage() {
                                 </div>
                                 <span className="king-mega-icon">👑</span>
                                 <h1 className="king-title">LEADERBOARD KING!</h1>
-                                <p className="king-subtitle">You&apos;re the #1 contributor with <strong>{leaderboardKingScore}</strong> points!</p>
+                                <p className="king-subtitle">You&apos;re #1 with <strong>{leaderboardKingScore}</strong> points!</p>
                                 <div className="winner-prize">
                                     <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
                                     <div className="prize-details">
@@ -2429,9 +2429,9 @@ export default function HomePage() {
                                     rel="noopener noreferrer"
                                     className="claim-prize-btn"
                                 >
-                                    🎁 CLAIM YOUR FREE HAT
+                                    🎁 Claim Your Free Hat
                                 </a>
-                                <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
+                                <p className="winner-note">Opens DJ.style — code applies automatically</p>
                             </div>
                         ) : (
                             <div className="leaderboard-king-broadcast">
@@ -2448,7 +2448,7 @@ export default function HomePage() {
                                 </div>
                                 <span className="king-mega-icon">👑</span>
                                 <h1 className="king-title">LEADERBOARD KING!</h1>
-                                <p className="king-winner-name">🏆 {leaderboardKingName} is the #1 contributor!</p>
+                                <p className="king-winner-name">🏆 {leaderboardKingName} finished #1!</p>
                                 <p className="king-score">Score: <strong>{leaderboardKingScore}</strong> points</p>
                             </div>
                         )}
@@ -2473,7 +2473,7 @@ export default function HomePage() {
             {/* ⚠️ STALE DATA INDICATOR - Show when offline */}
             {isStale && (
                 <div className="stale-indicator">
-                    ⚠️ Offline — showing last known data
+                    ⚠️ You're offline
                     <button className="stale-retry-btn" onClick={() => { fetchPlaylist(); }}>{isRefreshing ? 'Retrying...' : 'Retry'}</button>
                 </div>
             )}
@@ -2481,8 +2481,8 @@ export default function HomePage() {
             {/* 🎓 FIRST-TIME COACH MARKS */}
             {showCoachMark === 'vote' && sortedSongs.length > 0 && (
                 <div className="coach-mark-banner">
-                    <span>🏆 Now vote on other tracks — top 3 win prizes!</span>
-                    <button className="coach-dismiss" onClick={() => { setShowCoachMark(null); try { localStorage.setItem('crate-coach-done', 'true'); } catch (_) { } }}>Got it!</button>
+                    <span>🏆 Vote on songs — top 3 win prizes!</span>
+                    <button className="coach-dismiss" onClick={() => { setShowCoachMark(null); try { localStorage.setItem('crate-coach-done', 'true'); } catch (_) { } }}>Got it</button>
                 </div>
             )}
 
@@ -2510,13 +2510,13 @@ export default function HomePage() {
                         {showRulesPopover && (
                             <div className="rules-popover">
                                 <div className="rules-popover-arrow" />
-                                <h4><img src="/logo.png" alt="" className="inline-crate-icon" /> How to Play</h4>
+                                <h4><img src="/logo.png" alt="" className="inline-crate-icon" /> How It Works</h4>
                                 <ul>
-                                    <li><img src="/logo.png" alt="" className="inline-crate-icon" /> Drop up to 5 tracks on the playlist</li>
-                                    <li>👍 10 upvotes + 👎 10 downvotes to shape the outcome</li>
+                                    <li><img src="/logo.png" alt="" className="inline-crate-icon" /> Add up to 5 songs</li>
+                                    <li>👍 10 upvotes + 👎 10 downvotes to rank songs</li>
                                     <li>🏆 Top 3 songs win prizes + karma!</li>
                                 </ul>
-                                <button className="rules-popover-close" onClick={() => setShowRulesPopover(false)}>Got it!</button>
+                                <button className="rules-popover-close" onClick={() => setShowRulesPopover(false)}>Got it</button>
                             </div>
                         )}
                     </div>
@@ -2576,7 +2576,7 @@ export default function HomePage() {
                                 setAvatarInput(userAvatar);
                                 setShowUsernameModal(true);
                             }}
-                            data-tooltip="Tap to edit profile"
+                            data-tooltip="Edit profile"
                         >
                             <span className="user-pill-avatar">{userAvatar}</span>
                             {username} <span className="edit-hint">✏️</span>
@@ -2590,14 +2590,14 @@ export default function HomePage() {
                 {isBroadcastLive ? (
                     <>
                         <span className="broadcast-live-dot" />
-                        <span className="broadcast-text">ON AIR NOW</span>
-                        <span className="broadcast-schedule">Tuesdays 8 PM ET</span>
+                        <span className="broadcast-text">LIVE NOW</span>
+                        <span className="broadcast-schedule">Every Tue · 8 PM ET</span>
                     </>
                 ) : (
                     <>
-                        <span className="broadcast-text">NEXT SESSION</span>
+                        <span className="broadcast-text">NEXT LIVE EVENT</span>
                         <span className="broadcast-countdown">{broadcastCountdown}</span>
-                        <span className="broadcast-schedule">Tuesdays 8 PM ET</span>
+                        <span className="broadcast-schedule">Every Tue · 8 PM ET</span>
                     </>
                 )}
             </div>
@@ -2610,7 +2610,7 @@ export default function HomePage() {
                             className={`feature-btn ${showLeaderboard ? 'active' : ''}`}
                             onClick={() => { setShowLeaderboard(!showLeaderboard); if (!showLeaderboard) fetchLeaderboard(); }}
                         >
-                            🏆 Top DJs
+                            🏆 Leaderboard
                         </button>
 
                         {!predictionsLocked && !userPrediction && (
@@ -2618,13 +2618,13 @@ export default function HomePage() {
                                 className="feature-btn prediction"
                                 onClick={() => setShowPredictionModal(true)}
                             >
-                                🎯 Predict #1
+                                🎯 Predict the Winner
                             </button>
                         )}
 
                         {userPrediction && (
                             <span className="prediction-badge">
-                                🎯 Predicted!
+                                🎯 Prediction locked
                             </span>
                         )}
 
@@ -2635,7 +2635,7 @@ export default function HomePage() {
                                 setSoundsEnabled(newState);
                                 SoundEffects.setEnabled(newState);
                             }}
-                            title={soundsEnabled ? 'Mute sounds' : 'Enable sounds'}
+                            title={soundsEnabled ? 'Mute sounds' : 'Turn on sounds'}
                         >
                             {soundsEnabled ? '🔊' : '🔇'}
                         </button>
@@ -2657,7 +2657,7 @@ export default function HomePage() {
                                     onClick={() => streamMinimized ? handleExpandStream() : handleMinimizeStream()}
                                     title={streamMinimized ? 'Expand stream' : 'Minimize to PiP'}
                                 >
-                                    {streamMinimized ? '⬜ ᴇxᴘᴀɴᴅ' : '➖'}
+                                    {streamMinimized ? '▶ Expand' : '➖'}
                                 </button>
                             </div>
                         </div>
@@ -2765,7 +2765,7 @@ export default function HomePage() {
                                             onClick={() => setChatDocked(!chatDocked)}
                                             title={chatDocked ? 'Undock chat' : 'Dock chat to bottom'}
                                         >
-                                            {chatDocked ? '⬇️ Undock' : '💬 Dock Chat'}
+                                            {chatDocked ? 'Unpin Chat' : '💬 Pin Chat'}
                                         </button>
                                     </>
                                 )}
@@ -2965,7 +2965,7 @@ export default function HomePage() {
                         </div>
                         <div className="leaderboard-list">
                             {leaderboard.length === 0 ? (
-                                <div className="leaderboard-empty">Add songs to appear here!</div>
+                                <div className="leaderboard-empty">Add songs or vote to appear here</div>
                             ) : (
                                 leaderboard.slice(0, 5).map((entry, idx) => (
                                     <div key={entry.visitorId} className={`leaderboard-row ${entry.hasTopSong ? 'has-crown' : ''}`}>
@@ -2987,8 +2987,9 @@ export default function HomePage() {
                 showPredictionModal && (
                     <div className="modal-overlay" onClick={() => setShowPredictionModal(false)}>
                         <div className="prediction-modal" onClick={(e) => e.stopPropagation()}>
-                            <h3>🎯 Predict the Winner!</h3>
-                            <p>Which song will be #1 when voting ends?<br />Correct predictions earn <strong>+3 karma!</strong></p>
+                            <button className="modal-close-x" onClick={() => setShowPredictionModal(false)} aria-label="Close prediction modal">✕</button>
+                            <h3>🎯 Predict the Winner</h3>
+                            <p>Pick the song you think will finish #1.<br />Get it right = <strong>+3 karma!</strong></p>
                             <div className="prediction-list">
                                 {sortedSongs.slice(0, 10).map((song, idx) => (
                                     <button
@@ -3002,7 +3003,7 @@ export default function HomePage() {
                                     </button>
                                 ))}
                             </div>
-                            <p className="prediction-scroll-hint">↓ Scroll for more options</p>
+                            <p className="prediction-scroll-hint">↓ Scroll for more</p>
                             <button className="cancel-btn" onClick={() => setShowPredictionModal(false)}>Cancel</button>
                         </div>
                     </div>
@@ -3031,7 +3032,7 @@ export default function HomePage() {
                         </span>
                     ) : (
                         <span className="ticker-placeholder">
-                            {timerRunning ? currentShoutout || '🎵 Vote for your favorites!' : 'Waiting for session...'}
+                            {timerRunning ? currentShoutout || '🎵 Vote for your favorites!' : 'Waiting for the next event...'}
                         </span>
                     )}
                 </div>
@@ -3040,10 +3041,10 @@ export default function HomePage() {
                     className="export-inline-btn"
                     onClick={handleExport}
                     disabled={isExporting}
-                    title="Export playlist to Spotify anytime!"
+                    title="Save this playlist to your Spotify"
                 >
                     <img src="/spotify-logo.png" alt="" className="spotify-icon-sm" />
-                    {isExporting ? 'Opening Spotify...' : 'Export'}
+                    {isExporting ? 'Opening Spotify...' : 'Save to Spotify'}
                 </button>
             </div>
 
@@ -3066,7 +3067,7 @@ export default function HomePage() {
                 )
             }
 
-            {isBanned && <div className="banned-banner">⚠️ Your access was paused by a moderator. <span className="banned-detail">This resets automatically next round. Watching and browsing still work! Questions? Ask in the stream chat.</span></div>}
+            {isBanned && <div className="banned-banner">⚠️ A moderator paused your access. <span className="banned-detail">It resets next round.</span></div>}
 
             {/* ═══════════════════════════════════════════════════════════
                 SEARCH BAR - Only when session active and adding is enabled
@@ -3078,7 +3079,7 @@ export default function HomePage() {
                             id="search-input"
                             type="text"
                             className="search-input-stream"
-                            placeholder="Search any song on Spotify..."
+                            placeholder="Search for a song..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onBlur={() => setTimeout(() => setShowResults(false), 450)}
@@ -3086,7 +3087,7 @@ export default function HomePage() {
                         />
                         {showCoachMark === 'search' && (
                             <div className="coach-mark-tooltip">
-                                🎵 Drop your first track — search any song on Spotify
+                                🎵 Search for a song to add it to the playlist
                             </div>
                         )}
                         {isSearching && <span className="search-spinner">...</span>}
@@ -3094,7 +3095,7 @@ export default function HomePage() {
                         {showResults && searchResults.length > 0 && (
                             <div className="search-dropdown-stream">
                                 <div className="search-results-header">
-                                    🔍 SEARCH RESULTS <span className="header-hint">Tap to add →</span>
+                                    🔍 Results <span className="header-hint">Tap to add →</span>
                                 </div>
                                 {searchResults.slice(0, 5).map((track) => (
                                     <div
@@ -3110,9 +3111,9 @@ export default function HomePage() {
                                         {isAddingSong === track.id ? (
                                             <span className="adding-spinner">⏳</span>
                                         ) : isSongInPlaylist(track.id) ? (
-                                            <span className="already-added">✓ In playlist ↓</span>
+                                            <span className="already-added">✓ Already added</span>
                                         ) : (
-                                            <span className="add-btn-stream">+ ADD</span>
+                                            <span className="add-btn-stream">+ Add</span>
                                         )}
                                     </div>
                                 ))}
@@ -3122,7 +3123,7 @@ export default function HomePage() {
                         {/* No results state */}
                         {showResults && searchResults.length === 0 && !isSearching && searchQuery.length > 2 && (
                             <div className="search-dropdown-stream">
-                                <div className="search-empty-state">No songs found for "{searchQuery}" — try another search</div>
+                                <div className="search-empty-state">No results for "{searchQuery}" — try a different search</div>
                             </div>
                         )}
                     </div>
@@ -3132,12 +3133,12 @@ export default function HomePage() {
                             type="text"
                             className="search-input-stream search-input-disabled"
                             placeholder={
-                                !(timerRunning && timerRemaining > 0) ? '🎵 Song adding opens when a session is live' :
-                                    isLocked ? '🔒 The host has paused new additions' :
-                                        !permissions.canAddSongs ? '🔒 Song adding is currently disabled by the host' :
-                                            !username ? '👤 Set your DJ name to add songs' :
-                                                (userStatus.songsRemaining <= 0 && karmaBonuses.bonusSongAdds <= 0) ? `You've used all ${userStatus.songsAdded} song slots! Vote on tracks to shape the playlist.` :
-                                                    'Search any song on Spotify...'
+                                !(timerRunning && timerRemaining > 0) ? '🎵 Song adding opens when we go live' :
+                                    isLocked ? '🔒 Song adding is paused' :
+                                        !permissions.canAddSongs ? '🔒 Song adding is off right now' :
+                                            !username ? '👤 Set your name to add songs' :
+                                                (userStatus.songsRemaining <= 0 && karmaBonuses.bonusSongAdds <= 0) ? `All ${userStatus.songsAdded} song slots used — vote to shape the playlist` :
+                                                    'Search for a song...'
                             }
                             disabled
                         />
@@ -3148,17 +3149,17 @@ export default function HomePage() {
             {/* ═══════════════════════════════════════════════════════════
                 SONG LIST - The main star. Music first!
                ═══════════════════════════════════════════════════════════ */}
-            <div className="song-list-stream" id="song-list">
+            <div className={`song-list-stream${chatDocked ? ' chat-docked' : ''}`} id="song-list">
                 {sortedSongs.length === 0 ? (
                     <div className="empty-state">
                         <div className="empty-icon"><img src="/logo.png" alt="" className="empty-crate-icon" /></div>
                         {timerRunning ? (
                             <>
                                 <div className="empty-title">
-                                    The playlist is empty — you could be the first name on it 🔥
+                                    Playlist is empty — be the first to add a song
                                 </div>
                                 <div className="empty-subtitle">
-                                    Use the search bar above to add the first song and get the party started!
+                                    Search above to add a song.
                                 </div>
                             </>
                         ) : username ? (
@@ -3167,25 +3168,25 @@ export default function HomePage() {
                                     Welcome back, {username}! 🎧
                                 </div>
                                 <div className="empty-subtitle">
-                                    No live session right now — we go live every week where you add songs, vote, and build playlists together in real-time.
+                                    No live event right now. We go live weekly — add songs, vote, and build playlists together.
                                 </div>
                                 {broadcastCountdown && (
-                                    <div className="empty-countdown">🕐 Next session in <strong>{broadcastCountdown}</strong></div>
+                                    <div className="empty-countdown">🕐 Next live event in <strong>{broadcastCountdown}</strong></div>
                                 )}
-                                <div className="empty-hint">Drop your email below to get notified when we go live!</div>
+                                <div className="empty-hint">Enter your email to get notified.</div>
                             </>
                         ) : (
                             <>
                                 <div className="empty-title">
-                                    Welcome to Crate Vote 📦
+                                    Welcome to Crate Hackers
                                 </div>
                                 <div className="empty-subtitle">
-                                    Every week, we go live and let the crowd build the playlist. Add songs, vote, and see your picks climb the charts in real-time.
+                                    Every week we go live. Add songs, vote, and build the playlist together.
                                 </div>
                                 {broadcastCountdown && (
-                                    <div className="empty-countdown">🕐 Next session in <strong>{broadcastCountdown}</strong></div>
+                                    <div className="empty-countdown">🕐 Next live event in <strong>{broadcastCountdown}</strong></div>
                                 )}
-                                <div className="empty-hint">Sign up below to get notified when the next session drops!</div>
+                                <div className="empty-hint">Enter your email to get notified.</div>
                             </>
                         )}
 
@@ -3194,7 +3195,7 @@ export default function HomePage() {
                             <div className="waiting-rsvp">
                                 {waitingRsvpStatus === 'success' || waitingRsvpAlreadyDone ? (
                                     <div className="waiting-rsvp-success">
-                                        <span className="waiting-rsvp-check">✅</span> You're on the list! We'll let you know when the next session drops.
+                                        <span className="waiting-rsvp-check">✅</span> You're on the list! We'll notify you before the next event.
                                     </div>
                                 ) : (
                                     <>
@@ -3203,7 +3204,7 @@ export default function HomePage() {
                                             e.preventDefault();
                                             const email = waitingEmail.trim();
                                             if (!email || !isValidEmail(email)) {
-                                                setWaitingRsvpError('Please enter a valid email address');
+                                                setWaitingRsvpError('Enter a valid email address');
                                                 return;
                                             }
                                             setWaitingRsvpStatus('submitting');
@@ -3232,7 +3233,7 @@ export default function HomePage() {
                                                 }
                                             } catch (_) {
                                                 setWaitingRsvpStatus('error');
-                                                setWaitingRsvpError('Network error — check your connection');
+                                                setWaitingRsvpError('Connection issue — try again');
                                             }
                                         }}>
                                             <input
@@ -3248,7 +3249,7 @@ export default function HomePage() {
                                                 className="waiting-rsvp-btn"
                                                 disabled={waitingRsvpStatus === 'submitting' || !waitingEmail.trim()}
                                             >
-                                                {waitingRsvpStatus === 'submitting' ? 'Joining...' : 'Notify Me'}
+                                                {waitingRsvpStatus === 'submitting' ? 'Submitting...' : 'Notify Me'}
                                             </button>
                                         </form>
                                         {waitingRsvpError && (
@@ -3292,9 +3293,9 @@ export default function HomePage() {
                                 <button
                                     className={`play-preview-btn ${isLoadingVideo === song.id ? 'loading' : ''}`}
                                     onClick={(e) => handleOpenVideoPreview(song.id, song.name, song.artist, e)}
-                                    title="Preview music video on YouTube"
+                                    title="Play music video"
                                 >
-                                    {isLoadingVideo === song.id ? '⏳ Finding...' : '▶'}
+                                    {isLoadingVideo === song.id ? '⏳ Loading...' : '▶'}
                                 </button>
 
                                 {/* Song Info - super compact */}
@@ -3314,13 +3315,13 @@ export default function HomePage() {
                                             onClick={() => handleVote(song.id, -1)}
                                             disabled={votingInProgress.has(song.id)}
                                             aria-label={hasDownvoted ? `Remove downvote from ${song.name}` : `Downvote ${song.name}`}
-                                            data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote this song'}
+                                            data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote'}
                                         >
                                             {votingInProgress.has(song.id) ? '⏳' : '👎'}
                                         </button>
                                         <span
                                             className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
-                                            data-tooltip={`Net score: ${song.score > 0 ? '+' : ''}${song.score}`}
+                                            data-tooltip={`Score: ${song.score > 0 ? '+' : ''}${song.score}`}
                                             tabIndex={0}
                                             aria-label={`Score: ${song.score > 0 ? 'plus ' : song.score < 0 ? 'minus ' : ''}${Math.abs(song.score)}`}
                                         >
@@ -3331,7 +3332,7 @@ export default function HomePage() {
                                             onClick={() => handleVote(song.id, 1)}
                                             disabled={votingInProgress.has(song.id)}
                                             aria-label={hasUpvoted ? `Remove upvote from ${song.name}` : `Upvote ${song.name}`}
-                                            data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote this song'}
+                                            data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote'}
                                         >
                                             {votingInProgress.has(song.id) ? '⏳' : '👍'}
                                         </button>
@@ -3354,7 +3355,7 @@ export default function HomePage() {
                                             }
                                         }}
                                         disabled={isDeleting}
-                                        title={purgeArmedSongId === song.id ? 'Tap again to confirm!' : 'PURGE this song!'}
+                                        title={purgeArmedSongId === song.id ? 'Tap again to confirm' : 'Delete this song'}
                                     >
                                         {purgeArmedSongId === song.id ? '⚠️ Confirm?' : '💀'}
                                     </button>
