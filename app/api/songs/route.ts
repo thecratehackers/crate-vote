@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch data in parallel - most of these are cached
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
@@ -70,6 +70,8 @@ export async function GET(request: Request) {
         getSessionPermissions(),
         getYouTubeEmbed(),
         getStreamConfig(),
+        getPrizeDropStatus(),
+        getLeaderboardKingStatus(),
     ]);
 
     // Check if user can delete during window
@@ -123,6 +125,8 @@ export async function GET(request: Request) {
         permissions: sessionPermissions,
         youtubeEmbed,
         streamConfig,
+        prizeDrop: prizeDropStatus,
+        leaderboardKing: leaderboardKingStatus,
     });
 }
 

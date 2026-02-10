@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTimerStatus, startTimer, stopTimer, resetTimer, isUserBanned, isRedisConfigured } from '@/lib/redis-store';
+import { getTimerStatus, startTimer, stopTimer, resetTimer, isUserBanned, isRedisConfigured, crownLeaderboardKing } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 
 // GET - Get timer status (public)
@@ -51,6 +51,8 @@ export async function POST(request: Request) {
 
             case 'stop':
                 await stopTimer();
+                // 👑 Auto-crown the Leaderboard King when session ends
+                crownLeaderboardKing().catch(err => console.error('Failed to crown leaderboard king:', err));
                 const timerAfterStop = await getTimerStatus();
                 return NextResponse.json({ success: true, ...timerAfterStop });
 

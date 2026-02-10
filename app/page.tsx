@@ -238,6 +238,19 @@ export default function HomePage() {
     const [winnerSongName, setWinnerSongName] = useState<string>('');
     const previousTimerRunning = useRef<boolean>(false);
 
+    // 🎰 GOLDEN HOUR PRIZE DROP - Random active user wins a prize
+    const [showPrizeDrop, setShowPrizeDrop] = useState(false);
+    const [prizeDropIsWinner, setPrizeDropIsWinner] = useState(false);
+    const [prizeDropWinnerName, setPrizeDropWinnerName] = useState<string>('');
+    const [lastPrizeDropTimestamp, setLastPrizeDropTimestamp] = useState(0);
+
+    // 👑 LEADERBOARD KING - MVP at session end
+    const [showLeaderboardKing, setShowLeaderboardKing] = useState(false);
+    const [leaderboardKingIsMe, setLeaderboardKingIsMe] = useState(false);
+    const [leaderboardKingName, setLeaderboardKingName] = useState<string>('');
+    const [leaderboardKingScore, setLeaderboardKingScore] = useState(0);
+    const [lastLeaderboardKingTimestamp, setLastLeaderboardKingTimestamp] = useState(0);
+
     // 📺 STREAM EMBED - Admin-controlled live stream (YouTube or Twitch)
     const [streamPlatform, setStreamPlatform] = useState<'youtube' | 'twitch' | null>(null);
     const [youtubeEmbed, setYoutubeEmbed] = useState<string | null>(null);
@@ -966,6 +979,41 @@ export default function HomePage() {
                     setShowKarmaRain(false);
                     setShowConfetti(false);
                 }, 5000);
+            }
+
+            // 🎰 Handle Golden Hour Prize Drop
+            if (data.prizeDrop && data.prizeDrop.active && data.prizeDrop.timestamp > lastPrizeDropTimestamp) {
+                setLastPrizeDropTimestamp(data.prizeDrop.timestamp);
+                const isWinner = data.prizeDrop.winnerVisitorId === visitorId;
+                setPrizeDropIsWinner(isWinner);
+                setPrizeDropWinnerName(data.prizeDrop.winnerName || 'Someone');
+                setShowPrizeDrop(true);
+                if (isWinner) {
+                    SoundEffects.victory();
+                } else {
+                    SoundEffects.karmaRain();
+                }
+                // Auto-dismiss for non-winners after 8s, winner can close manually
+                if (!isWinner) {
+                    setTimeout(() => setShowPrizeDrop(false), 8000);
+                }
+            }
+
+            // 👑 Handle Leaderboard King announcement
+            if (data.leaderboardKing && data.leaderboardKing.active && data.leaderboardKing.timestamp > lastLeaderboardKingTimestamp) {
+                setLastLeaderboardKingTimestamp(data.leaderboardKing.timestamp);
+                const isMe = data.leaderboardKing.winnerVisitorId === visitorId;
+                setLeaderboardKingIsMe(isMe);
+                setLeaderboardKingName(data.leaderboardKing.winnerName || 'Someone');
+                setLeaderboardKingScore(data.leaderboardKing.score || 0);
+                setShowLeaderboardKing(true);
+                if (isMe) {
+                    SoundEffects.victory();
+                }
+                // Auto-dismiss for non-winners after 8s
+                if (!isMe) {
+                    setTimeout(() => setShowLeaderboardKing(false), 8000);
+                }
             }
 
             // 📢 Process live activity from server
@@ -2183,6 +2231,134 @@ export default function HomePage() {
                             </a>
                             <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
                         </div>
+                    </div>
+                )
+            }
+
+            {/* 🎰 GOLDEN HOUR PRIZE DROP */}
+            {
+                showPrizeDrop && (
+                    <div className={`prize-drop-overlay ${prizeDropIsWinner ? 'is-winner' : 'is-viewer'}`} onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowPrizeDrop(false);
+                    }}>
+                        {prizeDropIsWinner ? (
+                            <div className="prize-drop-modal winner-modal-prize">
+                                <button className="winner-close" onClick={() => setShowPrizeDrop(false)}>✕</button>
+                                <div className="prize-drop-particles">
+                                    {[...Array(15)].map((_, i) => (
+                                        <span key={i} className="prize-particle" style={{
+                                            left: `${Math.random() * 100}%`,
+                                            top: `${Math.random() * 100}%`,
+                                            animationDelay: `${Math.random() * 2}s`,
+                                        }}>
+                                            {['🎰', '💰', '✨', '🎉', '💎'][i % 5]}
+                                        </span>
+                                    ))}
+                                </div>
+                                <span className="prize-drop-mega-icon">🎰</span>
+                                <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
+                                <p className="prize-drop-subtitle">You were randomly selected — you win a FREE HAT!</p>
+                                <div className="winner-prize">
+                                    <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
+                                    <div className="prize-details">
+                                        <h2>FREE HAT!</h2>
+                                        <p className="promo-code">Use code: <strong>DOMTEST</strong></p>
+                                    </div>
+                                </div>
+                                <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
+                                <a
+                                    href="https://dj.style/discount/DOMTEST?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="claim-prize-btn"
+                                >
+                                    🎁 CLAIM YOUR FREE HAT
+                                </a>
+                                <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
+                            </div>
+                        ) : (
+                            <div className="prize-drop-broadcast">
+                                <div className="prize-drop-particles">
+                                    {[...Array(10)].map((_, i) => (
+                                        <span key={i} className="prize-particle" style={{
+                                            left: `${Math.random() * 100}%`,
+                                            top: `${Math.random() * 100}%`,
+                                            animationDelay: `${Math.random() * 2}s`,
+                                        }}>
+                                            {['🎰', '💰', '✨', '🎉', '💎'][i % 5]}
+                                        </span>
+                                    ))}
+                                </div>
+                                <span className="prize-drop-mega-icon">🎰</span>
+                                <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
+                                <p className="prize-drop-winner-name">🎉 {prizeDropWinnerName} just won a FREE HAT!</p>
+                                <p className="prize-drop-hint">Stay active — you could be next! 🎯</p>
+                            </div>
+                        )}
+                    </div>
+                )
+            }
+
+            {/* 👑 LEADERBOARD KING ANNOUNCEMENT */}
+            {
+                showLeaderboardKing && (
+                    <div className={`leaderboard-king-overlay ${leaderboardKingIsMe ? 'is-winner' : 'is-viewer'}`} onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowLeaderboardKing(false);
+                    }}>
+                        {leaderboardKingIsMe ? (
+                            <div className="leaderboard-king-modal winner-modal-prize">
+                                <button className="winner-close" onClick={() => setShowLeaderboardKing(false)}>✕</button>
+                                <div className="king-crown-particles">
+                                    {[...Array(12)].map((_, i) => (
+                                        <span key={i} className="king-particle" style={{
+                                            left: `${10 + Math.random() * 80}%`,
+                                            top: `${10 + Math.random() * 80}%`,
+                                            animationDelay: `${Math.random() * 2}s`,
+                                        }}>
+                                            {['👑', '⭐', '✨', '🏆'][i % 4]}
+                                        </span>
+                                    ))}
+                                </div>
+                                <span className="king-mega-icon">👑</span>
+                                <h1 className="king-title">LEADERBOARD KING!</h1>
+                                <p className="king-subtitle">You&apos;re the #1 contributor with <strong>{leaderboardKingScore}</strong> points!</p>
+                                <div className="winner-prize">
+                                    <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
+                                    <div className="prize-details">
+                                        <h2>FREE HAT!</h2>
+                                        <p className="promo-code">Use code: <strong>DOMTEST</strong></p>
+                                    </div>
+                                </div>
+                                <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
+                                <a
+                                    href="https://dj.style/discount/DOMTEST?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="claim-prize-btn"
+                                >
+                                    🎁 CLAIM YOUR FREE HAT
+                                </a>
+                                <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
+                            </div>
+                        ) : (
+                            <div className="leaderboard-king-broadcast">
+                                <div className="king-crown-particles">
+                                    {[...Array(8)].map((_, i) => (
+                                        <span key={i} className="king-particle" style={{
+                                            left: `${10 + Math.random() * 80}%`,
+                                            top: `${10 + Math.random() * 80}%`,
+                                            animationDelay: `${Math.random() * 2}s`,
+                                        }}>
+                                            {['👑', '⭐', '✨', '🏆'][i % 4]}
+                                        </span>
+                                    ))}
+                                </div>
+                                <span className="king-mega-icon">👑</span>
+                                <h1 className="king-title">LEADERBOARD KING!</h1>
+                                <p className="king-winner-name">🏆 {leaderboardKingName} is the #1 contributor!</p>
+                                <p className="king-score">Score: <strong>{leaderboardKingScore}</strong> points</p>
+                            </div>
+                        )}
                     </div>
                 )
             }

@@ -81,6 +81,8 @@ const SESSION_PERMISSIONS_KEY = 'hackathon:sessionPermissions';  // { canVote: b
 const YOUTUBE_EMBED_KEY = 'hackathon:youtubeEmbed';  // YouTube URL for live stream embed (legacy)
 const STREAM_CONFIG_KEY = 'hackathon:streamConfig';  // { platform, youtubeUrl?, twitchChannel? }
 const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } - when double points mode is active
+const PRIZE_DROP_KEY = 'hackathon:prizeDrop';  // { winnerVisitorId, winnerName, timestamp, prizeType } - active prize drop
+const LEADERBOARD_KING_KEY = 'hackathon:leaderboardKing';  // { winnerVisitorId, winnerName, score, timestamp } - session-end MVP
 
 // VERSUS BATTLE KEYS - Head-to-head song battles
 const VERSUS_BATTLE_KEY = 'hackathon:versusBattle';  // Main battle state
@@ -1161,6 +1163,8 @@ export async function resetSession(): Promise<void> {
         redis.del(DELETE_WINDOW_USED_KEY),
         redis.del(KARMA_RAIN_KEY),
         redis.del(DOUBLE_POINTS_KEY),
+        redis.del(PRIZE_DROP_KEY),
+        redis.del(LEADERBOARD_KING_KEY),
 
         // Versus Battle
         redis.del(VERSUS_BATTLE_KEY),
@@ -2162,6 +2166,142 @@ export async function getKarmaRainStatus(): Promise<{ active: boolean; timestamp
     } catch (error) {
         console.error('Failed to get karma rain status:', error);
         return { active: false, timestamp: 0, count: 0 };
+    }
+}
+
+// ============ GOLDEN HOUR PRIZE DROP ============
+// Admin triggers a random prize drop — picks a random active user and awards them
+
+interface PrizeDropData {
+    winnerVisitorId: string;
+    winnerName: string;
+    timestamp: number;
+    prizeType: 'golden_hour';
+}
+
+// Trigger a prize drop — pick a random active viewer
+export async function triggerPrizeDrop(): Promise<{ success: boolean; winner?: { visitorId: string; name: string }; error?: string }> {
+    try {
+        // Get active viewers from heartbeats (active in last 60 seconds for prize eligibility)
+        const heartbeats = await redis.hgetall<Record<string, number>>(VIEWER_HEARTBEAT_KEY) || {};
+        const now = Date.now();
+        const activeThreshold = now - 60000; // Active in last 60s
+
+        // Also get usernames from songs they've added
+        const songs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+        const usernameMap: Record<string, string> = {};
+        for (const song of Object.values(songs || {})) {
+            if (song.addedBy && song.addedByName) {
+                usernameMap[song.addedBy] = song.addedByName;
+            }
+        }
+
+        // Filter to active viewers who have contributed songs (real participants, not lurkers)
+        const eligibleViewers = Object.entries(heartbeats)
+            .filter(([visitorId, lastSeen]) => lastSeen >= activeThreshold && usernameMap[visitorId])
+            .map(([visitorId]) => visitorId);
+
+        if (eligibleViewers.length === 0) {
+            return { success: false, error: 'No eligible active users found. Users need to have added at least one song.' };
+        }
+
+        // Pick a random winner
+        const winnerVisitorId = eligibleViewers[Math.floor(Math.random() * eligibleViewers.length)];
+        const winnerName = usernameMap[winnerVisitorId] || 'Anonymous';
+
+        // Store the prize drop (expires in 60 seconds — enough for all clients to poll and see it)
+        const prizeData: PrizeDropData = {
+            winnerVisitorId,
+            winnerName,
+            timestamp: now,
+            prizeType: 'golden_hour',
+        };
+        await redis.set(PRIZE_DROP_KEY, prizeData, { ex: 60 });
+
+        console.log(`🎰 PRIZE DROP: ${winnerName} (${winnerVisitorId}) won the Golden Hour Drop!`);
+
+        return { success: true, winner: { visitorId: winnerVisitorId, name: winnerName } };
+    } catch (error) {
+        console.error('Failed to trigger prize drop:', error);
+        return { success: false, error: 'Failed to trigger prize drop' };
+    }
+}
+
+// Get prize drop status (for clients to detect via polling)
+export async function getPrizeDropStatus(): Promise<{ active: boolean; winnerVisitorId: string | null; winnerName: string | null; timestamp: number }> {
+    try {
+        const data = await redis.get<PrizeDropData>(PRIZE_DROP_KEY);
+        if (!data) return { active: false, winnerVisitorId: null, winnerName: null, timestamp: 0 };
+        return {
+            active: true,
+            winnerVisitorId: data.winnerVisitorId,
+            winnerName: data.winnerName,
+            timestamp: data.timestamp,
+        };
+    } catch (error) {
+        console.error('Failed to get prize drop status:', error);
+        return { active: false, winnerVisitorId: null, winnerName: null, timestamp: 0 };
+    }
+}
+
+// ============ LEADERBOARD KING ============
+// At session end, the #1 leaderboard contributor gets a prize
+
+interface LeaderboardKingData {
+    winnerVisitorId: string;
+    winnerName: string;
+    score: number;
+    timestamp: number;
+}
+
+// Crown the leaderboard king — called when session ends
+export async function crownLeaderboardKing(): Promise<{ success: boolean; winner?: { visitorId: string; name: string; score: number }; error?: string }> {
+    try {
+        const leaderboard = await getLeaderboard();
+
+        if (leaderboard.length === 0) {
+            return { success: false, error: 'Leaderboard is empty' };
+        }
+
+        const king = leaderboard[0];
+
+        if (king.score <= 0) {
+            return { success: false, error: 'No positive scores on leaderboard' };
+        }
+
+        // Store the king (expires in 5 minutes)
+        const kingData: LeaderboardKingData = {
+            winnerVisitorId: king.visitorId,
+            winnerName: king.username,
+            score: king.score,
+            timestamp: Date.now(),
+        };
+        await redis.set(LEADERBOARD_KING_KEY, kingData, { ex: 300 });
+
+        console.log(`👑 LEADERBOARD KING: ${king.username} crowned with score ${king.score}!`);
+
+        return { success: true, winner: { visitorId: king.visitorId, name: king.username, score: king.score } };
+    } catch (error) {
+        console.error('Failed to crown leaderboard king:', error);
+        return { success: false, error: 'Failed to determine leaderboard king' };
+    }
+}
+
+// Get leaderboard king status (for clients to detect via polling)
+export async function getLeaderboardKingStatus(): Promise<{ active: boolean; winnerVisitorId: string | null; winnerName: string | null; score: number; timestamp: number }> {
+    try {
+        const data = await redis.get<LeaderboardKingData>(LEADERBOARD_KING_KEY);
+        if (!data) return { active: false, winnerVisitorId: null, winnerName: null, score: 0, timestamp: 0 };
+        return {
+            active: true,
+            winnerVisitorId: data.winnerVisitorId,
+            winnerName: data.winnerName,
+            score: data.score,
+            timestamp: data.timestamp,
+        };
+    } catch (error) {
+        console.error('Failed to get leaderboard king status:', error);
+        return { active: false, winnerVisitorId: null, winnerName: null, score: 0, timestamp: 0 };
     }
 }
 

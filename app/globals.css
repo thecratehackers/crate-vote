@@ -10374,6 +10374,456 @@ input:disabled {
   opacity: 0.9;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   🎰 GOLDEN HOUR PRIZE DROP - Vegas-style overlay
+   ═══════════════════════════════════════════════════════════════════ */
+
+.prize-drop-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.prize-drop-overlay.is-winner {
+  background: rgba(0, 0, 0, 0.92);
+}
+
+.prize-drop-overlay.is-viewer {
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* Winner modal — full interaction */
+.prize-drop-modal {
+  background: linear-gradient(135deg, #1a1a2e 0%, #2d1810 50%, #1a0f05 100%);
+  border: 3px solid #ff9800;
+  border-radius: 24px;
+  padding: 32px 40px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 0 80px rgba(255, 152, 0, 0.5),
+    0 0 160px rgba(255, 152, 0, 0.2),
+    0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.prize-drop-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.prize-particle {
+  position: absolute;
+  font-size: 1.8rem;
+  animation: prizeParticleFloat 3s ease-in-out infinite;
+  opacity: 0.5;
+}
+
+@keyframes prizeParticleFloat {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 0.4;
+  }
+
+  50% {
+    transform: translateY(-25px) rotate(180deg) scale(1.2);
+    opacity: 0.7;
+  }
+}
+
+.prize-drop-mega-icon {
+  font-size: 5rem;
+  display: block;
+  position: relative;
+  z-index: 1;
+  animation: slotMachineSpin 0.6s ease-out, prizePulse 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 30px rgba(255, 152, 0, 0.8));
+  margin-bottom: 8px;
+}
+
+@keyframes slotMachineSpin {
+  0% {
+    transform: scale(0) rotateY(720deg);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.3) rotateY(0deg);
+  }
+
+  100% {
+    transform: scale(1) rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes prizePulse {
+
+  0%,
+  100% {
+    filter: drop-shadow(0 0 20px rgba(255, 152, 0, 0.6));
+    transform: scale(1);
+  }
+
+  50% {
+    filter: drop-shadow(0 0 50px rgba(255, 152, 0, 1)) drop-shadow(0 0 80px rgba(255, 215, 0, 0.5));
+    transform: scale(1.08);
+  }
+}
+
+.prize-drop-title {
+  font-family: 'Rubik', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(135deg, #ffd700 0%, #ff9800 50%, #ffd700 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: goldShimmer 2s ease-in-out infinite;
+  margin: 0 0 8px;
+}
+
+@keyframes goldShimmer {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.prize-drop-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.1rem;
+  font-weight: 600;
+  position: relative;
+  z-index: 1;
+  margin: 0 0 20px;
+}
+
+/* Broadcast (non-winner) — floating banner */
+.prize-drop-broadcast {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(0, 0, 0, 0.85) 100%);
+  border: 2px solid rgba(255, 152, 0, 0.5);
+  border-radius: 20px;
+  padding: 28px 40px;
+  max-width: 460px;
+  width: 85%;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 0 40px rgba(255, 152, 0, 0.3),
+    0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: broadcastSlideIn 0.4s ease-out;
+}
+
+@keyframes broadcastSlideIn {
+  0% {
+    transform: translateY(-40px) scale(0.9);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.prize-drop-broadcast .prize-drop-mega-icon {
+  font-size: 3.5rem;
+}
+
+.prize-drop-broadcast .prize-drop-title {
+  font-size: 1.6rem;
+  letter-spacing: 3px;
+}
+
+.prize-drop-winner-name {
+  color: #ffd700;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 8px 0;
+  position: relative;
+  z-index: 1;
+}
+
+.prize-drop-hint {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  margin: 4px 0 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   👑 LEADERBOARD KING - Royal MVP announcement
+   ═══════════════════════════════════════════════════════════════════ */
+
+.leaderboard-king-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.leaderboard-king-overlay.is-winner {
+  background: rgba(0, 0, 0, 0.92);
+}
+
+.leaderboard-king-overlay.is-viewer {
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* Winner modal */
+.leaderboard-king-modal {
+  background: linear-gradient(135deg, #1a0f2e 0%, #2e1065 50%, #1a0f2e 100%);
+  border: 3px solid #a855f7;
+  border-radius: 24px;
+  padding: 32px 40px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 0 80px rgba(168, 85, 247, 0.5),
+    0 0 160px rgba(168, 85, 247, 0.2),
+    0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.king-crown-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.king-particle {
+  position: absolute;
+  font-size: 1.8rem;
+  animation: kingParticleFloat 3s ease-in-out infinite;
+  opacity: 0.5;
+}
+
+@keyframes kingParticleFloat {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translateY(-20px) rotate(180deg) scale(1.3);
+    opacity: 0.7;
+  }
+}
+
+.king-mega-icon {
+  font-size: 5rem;
+  display: block;
+  position: relative;
+  z-index: 1;
+  animation: crownDrop 0.7s ease-out, crownFloat 2s ease-in-out infinite 0.7s;
+  filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.8));
+  margin-bottom: 8px;
+}
+
+@keyframes crownDrop {
+  0% {
+    transform: translateY(-80px) scale(0.5);
+    opacity: 0;
+  }
+
+  60% {
+    transform: translateY(10px) scale(1.1);
+  }
+
+  80% {
+    transform: translateY(-5px) scale(0.95);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes crownFloat {
+
+  0%,
+  100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 25px rgba(255, 215, 0, 0.7));
+  }
+
+  50% {
+    transform: translateY(-8px);
+    filter: drop-shadow(0 0 50px rgba(255, 215, 0, 1)) drop-shadow(0 0 80px rgba(168, 85, 247, 0.4));
+  }
+}
+
+.king-title {
+  font-family: 'Rubik', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(135deg, #ffd700 0%, #a855f7 50%, #ffd700 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: goldShimmer 2s ease-in-out infinite;
+  margin: 0 0 8px;
+}
+
+.king-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.1rem;
+  font-weight: 600;
+  position: relative;
+  z-index: 1;
+  margin: 0 0 20px;
+}
+
+.king-subtitle strong {
+  color: #ffd700;
+  font-size: 1.3rem;
+}
+
+/* Broadcast (non-winner) */
+.leaderboard-king-broadcast {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(0, 0, 0, 0.85) 100%);
+  border: 2px solid rgba(168, 85, 247, 0.5);
+  border-radius: 20px;
+  padding: 28px 40px;
+  max-width: 460px;
+  width: 85%;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 0 40px rgba(168, 85, 247, 0.3),
+    0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: broadcastSlideIn 0.4s ease-out;
+}
+
+.leaderboard-king-broadcast .king-mega-icon {
+  font-size: 3.5rem;
+}
+
+.leaderboard-king-broadcast .king-title {
+  font-size: 1.6rem;
+  letter-spacing: 3px;
+}
+
+.king-winner-name {
+  color: #ffd700;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 8px 0;
+  position: relative;
+  z-index: 1;
+}
+
+.king-score {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+  margin: 4px 0 0;
+  position: relative;
+  z-index: 1;
+}
+
+.king-score strong {
+  color: #a855f7;
+  font-size: 1.1rem;
+}
+
+/* Admin tool button styling for prize drop */
+.tool-btn.prize-drop {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(255, 215, 0, 0.1) 100%) !important;
+  border-color: rgba(255, 152, 0, 0.3) !important;
+}
+
+.tool-btn.prize-drop:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.3) 0%, rgba(255, 215, 0, 0.2) 100%) !important;
+  border-color: rgba(255, 152, 0, 0.6) !important;
+  box-shadow: 0 0 20px rgba(255, 152, 0, 0.3) !important;
+}
+
+/* ═══════════════════════════════════════════
+   📱 PRIZE OVERLAYS - Mobile adjustments
+   ═══════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+
+  .prize-drop-modal,
+  .leaderboard-king-modal {
+    padding: 24px 20px;
+    max-width: 340px;
+  }
+
+  .prize-drop-mega-icon,
+  .king-mega-icon {
+    font-size: 3.5rem !important;
+  }
+
+  .prize-drop-title,
+  .king-title {
+    font-size: 1.6rem !important;
+    letter-spacing: 2px !important;
+  }
+
+  .prize-drop-broadcast,
+  .leaderboard-king-broadcast {
+    padding: 20px 24px;
+    max-width: 320px;
+  }
+
+  .prize-drop-broadcast .prize-drop-mega-icon,
+  .leaderboard-king-broadcast .king-mega-icon {
+    font-size: 2.5rem !important;
+  }
+
+  .prize-drop-broadcast .prize-drop-title,
+  .leaderboard-king-broadcast .king-title {
+    font-size: 1.2rem !important;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    📺 LIVE STREAM HOST — Dual-mode: PiP (bottom-right) ↔ Expanded (sticky top)
    Supports YouTube + Twitch

@@ -112,6 +112,7 @@ export default function AdminPage() {
     const [isStartingDoublePoints, setIsStartingDoublePoints] = useState(false);
     const [doublePointsActive, setDoublePointsActive] = useState(false);
     const [isAddingSong, setIsAddingSong] = useState<string | null>(null);
+    const [isTriggeredPrizeDrop, setIsTriggeredPrizeDrop] = useState(false);
 
     // 🤖 AUTO-PILOT - Random surprise events during live sessions
     const [autoPilotEnabled, setAutoPilotEnabled] = useState(false);
@@ -1007,6 +1008,25 @@ export default function AdminPage() {
         }
     };
 
+    // 🎰 Golden Hour Prize Drop - pick random active user to win a prize
+    const handlePrizeDrop = async () => {
+        setIsTriggeredPrizeDrop(true);
+        try {
+            const res = await adminFetch('/api/admin/prize-drop', { method: 'POST' });
+            const data = await res.json();
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: `🎰 Golden Hour Drop! ${data.winner?.name} won a prize!` });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to trigger prize drop' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to trigger prize drop - network error' });
+        } finally {
+            setIsTriggeredPrizeDrop(false);
+        }
+    };
+
     // ═══════════════════════════════════════════════════════════════════
     // 🤖 AUTO-PILOT - Silent event triggers for automation
     // ═══════════════════════════════════════════════════════════════════
@@ -1061,6 +1081,19 @@ export default function AdminPage() {
         }
     };
 
+    // Silent Prize Drop - no confirmation
+    const triggerPrizeDropSilent = async () => {
+        try {
+            const res = await adminFetch('/api/admin/prize-drop', { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                setMessage({ type: 'success', text: `🎰 AUTO-PILOT: Golden Hour Drop! ${data.winner?.name} won!` });
+            }
+        } catch (error) {
+            console.error('Auto-pilot prize drop failed:', error);
+        }
+    };
+
     // 🤖 AUTO-PILOT EFFECT - Schedule random events when enabled
     useEffect(() => {
         // Clear any existing timeouts
@@ -1080,11 +1113,12 @@ export default function AdminPage() {
         let numEvents = Math.floor(remainingMinutes / 4); // 1 event every 4 minutes
         numEvents = Math.max(1, Math.min(numEvents, 10)); // Between 1-10 events
 
-        // Event pool (weighted: Shuffle 40%, Karma Rain 40%, Purge 20%)
+        // Event pool (weighted: Shuffle 30%, Karma Rain 30%, Purge 20%, Prize Drop 20%)
         const eventPool = [
-            { type: 'shuffle', weight: 40 },
-            { type: 'karma', weight: 40 },
+            { type: 'shuffle', weight: 30 },
+            { type: 'karma', weight: 30 },
             { type: 'purge', weight: 20 },
+            { type: 'prize', weight: 20 },
         ];
 
         const pickRandomEvent = () => {
@@ -1126,6 +1160,9 @@ export default function AdminPage() {
                         break;
                     case 'karma':
                         await triggerKarmaRainSilent();
+                        break;
+                    case 'prize':
+                        await triggerPrizeDropSilent();
                         break;
                 }
             }, delay);
@@ -1769,6 +1806,10 @@ export default function AdminPage() {
                             <button className="tool-btn predictions" onClick={handleRevealPredictions} disabled={isRevealingPredictions}>
                                 <span className="tool-icon">🎯</span>
                                 <span className="tool-name">{isRevealingPredictions ? 'Revealing...' : 'Reveal Predictions'}</span>
+                            </button>
+                            <button className="tool-btn prize-drop" onClick={handlePrizeDrop} disabled={isTriggeredPrizeDrop}>
+                                <span className="tool-icon">🎰</span>
+                                <span className="tool-name">{isTriggeredPrizeDrop ? 'Dropping...' : 'Prize Drop'}</span>
                             </button>
 
                             {/* 📺 STREAM PLATFORM SELECTOR */}
