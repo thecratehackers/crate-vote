@@ -247,6 +247,84 @@ export default function HomePage() {
     const [hideStreamLocally, setHideStreamLocally] = useState(false); // Admin screen-share mirror prevention
     const youtubePlayerRef = useRef<HTMLIFrameElement | null>(null);
     const youtubeWasUnmuted = useRef<boolean>(false);  // Track if user had audio on
+    const [twitchMuted, setTwitchMuted] = useState(true); // Twitch starts muted
+
+    // 📜 SCROLL-TRIGGERED EXPAND - expands PiP when user scrolls into playlist
+    const [scrollExpandedMuted, setScrollExpandedMuted] = useState(false); // true = expanded by scroll (still muted)
+    const hasAutoExpanded = useRef(false);   // prevent re-triggering after manual minimize
+    const userManuallyMinimized = useRef(false); // respect user's choice to minimize
+    const [chatDocked, setChatDocked] = useState(false); // Twitch chat docked as persistent bottom panel
+
+    // 🔊 Expand stream + auto-unmute — users tapping expand clearly want audio
+    const handleExpandStream = useCallback(() => {
+        setStreamMinimized(false);
+        // Unmute YouTube via iframe API
+        if (streamPlatform === 'youtube' && youtubePlayerRef.current) {
+            try {
+                youtubePlayerRef.current.contentWindow?.postMessage(
+                    JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*'
+                );
+            } catch (e) { /* cross-origin may fail silently */ }
+        }
+        // Unmute Twitch by toggling the muted param (causes iframe src reload)
+        if (streamPlatform === 'twitch') {
+            setTwitchMuted(false);
+        }
+        setScrollExpandedMuted(false); // Manual expand = user wants sound
+    }, [streamPlatform]);
+
+    // 🔇 Minimize stream + re-mute so PiP doesn't blast audio
+    const handleMinimizeStream = useCallback(() => {
+        setStreamMinimized(true);
+        setScrollExpandedMuted(false);
+        userManuallyMinimized.current = true; // Don't auto-expand again
+        // Mute YouTube via iframe API
+        if (streamPlatform === 'youtube' && youtubePlayerRef.current) {
+            try {
+                youtubePlayerRef.current.contentWindow?.postMessage(
+                    JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*'
+                );
+            } catch (e) { /* cross-origin may fail silently */ }
+        }
+        // Re-mute Twitch
+        if (streamPlatform === 'twitch') {
+            setTwitchMuted(true);
+        }
+    }, [streamPlatform]);
+
+    // 🔊 Unmute after scroll-expand — user taps "Tap for sound" on expanded player
+    const handleUnmuteExpanded = useCallback(() => {
+        setScrollExpandedMuted(false);
+        if (streamPlatform === 'youtube' && youtubePlayerRef.current) {
+            try {
+                youtubePlayerRef.current.contentWindow?.postMessage(
+                    JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*'
+                );
+            } catch (e) { /* cross-origin may fail silently */ }
+        }
+        if (streamPlatform === 'twitch') {
+            setTwitchMuted(false);
+        }
+    }, [streamPlatform]);
+
+    // 📜 Scroll listener — auto-expand PiP when user scrolls into playlist
+    useEffect(() => {
+        const hasStream = (streamPlatform === 'youtube' && youtubeEmbed) || (streamPlatform === 'twitch' && twitchChannel);
+        if (!hasStream || hideStreamLocally) return;
+
+        const onScroll = () => {
+            const scrollY = window.scrollY || document.documentElement.scrollTop;
+            // Trigger when user scrolls ~350px (roughly past the header + search bar)
+            if (scrollY > 350 && streamMinimized && !hasAutoExpanded.current && !userManuallyMinimized.current) {
+                hasAutoExpanded.current = true;
+                setStreamMinimized(false);
+                setScrollExpandedMuted(true); // Stay muted — don't scare them
+            }
+        };
+
+        window.addEventListener('scroll', onScroll, { passive: true });
+        return () => window.removeEventListener('scroll', onScroll);
+    }, [streamPlatform, youtubeEmbed, twitchChannel, hideStreamLocally, streamMinimized]);
 
     // ⚔️ Versus Battle state
     interface VersusBattleSong {
@@ -369,6 +447,14 @@ export default function HomePage() {
     const [showRulesPopover, setShowRulesPopover] = useState(false);
     const [userLocation, setUserLocation] = useState<string | null>(null);  // User's location for tracking
 
+    // 🎯 Multi-step onboarding state
+    const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
+    const [isProfessionalDJ, setIsProfessionalDJ] = useState<boolean | null>(null);
+    const [emailInput, setEmailInput] = useState('');
+    const [phoneInput, setPhoneInput] = useState('');
+    const [isSubmittingKartra, setIsSubmittingKartra] = useState(false);
+    const [kartraError, setKartraError] = useState<string | null>(null);
+
     // Color options for user name
     // Color options for user name - limited to readable colors on dark background
     const COLOR_OPTIONS = [
@@ -416,6 +502,65 @@ export default function HomePage() {
 
     // 📢 AUTO SHOUT-OUTS - Rotating encouragement messages
     const [currentShoutout, setCurrentShoutout] = useState<string | null>(null);
+
+    // 📡 BROADCAST COUNTDOWN - Next Tuesday 8 PM ET
+    const [broadcastCountdown, setBroadcastCountdown] = useState<string>('');
+    const [isBroadcastLive, setIsBroadcastLive] = useState(false);
+
+    // 📬 WAITING SCREEN RSVP - Mailing list signup for idle visitors
+    const [waitingEmail, setWaitingEmail] = useState('');
+    const [waitingRsvpStatus, setWaitingRsvpStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+    const [waitingRsvpError, setWaitingRsvpError] = useState<string | null>(null);
+    const [waitingRsvpAlreadyDone, setWaitingRsvpAlreadyDone] = useState(false);
+
+    useEffect(() => {
+        const calcCountdown = () => {
+            const now = new Date();
+            // Convert to ET (America/New_York)
+            const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const etDay = etNow.getDay(); // 0=Sun, 2=Tue
+            const etHour = etNow.getHours();
+
+            // Broadcast window: Tuesday 8 PM - 11 PM ET
+            if (etDay === 2 && etHour >= 20 && etHour < 23) {
+                setIsBroadcastLive(true);
+                setBroadcastCountdown('');
+                return;
+            }
+            setIsBroadcastLive(false);
+
+            // Calculate next Tuesday 8 PM ET
+            // Build target date in ET
+            const target = new Date(etNow);
+            target.setHours(20, 0, 0, 0);
+            let daysUntilTuesday = (2 - etDay + 7) % 7;
+            // If it's Tuesday but past broadcast window, next week
+            if (daysUntilTuesday === 0 && etHour >= 23) daysUntilTuesday = 7;
+            target.setDate(target.getDate() + daysUntilTuesday);
+
+            const diff = target.getTime() - etNow.getTime();
+            if (diff <= 0) {
+                setBroadcastCountdown('Soon!');
+                return;
+            }
+
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+            if (days > 0) {
+                setBroadcastCountdown(`${days}d ${hours}h ${mins}m`);
+            } else if (hours > 0) {
+                setBroadcastCountdown(`${hours}h ${mins}m`);
+            } else {
+                setBroadcastCountdown(`${mins}m`);
+            }
+        };
+
+        calcCountdown();
+        const interval = setInterval(calcCountdown, 60_000); // Update every minute
+        return () => clearInterval(interval);
+    }, []);
 
     // 🔄 Debounce for refresh button
     const [isRefreshCooldown, setIsRefreshCooldown] = useState(false);
@@ -516,6 +661,12 @@ export default function HomePage() {
                 setShowUsernameModal(true);
             }
 
+            // Check if user already signed up for mailing list
+            const rsvpDone = localStorage.getItem('crate-rsvp-done');
+            if (rsvpDone === 'true') {
+                setWaitingRsvpAlreadyDone(true);
+            }
+
             // Initialize sound effects on first interaction
             SoundEffects.init();
 
@@ -546,19 +697,59 @@ export default function HomePage() {
     };
 
     // Save username with loading feedback
-    const handleSetUsername = async () => {
+    // Step 1 → Step 2: Validate DJ name and advance
+    const handleStep1Next = () => {
         const name = usernameInput.trim();
         if (name.length === 0) {
             setMessage({ type: 'error', text: 'Please enter a name' });
             return;
         }
-        // Check for profanity
         if (containsBadWord(name)) {
             setMessage({ type: 'error', text: 'Please choose an appropriate username' });
             return;
         }
+        setOnboardingStep(2);
+    };
+
+    // Step 2 → Step 3: Pro DJ answer and advance
+    const handleStep2Next = (isPro: boolean) => {
+        setIsProfessionalDJ(isPro);
+        setOnboardingStep(3);
+    };
+
+    // Step 3: Submit to Kartra and complete onboarding
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    const handleOnboardingComplete = async () => {
+        const name = usernameInput.trim();
+        const email = emailInput.trim();
+
+        if (!email || !isValidEmail(email)) {
+            setKartraError('Please enter a valid email address (e.g. you@example.com)');
+            return;
+        }
+
+        setIsSubmittingKartra(true);
+        setKartraError(null);
+
+        // Fire Kartra lead creation (non-blocking to login)
+        try {
+            await fetch('/api/kartra', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    phone: phoneInput.trim() || undefined,
+                    firstName: name,
+                }),
+            });
+        } catch (err) {
+            // Don't block onboarding if Kartra fails — just log it
+            console.warn('Kartra submission failed (non-blocking):', err);
+        }
+
+        // Now complete the actual login (same logic as before)
         setIsSavingUsername(true);
-        // Simulate slight delay for feedback
         await new Promise(resolve => setTimeout(resolve, 200));
         setUsername(name);
         try {
@@ -570,7 +761,61 @@ export default function HomePage() {
             localStorage.setItem('crate-color', colorInput);
             setUserColor(colorInput);
         } catch (e) {
-            // localStorage full or disabled - continue anyway, just won't persist
+            console.warn('Could not save to localStorage:', e);
+        }
+        setIsSavingUsername(false);
+        setIsSubmittingKartra(false);
+        setShowUsernameModal(false);
+        setOnboardingStep(1); // Reset for next time
+        setMessage({ type: 'success', text: `Welcome to the community, ${name}! 🎧` });
+    };
+
+    // Skip Step 3: Let users in without email capture
+    const handleSkipOnboarding = async () => {
+        const name = usernameInput.trim();
+        setIsSavingUsername(true);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        setUsername(name);
+        try {
+            localStorage.setItem('crate-username', name);
+            if (avatarInput) {
+                localStorage.setItem('crate-avatar', avatarInput);
+                setUserAvatar(avatarInput);
+            }
+            localStorage.setItem('crate-color', colorInput);
+            setUserColor(colorInput);
+        } catch (e) {
+            console.warn('Could not save to localStorage:', e);
+        }
+        setIsSavingUsername(false);
+        setShowUsernameModal(false);
+        setOnboardingStep(1);
+        setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
+    };
+
+    // Legacy handler for profile editing (re-opening modal when already logged in)
+    const handleSetUsername = async () => {
+        const name = usernameInput.trim();
+        if (name.length === 0) {
+            setMessage({ type: 'error', text: 'Please enter a name' });
+            return;
+        }
+        if (containsBadWord(name)) {
+            setMessage({ type: 'error', text: 'Please choose an appropriate username' });
+            return;
+        }
+        setIsSavingUsername(true);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        setUsername(name);
+        try {
+            localStorage.setItem('crate-username', name);
+            if (avatarInput) {
+                localStorage.setItem('crate-avatar', avatarInput);
+                setUserAvatar(avatarInput);
+            }
+            localStorage.setItem('crate-color', colorInput);
+            setUserColor(colorInput);
+        } catch (e) {
             console.warn('Could not save to localStorage:', e);
         }
         setIsSavingUsername(false);
@@ -808,7 +1053,7 @@ export default function HomePage() {
             };
             setToastQueue(prev => [tip, ...prev.slice(0, 2)]); // Add tip, keep max 3
             tipIndex++;
-        }, 45000); // Every 45 seconds
+        }, 90000); // Every 90 seconds (reduced from 45s to minimize noise)
 
         return () => clearInterval(tipInterval);
     }, []);
@@ -1476,6 +1721,8 @@ export default function HomePage() {
             // UPVOTE
             if (hasUpvoted) {
                 // Remove upvote (toggle off)
+                const removedSong = songs.find(s => s.id === songId);
+                if (removedSong) toast.info(`Vote removed from "${removedSong.name}"`);
                 setUserVotes(prev => ({
                     ...prev,
                     upvotedSongIds: prev.upvotedSongIds.filter(id => id !== songId)
@@ -1510,6 +1757,8 @@ export default function HomePage() {
             // DOWNVOTE
             if (hasDownvoted) {
                 // Remove downvote (toggle off)
+                const removedSong = songs.find(s => s.id === songId);
+                if (removedSong) toast.info(`Vote removed from "${removedSong.name}"`);
                 setUserVotes(prev => ({
                     ...prev,
                     downvotedSongIds: prev.downvotedSongIds.filter(id => id !== songId)
@@ -1627,8 +1876,7 @@ export default function HomePage() {
             <div className="stream-layout loading-state">
                 <header className="stream-header">
                     <div className="header-left">
-                        <img src="/logo.png" alt="" className="mini-logo" />
-                        <span className="brand-name">{APP_CONFIG.name}</span>
+                        <img src="/crate-hackers-master-logo.png" alt="Crate Hackers" className="master-logo" />
                     </div>
                     <div className="header-right">
                         <span className="stat-pill capacity">--/100</span>
@@ -1657,174 +1905,301 @@ export default function HomePage() {
     return (
         <div className="stream-layout">
 
-            {/* 🔒 JOIN OVERLAY — glassmorphism over live page */}
-            {showUsernameModal && (
+            {/* 🔒 JOIN OVERLAY — Multi-step onboarding with Kartra integration */}
+            {showUsernameModal && !username && (
                 <div className="join-overlay">
                     <div className="join-card">
-                        <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
-                        <h2 className="join-title">Join the Crate Hackers Hackathon</h2>
-                        <p className="join-subtitle">Pick songs, vote, and collaborate live with DJs worldwide.
-                            Every Tuesday at 8 PM ET.</p>
+                        {/* Step indicator */}
+                        <div className="onboarding-steps-indicator">
+                            <span className={`step-dot ${onboardingStep >= 1 ? 'active' : ''}`} />
+                            <span className={`step-dot ${onboardingStep >= 2 ? 'active' : ''}`} />
+                            <span className={`step-dot ${onboardingStep >= 3 ? 'active' : ''}`} />
+                        </div>
 
-                        <div className="join-name-section">
-                            <input
-                                type="text"
-                                className="join-name-input"
-                                placeholder="Your name"
-                                value={usernameInput}
-                                onChange={(e) => setUsernameInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleSetUsername()}
-                                autoFocus
-                                maxLength={20}
-                                disabled={isSavingUsername}
-                            />
-                            <button
-                                className="join-go-btn"
-                                onClick={handleSetUsername}
-                                disabled={!usernameInput.trim() || isSavingUsername}
-                            >
-                                {isSavingUsername ? 'Joining...' : "Let's Go! 🚀"}
+                        {/* ── STEP 1: DJ Name ── */}
+                        {onboardingStep === 1 && (
+                            <>
+                                <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
+                                <h2 className="join-title">Welcome to the Crate Hackathon 🎧</h2>
+                                <p className="join-subtitle">
+                                    Pick the tracks. Cast your vote. Shape the playlist — live.
+                                </p>
+                                <div className="join-name-section">
+                                    <input
+                                        type="text"
+                                        className="join-name-input"
+                                        placeholder="What should we call you?"
+                                        value={usernameInput}
+                                        onChange={(e) => setUsernameInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleStep1Next()}
+                                        autoFocus
+                                        maxLength={20}
+                                    />
+                                    <button
+                                        className="join-go-btn"
+                                        onClick={handleStep1Next}
+                                        disabled={!usernameInput.trim()}
+                                    >
+                                        Next →
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {/* ── STEP 2: Professional DJ? ── */}
+                        {onboardingStep === 2 && (
+                            <>
+                                <div className="step2-emoji"><img src="/logo.png" alt="Crate Hackers" className="step2-crate-icon" /></div>
+                                <h2 className="join-title">What&apos;s your vibe?</h2>
+                                <p className="join-subtitle">
+                                    We&apos;re building the future of music curation and your perspective matters.
+                                </p>
+                                <div className="dj-type-buttons">
+                                    <button
+                                        className="dj-type-btn pro"
+                                        onClick={() => handleStep2Next(true)}
+                                    >
+                                        <span className="dj-type-icon">🎧</span>
+                                        <span className="dj-type-label">I spin tracks</span>
+                                        <span className="dj-type-hint">Any level — bedroom to main stage</span>
+                                    </button>
+                                    <button
+                                        className="dj-type-btn fan"
+                                        onClick={() => handleStep2Next(false)}
+                                    >
+                                        <span className="dj-type-icon">🎶</span>
+                                        <span className="dj-type-label">I discover music</span>
+                                        <span className="dj-type-hint">I know what sounds good</span>
+                                    </button>
+                                </div>
+                                <button className="step-back-btn" onClick={() => setOnboardingStep(1)}>
+                                    ← Back
+                                </button>
+                            </>
+                        )}
+
+                        {/* ── STEP 3: Email + Phone (Kartra capture) ── */}
+                        {onboardingStep === 3 && (
+                            <>
+                                <div className="step3-emoji">🚀</div>
+                                <h2 className="join-title">Stay in the Loop</h2>
+                                <p className="join-subtitle">
+                                    Your contact info is required for music reporting and record label communications. This ensures the integrity of our data.
+                                </p>
+                                <div className="join-capture-section">
+                                    <input
+                                        type="email"
+                                        className="join-name-input"
+                                        placeholder="Email address *"
+                                        value={emailInput}
+                                        onChange={(e) => { setEmailInput(e.target.value); setKartraError(null); }}
+                                        onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
+                                        autoFocus
+                                    />
+                                    <input
+                                        type="tel"
+                                        className="join-name-input"
+                                        placeholder="Phone number *"
+                                        value={phoneInput}
+                                        onChange={(e) => setPhoneInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
+                                    />
+                                    {kartraError && (
+                                        <p className="kartra-error">{kartraError}</p>
+                                    )}
+                                    <button
+                                        className="join-go-btn"
+                                        onClick={handleOnboardingComplete}
+                                        disabled={!isValidEmail(emailInput) || !phoneInput.trim() || isSubmittingKartra}
+                                    >
+                                        {isSubmittingKartra ? 'Joining the community...' : "I'm In! 🎉"}
+                                    </button>
+                                </div>
+                                <p className="join-privacy-note">
+                                    🔒 Your information is securely stored and used solely for hackathon communications.
+                                </p>
+                                <button className="step-back-btn" onClick={() => setOnboardingStep(2)}>
+                                    ← Back
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )
+            }
+
+            {/* 🔒 PROFILE EDIT OVERLAY — simple name edit for existing users */}
+            {
+                showUsernameModal && username && (
+                    <div className="join-overlay">
+                        <div className="join-card">
+                            <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
+                            <h2 className="join-title">Edit Your Profile</h2>
+                            <div className="join-name-section">
+                                <input
+                                    type="text"
+                                    className="join-name-input"
+                                    placeholder="Your name"
+                                    value={usernameInput}
+                                    onChange={(e) => setUsernameInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleSetUsername()}
+                                    autoFocus
+                                    maxLength={20}
+                                    disabled={isSavingUsername}
+                                />
+                                <button
+                                    className="join-go-btn"
+                                    onClick={handleSetUsername}
+                                    disabled={!usernameInput.trim() || isSavingUsername}
+                                >
+                                    {isSavingUsername ? 'Saving...' : 'Save ✓'}
+                                </button>
+                            </div>
+                            <button className="step-back-btn" onClick={() => setShowUsernameModal(false)}>
+                                Cancel
                             </button>
                         </div>
-
-                        <div className="join-rsvp-section">
-                            <p className="join-rsvp-label">📅 RSVP — Tuesdays at 8 PM ET</p>
-                            <a
-                                href="https://www.addevent.com/event/Kc25151651"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="join-rsvp-btn"
-                            >
-                                RSVP — Get on the List
-                            </a>
-                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* 🎉 CONFETTI CELEBRATION OVERLAY */}
-            {showConfetti && (
-                <div className="confetti-overlay">
-                    <div className="confetti-message">{confettiMessage}</div>
-                </div>
-            )}
+            {
+                showConfetti && (
+                    <div className="confetti-overlay">
+                        <div className="confetti-message">{confettiMessage}</div>
+                    </div>
+                )
+            }
 
             {/* 🌧️ KARMA RAIN ANIMATION */}
-            {showKarmaRain && (
-                <div className="karma-rain-overlay">
-                    {[...Array(30)].map((_, i) => (
-                        <span
-                            key={i}
-                            className="rain-drop"
-                            style={{
-                                left: `${Math.random() * 100}%`,
-                                animationDelay: `${Math.random() * 2}s`,
-                                animationDuration: `${1.5 + Math.random() * 1}s`,
-                            }}
-                        >
-                            {['💧', '✨', '💫', '⭐', '🌟'][i % 5]}
-                        </span>
-                    ))}
-                </div>
-            )}
-
-            {/* 🎰 MEGA-ANNOUNCEMENT: PURGE SPLASH */}
-            {showPurgeSplash && (
-                <div className="mega-announcement purge">
-                    <div className="purge-particles">
-                        {[...Array(12)].map((_, i) => (
+            {
+                showKarmaRain && (
+                    <div className="karma-rain-overlay">
+                        {[...Array(30)].map((_, i) => (
                             <span
                                 key={i}
-                                className="purge-particle"
-                                style={{
-                                    left: `${10 + Math.random() * 80}%`,
-                                    top: `${10 + Math.random() * 80}%`,
-                                    animationDelay: `${Math.random() * 2}s`,
-                                }}
-                            >
-                                {['💀', '🔥', '⚡', '💥'][i % 4]}
-                            </span>
-                        ))}
-                    </div>
-                    <span className="mega-icon">💀</span>
-                    <h1 className="mega-title">THE PURGE</h1>
-                    <p className="mega-subtitle">Delete ANY song! Choose wisely...</p>
-                    <div className="mega-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</div>
-                </div>
-            )}
-
-            {/* 🎰 MEGA-ANNOUNCEMENT: KARMA RAIN SPLASH */}
-            {showKarmaRainSplash && (
-                <div className="mega-announcement karma-rain">
-                    <div className="karma-rain-enhanced">
-                        {[...Array(20)].map((_, i) => (
-                            <span
-                                key={i}
-                                className="karma-drop"
+                                className="rain-drop"
                                 style={{
                                     left: `${Math.random() * 100}%`,
                                     animationDelay: `${Math.random() * 2}s`,
+                                    animationDuration: `${1.5 + Math.random() * 1}s`,
                                 }}
                             >
-                                {['✨', '💫', '⭐', '🌟', '💎'][i % 5]}
+                                {['💧', '✨', '💫', '⭐', '🌟'][i % 5]}
                             </span>
                         ))}
                     </div>
-                    <span className="mega-icon">🌧️</span>
-                    <h1 className="mega-title">KARMA RAIN!</h1>
-                    <p className="mega-subtitle">+1 Karma for everyone! 🎉</p>
-                </div>
-            )}
+                )
+            }
+
+            {/* 🎰 MEGA-ANNOUNCEMENT: PURGE SPLASH */}
+            {
+                showPurgeSplash && (
+                    <div className="mega-announcement purge">
+                        <div className="purge-particles">
+                            {[...Array(12)].map((_, i) => (
+                                <span
+                                    key={i}
+                                    className="purge-particle"
+                                    style={{
+                                        left: `${10 + Math.random() * 80}%`,
+                                        top: `${10 + Math.random() * 80}%`,
+                                        animationDelay: `${Math.random() * 2}s`,
+                                    }}
+                                >
+                                    {['💀', '🔥', '⚡', '💥'][i % 4]}
+                                </span>
+                            ))}
+                        </div>
+                        <span className="mega-icon">💀</span>
+                        <h1 className="mega-title">THE PURGE</h1>
+                        <p className="mega-subtitle">Delete ANY song! Choose wisely...</p>
+                        <div className="mega-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</div>
+                    </div>
+                )
+            }
+
+            {/* 🎰 MEGA-ANNOUNCEMENT: KARMA RAIN SPLASH */}
+            {
+                showKarmaRainSplash && (
+                    <div className="mega-announcement karma-rain">
+                        <div className="karma-rain-enhanced">
+                            {[...Array(20)].map((_, i) => (
+                                <span
+                                    key={i}
+                                    className="karma-drop"
+                                    style={{
+                                        left: `${Math.random() * 100}%`,
+                                        animationDelay: `${Math.random() * 2}s`,
+                                    }}
+                                >
+                                    {['✨', '💫', '⭐', '🌟', '💎'][i % 5]}
+                                </span>
+                            ))}
+                        </div>
+                        <span className="mega-icon">🌧️</span>
+                        <h1 className="mega-title">KARMA RAIN!</h1>
+                        <p className="mega-subtitle">+1 Karma for everyone! 🎉</p>
+                    </div>
+                )
+            }
 
             {/* 🎰 MEGA-ANNOUNCEMENT: WIPE SPLASH */}
-            {showWipeSplash && (
-                <div className="mega-announcement wipe">
-                    <span className="mega-icon">🗑️</span>
-                    <h1 className="mega-title">PLAYLIST WIPED!</h1>
-                    <p className="mega-subtitle">Fresh start! Add your songs now.</p>
-                </div>
-            )}
+            {
+                showWipeSplash && (
+                    <div className="mega-announcement wipe">
+                        <span className="mega-icon">🗑️</span>
+                        <h1 className="mega-title">PLAYLIST WIPED!</h1>
+                        <p className="mega-subtitle">Fresh start! Add your songs now.</p>
+                    </div>
+                )
+            }
 
             {/* 🏆 WINNER ANNOUNCEMENT - Promo code popup */}
-            {showWinnerSplash && (
-                <div className="winner-announcement" onClick={(e) => e.target === e.currentTarget && setShowWinnerSplash(false)}>
-                    <div className="winner-modal">
-                        <button className="winner-close" onClick={() => setShowWinnerSplash(false)}>✕</button>
-                        <div className="winner-confetti">🎉</div>
-                        <h1 className="winner-title">YOU WON! 🏆</h1>
-                        <p className="winner-song">Your song "{winnerSongName}" hit #1!</p>
-                        <div className="winner-prize">
-                            <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
-                            <div className="prize-details">
-                                <h2>FREE HAT!</h2>
-                                <p className="promo-code">Use code: <strong>HACKATHONWINNER</strong></p>
+            {
+                showWinnerSplash && (
+                    <div className="winner-announcement" onClick={(e) => e.target === e.currentTarget && setShowWinnerSplash(false)}>
+                        <div className="winner-modal">
+                            <button className="winner-close" onClick={() => setShowWinnerSplash(false)}>✕</button>
+                            <div className="winner-confetti">🎉</div>
+                            <h1 className="winner-title">YOU WON! 🏆</h1>
+                            <p className="winner-song">Your song "{winnerSongName}" hit #1!</p>
+                            <div className="winner-prize">
+                                <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
+                                <div className="prize-details">
+                                    <h2>FREE HAT!</h2>
+                                    <p className="promo-code">Use code: <strong>HACKATHONWINNER</strong></p>
+                                </div>
                             </div>
+                            <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
+                            <a
+                                href="https://dj.style/discount/HACKATHONWINNER?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="claim-prize-btn"
+                            >
+                                🎁 CLAIM YOUR FREE HAT
+                            </a>
+                            <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
                         </div>
-                        <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
-                        <a
-                            href="https://dj.style/discount/HACKATHONWINNER?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="claim-prize-btn"
-                        >
-                            🎁 CLAIM YOUR FREE HAT
-                        </a>
-                        <p className="winner-note">Click to visit DJ.style - code auto-applies!</p>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* 🔴 PERSISTENT PURGE INDICATOR (after splash) */}
-            {deleteWindow.active && !showPurgeSplash && (
-                <div className={`purge-persistent-indicator ${!deleteWindow.canDelete ? 'inactive-user' : ''}`}>
-                    <span className="purge-icon">💀</span>
-                    <span className="purge-text">PURGE ACTIVE</span>
-                    <span className="purge-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</span>
-                    {!deleteWindow.canDelete && deleteWindow.reason && (
-                        <span className="purge-restriction">{deleteWindow.reason}</span>
-                    )}
-                </div>
-            )}
+            {
+                deleteWindow.active && !showPurgeSplash && (
+                    <div className={`purge-persistent-indicator ${!deleteWindow.canDelete ? 'inactive-user' : ''}`}>
+                        <span className="purge-icon">💀</span>
+                        <span className="purge-text">PURGE ACTIVE</span>
+                        <span className="purge-countdown">{Math.ceil(deleteWindowRemaining / 1000)}s</span>
+                        {!deleteWindow.canDelete && deleteWindow.reason && (
+                            <span className="purge-restriction">{deleteWindow.reason}</span>
+                        )}
+                    </div>
+                )
+            }
 
             {/* ═══════════════════════════════════════════════════════════
                 COMPACT TOP BAR - Everything important on 1-2 lines
@@ -1832,9 +2207,8 @@ export default function HomePage() {
             <header className="stream-header">
                 <div className="header-left">
                     <Link href="/" className="logo-home-link" title="Go to Home">
-                        <img src="/logo.png" alt="" className="mini-logo" />
+                        <img src="/crate-hackers-master-logo.png" alt="Crate Hackers" className="master-logo" />
                     </Link>
-                    <span className="brand-name">{APP_CONFIG.name}</span>
                     {/* Discrete admin link */}
                     <Link href="/admin" className="admin-link-subtle" title="Admin Panel">
                         ⚙️
@@ -1842,7 +2216,7 @@ export default function HomePage() {
                     {/* Rules info popover */}
                     <div className="rules-popover-wrapper">
                         <button
-                            className="admin-link-subtle rules-info-btn"
+                            className="admin-link-subtle rules-info-btn rules-info-bright"
                             title="How to play"
                             onClick={() => setShowRulesPopover(!showRulesPopover)}
                         >
@@ -1851,9 +2225,9 @@ export default function HomePage() {
                         {showRulesPopover && (
                             <div className="rules-popover">
                                 <div className="rules-popover-arrow" />
-                                <h4>🎶 How to Play</h4>
+                                <h4><img src="/logo.png" alt="" className="inline-crate-icon" /> How to Play</h4>
                                 <ul>
-                                    <li>💿 Add up to 5 songs</li>
+                                    <li><img src="/logo.png" alt="" className="inline-crate-icon" /> Add up to 5 songs</li>
                                     <li>🗳️ 10 upvotes & 10 downvotes</li>
                                     <li>🏆 Top 3 songs win!</li>
                                 </ul>
@@ -1876,7 +2250,7 @@ export default function HomePage() {
                             {/* Songs remaining - hide if adding disabled */}
                             {permissions.canAddSongs && (
                                 <span className="stat-counter songs" data-tooltip={`You can add ${userStatus.songsRemaining} more song${userStatus.songsRemaining !== 1 ? 's' : ''}`} tabIndex={0}>
-                                    💿 {userStatus.songsRemaining}
+                                    <img src="/logo.png" alt="" className="inline-crate-icon" /> {userStatus.songsRemaining}
                                 </span>
                             )}
                             {/* Upvotes remaining - hide if voting disabled */}
@@ -1905,15 +2279,7 @@ export default function HomePage() {
                             )}
                         </div>
                     )}
-                    <a
-                        href="https://www.addevent.com/event/Kc25151651"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="stat-pill rsvp-pill"
-                        data-tooltip="RSVP — Live every Tuesday at 8 PM ET"
-                    >
-                        📅
-                    </a>
+
                     <span className="stat-pill capacity" data-tooltip={`Playlist: ${playlistStats.current} of ${playlistStats.max} songs`} tabIndex={0}>
                         {playlistStats.current}/{playlistStats.max}
                     </span>
@@ -1934,205 +2300,428 @@ export default function HomePage() {
                 </div>
             </header>
 
+            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 8 PM ET */}
+            <div className={`broadcast-bar ${isBroadcastLive ? 'broadcast-live' : ''}`}>
+                {isBroadcastLive ? (
+                    <>
+                        <span className="broadcast-live-dot" />
+                        <span className="broadcast-text">ON AIR NOW</span>
+                        <span className="broadcast-schedule">Tuesdays 8 PM ET</span>
+                    </>
+                ) : (
+                    <>
+                        <span className="broadcast-text">NEXT HACKATHON</span>
+                        <span className="broadcast-countdown">{broadcastCountdown}</span>
+                        <span className="broadcast-schedule">Tuesdays 8 PM ET</span>
+                    </>
+                )}
+            </div>
+
             {/* 🎮 GAME FEATURES BAR - Leaderboard, Predictions, Sound toggle */}
-            {timerRunning && (
-                <div className="game-features-bar">
-                    <button
-                        className={`feature-btn ${showLeaderboard ? 'active' : ''}`}
-                        onClick={() => { setShowLeaderboard(!showLeaderboard); if (!showLeaderboard) fetchLeaderboard(); }}
-                    >
-                        🏆 Top DJs
-                    </button>
-
-                    {!predictionsLocked && !userPrediction && (
+            {
+                timerRunning && (
+                    <div className="game-features-bar">
                         <button
-                            className="feature-btn prediction"
-                            onClick={() => setShowPredictionModal(true)}
+                            className={`feature-btn ${showLeaderboard ? 'active' : ''}`}
+                            onClick={() => { setShowLeaderboard(!showLeaderboard); if (!showLeaderboard) fetchLeaderboard(); }}
                         >
-                            🎯 Predict #1
+                            🏆 Top DJs
                         </button>
-                    )}
 
-                    {userPrediction && (
-                        <span className="prediction-badge">
-                            🎯 Predicted!
-                        </span>
-                    )}
+                        {!predictionsLocked && !userPrediction && (
+                            <button
+                                className="feature-btn prediction"
+                                onClick={() => setShowPredictionModal(true)}
+                            >
+                                🎯 Predict #1
+                            </button>
+                        )}
 
-                    <button
-                        className={`feature-btn sound-toggle ${soundsEnabled ? '' : 'muted'}`}
-                        onClick={() => {
-                            const newState = !soundsEnabled;
-                            setSoundsEnabled(newState);
-                            SoundEffects.setEnabled(newState);
-                        }}
-                        title={soundsEnabled ? 'Mute sounds' : 'Enable sounds'}
-                    >
-                        {soundsEnabled ? '🔊' : '🔇'}
-                    </button>
-                </div>
-            )}
+                        {userPrediction && (
+                            <span className="prediction-badge">
+                                🎯 Predicted!
+                            </span>
+                        )}
+
+                        <button
+                            className={`feature-btn sound-toggle ${soundsEnabled ? '' : 'muted'}`}
+                            onClick={() => {
+                                const newState = !soundsEnabled;
+                                setSoundsEnabled(newState);
+                                SoundEffects.setEnabled(newState);
+                            }}
+                            title={soundsEnabled ? 'Mute sounds' : 'Enable sounds'}
+                        >
+                            {soundsEnabled ? '🔊' : '🔇'}
+                        </button>
+                    </div>
+                )
+            }
 
             {/* 📺 LIVE STREAM HOST - Dual mode: PiP (bottom-right) / Expanded (sticky top) */}
             {/* YouTube Mode */}
-            {!hideStreamLocally && streamPlatform === 'youtube' && youtubeEmbed && (
-                <div className={`stream-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
-                    <div className="stream-host-header">
-                        <span className="live-host-badge replay-badge">🎬 REPLAY</span>
-                        <div className="stream-host-controls">
-                            {!streamMinimized && (
-                                <a
-                                    href="https://www.addevent.com/event/Kc25151651"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="stream-rsvp-btn"
-                                    title="RSVP for the next event"
-                                >
-                                    📅 RSVP
-                                </a>
-                            )}
-                            <button
-                                className="stream-toggle-btn"
-                                onClick={() => setStreamMinimized(!streamMinimized)}
-                                title={streamMinimized ? 'Expand stream' : 'Minimize to PiP'}
-                            >
-                                {streamMinimized ? '⬜ ᴇxᴘᴀɴᴅ' : '➖'}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="stream-host-video">
-                        <iframe
-                            ref={youtubePlayerRef}
-                            src={getYouTubeEmbedSrc(youtubeEmbed)}
-                            title="Live Host Stream"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                        />
-                    </div>
-                    {/* PiP tap-to-expand overlay */}
-                    {streamMinimized && (
-                        <button
-                            className="pip-expand-overlay"
-                            onClick={() => setStreamMinimized(false)}
-                            aria-label="Expand and unmute stream"
-                        >
-                            <span className="pip-sound-prompt">🔊 Tap for sound</span>
-                        </button>
-                    )}
-                </div>
-            )}
+            {
+                !hideStreamLocally && streamPlatform === 'youtube' && youtubeEmbed && (
+                    <div className={`stream-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
+                        <div className="stream-host-header">
+                            <span className="live-host-badge replay-badge">🎬 REPLAY</span>
+                            <div className="stream-host-controls">
 
-            {/* Twitch Mode */}
-            {!hideStreamLocally && streamPlatform === 'twitch' && twitchChannel && (
-                <div className={`stream-host twitch-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
-                    <div className="stream-host-header twitch-header">
-                        <span className="live-host-badge twitch-badge">🟣 LIVE</span>
-                        <div className="stream-host-controls">
-                            {!streamMinimized && (
-                                <a
-                                    href="https://www.addevent.com/event/Kc25151651"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="stream-rsvp-btn twitch-rsvp"
-                                    title="RSVP for the next event"
+                                <button
+                                    className="stream-toggle-btn"
+                                    onClick={() => streamMinimized ? handleExpandStream() : handleMinimizeStream()}
+                                    title={streamMinimized ? 'Expand stream' : 'Minimize to PiP'}
                                 >
-                                    📅 RSVP
-                                </a>
-                            )}
-                            <button
-                                className="stream-toggle-btn"
-                                onClick={() => setStreamMinimized(!streamMinimized)}
-                                title={streamMinimized ? 'Expand stream' : 'Minimize to PiP'}
-                            >
-                                {streamMinimized ? '⬜ ᴇxᴘᴀɴᴅ' : '➖'}
-                            </button>
+                                    {streamMinimized ? '⬜ ᴇxᴘᴀɴᴅ' : '➖'}
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div className={`twitch-content ${streamMinimized ? '' : 'twitch-expanded-layout'}`}>
                         <div className="stream-host-video">
                             <iframe
-                                src={`https://player.twitch.tv/?channel=${twitchChannel}&parent=${twitchParent}&muted=true`}
-                                title="Twitch Stream"
+                                ref={youtubePlayerRef}
+                                src={getYouTubeEmbedSrc(youtubeEmbed)}
+                                title="Live Host Stream"
                                 frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowFullScreen
-                                scrolling="no"
                             />
                         </div>
-                        {/* Chat only in expanded mode */}
-                        {!streamMinimized && (
-                            <div className="twitch-chat-container">
+                        {/* PiP tap-to-expand overlay */}
+                        {streamMinimized && (
+                            <button
+                                className="pip-expand-overlay"
+                                onClick={handleExpandStream}
+                                aria-label="Expand and unmute stream"
+                            >
+                                <span className="pip-sound-prompt">🔊 Tap for sound</span>
+                            </button>
+                        )}
+                        {/* 🔍 PiP DOCKED SONG SEARCH — Add songs while watching YouTube */}
+                        {streamMinimized && (isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) && (
+                            <div className="pip-docked-search">
+                                <input
+                                    type="text"
+                                    className="pip-search-input"
+                                    placeholder="🔍 Add a song..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onBlur={() => setTimeout(() => setShowResults(false), 300)}
+                                    onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                                />
+                                {isSearching && <span className="pip-search-spinner">...</span>}
+                                {showResults && searchResults.length > 0 && (
+                                    <div className="pip-search-dropdown">
+                                        <div className="search-results-header">
+                                            🔍 RESULTS <span className="header-hint">Tap to add →</span>
+                                        </div>
+                                        {searchResults.slice(0, 4).map((track) => (
+                                            <div
+                                                key={track.id}
+                                                className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
+                                                onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
+                                            >
+                                                <img src={track.albumArt || '/placeholder.svg'} alt="" />
+                                                <div className="result-info">
+                                                    <span className="result-name">{track.name}</span>
+                                                    <span className="result-artist">{track.artist}</span>
+                                                </div>
+                                                {isAddingSong === track.id ? (
+                                                    <span className="adding-spinner">⏳</span>
+                                                ) : isSongInPlaylist(track.id) ? (
+                                                    <span className="already-added">✓</span>
+                                                ) : (
+                                                    <span className="add-btn-stream">+ ADD</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {showResults && searchResults.length === 0 && !isSearching && searchQuery.length > 2 && (
+                                    <div className="pip-search-dropdown">
+                                        <div className="search-empty-state">No songs found — try another search</div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {/* Scroll-expanded: still muted, encourage tap for sound */}
+                        {!streamMinimized && scrollExpandedMuted && (
+                            <button
+                                className="expanded-sound-overlay"
+                                onClick={handleUnmuteExpanded}
+                                aria-label="Unmute stream"
+                            >
+                                <span className="pip-sound-prompt">🔊 Tap for sound</span>
+                            </button>
+                        )}
+                    </div>
+                )
+            }
+
+            {/* Twitch Mode */}
+            {
+                !hideStreamLocally && streamPlatform === 'twitch' && twitchChannel && (
+                    <div className={`stream-host twitch-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
+                        <div className="stream-host-header twitch-header">
+                            <span className="live-host-badge twitch-badge">🟣 LIVE</span>
+                            <div className="stream-host-controls">
+                                {!streamMinimized && (
+                                    <>
+                                        <a
+                                            href={`https://twitch.tv/${twitchChannel}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="stream-rsvp-btn twitch-rsvp"
+                                            title="Open in Twitch app"
+                                        >
+                                            ⇗ Twitch
+                                        </a>
+                                        <button
+                                            className={`stream-rsvp-btn twitch-rsvp ${chatDocked ? 'active' : ''}`}
+                                            onClick={() => setChatDocked(!chatDocked)}
+                                            title={chatDocked ? 'Undock chat' : 'Dock chat to bottom'}
+                                        >
+                                            {chatDocked ? '⬇️ Undock' : '💬 Dock Chat'}
+                                        </button>
+                                    </>
+                                )}
+                                <button
+                                    className="stream-toggle-btn"
+                                    onClick={() => streamMinimized ? handleExpandStream() : handleMinimizeStream()}
+                                    title={streamMinimized ? 'Expand stream' : 'Minimize to PiP'}
+                                >
+                                    {streamMinimized ? '⬜ ᴇxᴘᴀɴᴅ' : '➖'}
+                                </button>
+                            </div>
+                        </div>
+                        <div className={`twitch-content ${streamMinimized ? '' : 'twitch-expanded-layout'}`}>
+                            <div className="stream-host-video">
                                 <iframe
-                                    src={`https://www.twitch.tv/embed/${twitchChannel}/chat?parent=${twitchParent}&darkpopout`}
-                                    title="Twitch Chat"
+                                    src={`https://player.twitch.tv/?channel=${twitchChannel}&parent=${twitchParent}&muted=${twitchMuted}`}
+                                    title="Twitch Stream"
                                     frameBorder="0"
+                                    allowFullScreen
                                     scrolling="no"
                                 />
                             </div>
-                        )}
-                    </div>
-                    {/* PiP tap-to-expand overlay */}
-                    {streamMinimized && (
-                        <button
-                            className="pip-expand-overlay twitch-pip-overlay"
-                            onClick={() => setStreamMinimized(false)}
-                            aria-label="Expand and unmute stream"
-                        >
-                            <span className="pip-sound-prompt">🔊 Tap for sound</span>
-                        </button>
-                    )}
-                </div>
-            )}
-
-
-
-            {showLeaderboard && (
-                <div className="leaderboard-panel">
-                    <div className="leaderboard-header">
-                        <span>🏆 Top Contributors</span>
-                        <button className="close-btn" onClick={() => setShowLeaderboard(false)}>×</button>
-                    </div>
-                    <div className="leaderboard-list">
-                        {leaderboard.length === 0 ? (
-                            <div className="leaderboard-empty">Add songs to appear here!</div>
-                        ) : (
-                            leaderboard.slice(0, 5).map((entry, idx) => (
-                                <div key={entry.visitorId} className={`leaderboard-row ${entry.hasTopSong ? 'has-crown' : ''}`}>
-                                    <span className="lb-rank">{idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}</span>
-                                    <span className="lb-name" style={entry.visitorId === visitorId ? { color: userColor } : {}}>
-                                        {entry.username}{entry.visitorId === visitorId && ' (you)'}
-                                    </span>
-                                    <span className="lb-score">+{entry.score}</span>
+                            {/* Chat inline (only when NOT docked and expanded) */}
+                            {!streamMinimized && !chatDocked && (
+                                <div className="twitch-chat-container">
+                                    <iframe
+                                        src={`https://www.twitch.tv/embed/${twitchChannel}/chat?parent=${twitchParent}&darkpopout`}
+                                        title="Twitch Chat"
+                                        frameBorder="0"
+                                        scrolling="no"
+                                    />
                                 </div>
-                            ))
+                            )}
+                        </div>
+                        {/* PiP tap-to-expand overlay */}
+                        {streamMinimized && (
+                            <button
+                                className="pip-expand-overlay twitch-pip-overlay"
+                                onClick={handleExpandStream}
+                                aria-label="Expand and unmute stream"
+                            >
+                                <span className="pip-sound-prompt">🔊 Tap for sound</span>
+                            </button>
+                        )}
+                        {/* 🔍 PiP DOCKED SONG SEARCH — Add songs while watching Twitch */}
+                        {streamMinimized && (isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) && (
+                            <div className="pip-docked-search twitch-pip-search">
+                                <input
+                                    type="text"
+                                    className="pip-search-input"
+                                    placeholder="🔍 Add a song..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onBlur={() => setTimeout(() => setShowResults(false), 300)}
+                                    onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                                />
+                                {isSearching && <span className="pip-search-spinner">...</span>}
+                                {showResults && searchResults.length > 0 && (
+                                    <div className="pip-search-dropdown twitch-search-dropdown">
+                                        <div className="search-results-header">
+                                            🔍 RESULTS <span className="header-hint">Tap to add →</span>
+                                        </div>
+                                        {searchResults.slice(0, 4).map((track) => (
+                                            <div
+                                                key={track.id}
+                                                className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
+                                                onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
+                                            >
+                                                <img src={track.albumArt || '/placeholder.svg'} alt="" />
+                                                <div className="result-info">
+                                                    <span className="result-name">{track.name}</span>
+                                                    <span className="result-artist">{track.artist}</span>
+                                                </div>
+                                                {isAddingSong === track.id ? (
+                                                    <span className="adding-spinner">⏳</span>
+                                                ) : isSongInPlaylist(track.id) ? (
+                                                    <span className="already-added">✓</span>
+                                                ) : (
+                                                    <span className="add-btn-stream">+ ADD</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {showResults && searchResults.length === 0 && !isSearching && searchQuery.length > 2 && (
+                                    <div className="pip-search-dropdown twitch-search-dropdown">
+                                        <div className="search-empty-state">No songs found — try another search</div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {/* Scroll-expanded: still muted, encourage tap for sound */}
+                        {!streamMinimized && scrollExpandedMuted && (
+                            <button
+                                className="expanded-sound-overlay twitch-pip-overlay"
+                                onClick={handleUnmuteExpanded}
+                                aria-label="Unmute stream"
+                            >
+                                <span className="pip-sound-prompt">🔊 Tap for sound</span>
+                            </button>
                         )}
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {/* 💬 DOCKED TWITCH CHAT - Fixed bottom panel for chatting while scrolling */}
+            {
+                chatDocked && streamPlatform === 'twitch' && twitchChannel && !streamMinimized && (
+                    <div className="docked-chat-panel">
+                        <div className="docked-chat-header">
+                            <span className="docked-chat-handle" />
+                            <span className="docked-chat-title">💬 Chat</span>
+                            <div className="docked-chat-controls">
+                                <a
+                                    href={`https://twitch.tv/${twitchChannel}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="docked-chat-btn"
+                                    title="Open in Twitch"
+                                >
+                                    ⇗
+                                </a>
+                                <button
+                                    className="docked-chat-btn"
+                                    onClick={() => setChatDocked(false)}
+                                    title="Undock chat"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                        {/* 🔍 DOCKED SONG SEARCH — Add songs without leaving the chat */}
+                        {(isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) && (
+                            <div className="docked-search-container">
+                                <input
+                                    type="text"
+                                    className="docked-search-input"
+                                    placeholder="Search any song on Spotify..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onBlur={() => setTimeout(() => setShowResults(false), 300)}
+                                    onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                                />
+                                {isSearching && <span className="docked-search-spinner">...</span>}
+                                {showResults && searchResults.length > 0 && (
+                                    <div className="docked-search-dropdown">
+                                        <div className="search-results-header">
+                                            🔍 RESULTS <span className="header-hint">Tap to add →</span>
+                                        </div>
+                                        {searchResults.slice(0, 4).map((track) => (
+                                            <div
+                                                key={track.id}
+                                                className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
+                                                onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
+                                            >
+                                                <img src={track.albumArt || '/placeholder.svg'} alt="" />
+                                                <div className="result-info">
+                                                    <span className="result-name">{track.name}</span>
+                                                    <span className="result-artist">{track.artist}</span>
+                                                </div>
+                                                {isAddingSong === track.id ? (
+                                                    <span className="adding-spinner">⏳</span>
+                                                ) : isSongInPlaylist(track.id) ? (
+                                                    <span className="already-added">✓</span>
+                                                ) : (
+                                                    <span className="add-btn-stream">+ ADD</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {/* No results state for docked search */}
+                                {showResults && searchResults.length === 0 && !isSearching && searchQuery.length > 2 && (
+                                    <div className="docked-search-dropdown">
+                                        <div className="search-empty-state">No songs found — try another search</div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <iframe
+                            src={`https://www.twitch.tv/embed/${twitchChannel}/chat?parent=${twitchParent}&darkpopout`}
+                            title="Twitch Chat (Docked)"
+                            frameBorder="0"
+                            scrolling="no"
+                            className="docked-chat-iframe"
+                        />
+                    </div>
+                )
+            }
+
+            {
+                showLeaderboard && (
+                    <div className="leaderboard-panel">
+                        <div className="leaderboard-header">
+                            <span>🏆 Top Contributors</span>
+                            <button className="close-btn" onClick={() => setShowLeaderboard(false)}>×</button>
+                        </div>
+                        <div className="leaderboard-list">
+                            {leaderboard.length === 0 ? (
+                                <div className="leaderboard-empty">Add songs to appear here!</div>
+                            ) : (
+                                leaderboard.slice(0, 5).map((entry, idx) => (
+                                    <div key={entry.visitorId} className={`leaderboard-row ${entry.hasTopSong ? 'has-crown' : ''}`}>
+                                        <span className="lb-rank">{idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}</span>
+                                        <span className="lb-name" style={entry.visitorId === visitorId ? { color: userColor } : {}}>
+                                            {entry.username}{entry.visitorId === visitorId && ' (you)'}
+                                        </span>
+                                        <span className="lb-score">+{entry.score}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )
+            }
 
             {/* 🎯 PREDICTION MODAL */}
-            {showPredictionModal && (
-                <div className="modal-overlay" onClick={() => setShowPredictionModal(false)}>
-                    <div className="prediction-modal" onClick={(e) => e.stopPropagation()}>
-                        <h3>🎯 Predict the Winner!</h3>
-                        <p>Which song will be #1 when voting ends?<br />Correct predictions earn <strong>+3 karma!</strong></p>
-                        <div className="prediction-list">
-                            {sortedSongs.slice(0, 10).map((song) => (
-                                <button
-                                    key={song.id}
-                                    className="prediction-option"
-                                    onClick={() => handleMakePrediction(song.id)}
-                                >
-                                    <img src={song.albumArt || '/placeholder.svg'} alt="" />
-                                    <span className="pred-name">{song.name.length > 25 ? song.name.slice(0, 25) + '…' : song.name}</span>
-                                    <span className="pred-score">+{song.score}</span>
-                                </button>
-                            ))}
+            {
+                showPredictionModal && (
+                    <div className="modal-overlay" onClick={() => setShowPredictionModal(false)}>
+                        <div className="prediction-modal" onClick={(e) => e.stopPropagation()}>
+                            <h3>🎯 Predict the Winner!</h3>
+                            <p>Which song will be #1 when voting ends?<br />Correct predictions earn <strong>+3 karma!</strong></p>
+                            <div className="prediction-list">
+                                {sortedSongs.slice(0, 10).map((song) => (
+                                    <button
+                                        key={song.id}
+                                        className="prediction-option"
+                                        onClick={() => handleMakePrediction(song.id)}
+                                    >
+                                        <img src={song.albumArt || '/placeholder.svg'} alt="" />
+                                        <span className="pred-name">{song.name.length > 25 ? song.name.slice(0, 25) + '…' : song.name}</span>
+                                        <span className="pred-score">+{song.score}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <button className="cancel-btn" onClick={() => setShowPredictionModal(false)}>Cancel</button>
                         </div>
-                        <button className="cancel-btn" onClick={() => setShowPredictionModal(false)}>Cancel</button>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* 🎧 YOUR REQUESTS - REMOVED: Now using in-playlist highlighting instead */}
 
@@ -2178,30 +2767,32 @@ export default function HomePage() {
 
 
             {/* ⚔️ VERSUS BATTLE COMPONENT - Show when battle is active */}
-            {versusBattle.active && versusBattle.songA && versusBattle.songB && (
-                <ErrorBoundary fallback={<div className="battle-error">⚔️ Battle error - refreshing...</div>}>
-                    <VersusBattle
-                        battle={versusBattle}
-                        visitorId={visitorId || ''}
-                        onVote={handleBattleVote}
-                        isVoting={isVotingInBattle}
-                    />
-                </ErrorBoundary>
-            )}
+            {
+                versusBattle.active && versusBattle.songA && versusBattle.songB && (
+                    <ErrorBoundary fallback={<div className="battle-error">⚔️ Battle error - refreshing...</div>}>
+                        <VersusBattle
+                            battle={versusBattle}
+                            visitorId={visitorId || ''}
+                            onVote={handleBattleVote}
+                            isVoting={isVotingInBattle}
+                        />
+                    </ErrorBoundary>
+                )
+            }
 
-            {isBanned && <div className="banned-banner">🚫 You've been banned from this session</div>}
+            {isBanned && <div className="banned-banner">⚠️ Your participation has been paused for this session</div>}
 
             {/* ═══════════════════════════════════════════════════════════
                 SEARCH BAR - Only when session active and adding is enabled
                ═══════════════════════════════════════════════════════════ */}
             {
-                (isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) && (
+                (isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) ? (
                     <div className="search-bar-container">
                         <input
                             id="search-input"
                             type="text"
                             className="search-input-stream"
-                            placeholder="🔍 Add a song..."
+                            placeholder="Search any song on Spotify..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onBlur={() => setTimeout(() => setShowResults(false), 300)}
@@ -2236,8 +2827,24 @@ export default function HomePage() {
                                 ))}
                             </div>
                         )}
+
+                        {/* No results state */}
+                        {showResults && searchResults.length === 0 && !isSearching && searchQuery.length > 2 && (
+                            <div className="search-dropdown-stream">
+                                <div className="search-empty-state">No songs found for "{searchQuery}" — try another search</div>
+                            </div>
+                        )}
                     </div>
-                )
+                ) : (permissions.canAddSongs && canParticipate && userStatus.songsRemaining <= 0 && karmaBonuses.bonusSongAdds <= 0) ? (
+                    <div className="search-bar-container">
+                        <input
+                            type="text"
+                            className="search-input-stream search-input-disabled"
+                            placeholder={`You've added ${userStatus.songsAdded}/${userStatus.songsAdded} songs — vote on existing ones!`}
+                            disabled
+                        />
+                    </div>
+                ) : null
             }
 
             {/* ═══════════════════════════════════════════════════════════
@@ -2246,15 +2853,85 @@ export default function HomePage() {
             <div className="song-list-stream" id="song-list">
                 {sortedSongs.length === 0 ? (
                     <div className="empty-state">
-                        <div className="empty-icon">🎧</div>
+                        <div className="empty-icon"><img src="/logo.png" alt="" className="empty-crate-icon" /></div>
                         <div className="empty-title">
-                            {timerRunning ? 'No songs yet!' : 'Waiting for session...'}
+                            {timerRunning ? 'Be the first to drop a track 🔥' : 'The next session starts soon — hang tight!'}
                         </div>
                         <div className="empty-subtitle">
                             {timerRunning
                                 ? 'Use the search bar above to add the first song and get the party started!'
-                                : 'The admin will start a voting session soon. Hang tight!'}
+                                : 'The admin will start a voting session soon.'}
                         </div>
+
+                        {/* 📬 Mailing List RSVP — only shown when session is NOT active */}
+                        {!timerRunning && (
+                            <div className="waiting-rsvp">
+                                {waitingRsvpStatus === 'success' || waitingRsvpAlreadyDone ? (
+                                    <div className="waiting-rsvp-success">
+                                        <span className="waiting-rsvp-check">✅</span> You're on the list! We'll let you know when the next session drops.
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="waiting-rsvp-label">Get notified when we go live</p>
+                                        <form className="waiting-rsvp-form" onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const email = waitingEmail.trim();
+                                            if (!email || !isValidEmail(email)) {
+                                                setWaitingRsvpError('Please enter a valid email address');
+                                                return;
+                                            }
+                                            setWaitingRsvpStatus('submitting');
+                                            setWaitingRsvpError(null);
+                                            try {
+                                                const res = await fetch('/api/kartra', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ email, firstName: username || 'Visitor' }),
+                                                });
+                                                const data = await res.json();
+                                                if (data.success) {
+                                                    setWaitingRsvpStatus('success');
+                                                    setWaitingRsvpAlreadyDone(true);
+                                                    try { localStorage.setItem('crate-rsvp-done', 'true'); } catch (_) { }
+                                                } else {
+                                                    // "already exists" is still a win
+                                                    if (data.error?.includes('already')) {
+                                                        setWaitingRsvpStatus('success');
+                                                        setWaitingRsvpAlreadyDone(true);
+                                                        try { localStorage.setItem('crate-rsvp-done', 'true'); } catch (_) { }
+                                                    } else {
+                                                        setWaitingRsvpStatus('error');
+                                                        setWaitingRsvpError('Something went wrong — try again');
+                                                    }
+                                                }
+                                            } catch (_) {
+                                                setWaitingRsvpStatus('error');
+                                                setWaitingRsvpError('Network error — check your connection');
+                                            }
+                                        }}>
+                                            <input
+                                                type="email"
+                                                className="waiting-rsvp-input"
+                                                placeholder="your@email.com"
+                                                value={waitingEmail}
+                                                onChange={(e) => { setWaitingEmail(e.target.value); setWaitingRsvpError(null); }}
+                                                disabled={waitingRsvpStatus === 'submitting'}
+                                            />
+                                            <button
+                                                type="submit"
+                                                className="waiting-rsvp-btn"
+                                                disabled={waitingRsvpStatus === 'submitting' || !waitingEmail.trim()}
+                                            >
+                                                {waitingRsvpStatus === 'submitting' ? 'Joining...' : 'Notify Me'}
+                                            </button>
+                                        </form>
+                                        {waitingRsvpError && (
+                                            <p className="waiting-rsvp-error">{waitingRsvpError}</p>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     sortedSongs.map((song, index) => {
@@ -2309,6 +2986,7 @@ export default function HomePage() {
                                             className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
                                             onClick={() => handleVote(song.id, -1)}
                                             disabled={!canParticipate || votingInProgress.has(song.id)}
+                                            aria-label={hasDownvoted ? `Remove downvote from ${song.name}` : `Downvote ${song.name}`}
                                             data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote this song'}
                                         >
                                             {votingInProgress.has(song.id) ? '⏳' : '👎'}
@@ -2317,6 +2995,7 @@ export default function HomePage() {
                                             className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
                                             data-tooltip={`Net score: ${song.score > 0 ? '+' : ''}${song.score}`}
                                             tabIndex={0}
+                                            aria-label={`Score: ${song.score > 0 ? 'plus ' : song.score < 0 ? 'minus ' : ''}${Math.abs(song.score)}`}
                                         >
                                             {song.score > 0 ? '+' : ''}{song.score}
                                         </span>
@@ -2324,6 +3003,7 @@ export default function HomePage() {
                                             className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
                                             onClick={() => handleVote(song.id, 1)}
                                             disabled={!canParticipate || votingInProgress.has(song.id)}
+                                            aria-label={hasUpvoted ? `Remove upvote from ${song.name}` : `Upvote ${song.name}`}
                                             data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote this song'}
                                         >
                                             {votingInProgress.has(song.id) ? '⏳' : '👍'}
@@ -2349,32 +3029,36 @@ export default function HomePage() {
             </div>
 
             {/* � JUKEBOX MODE - Full-screen music experience */}
-            {jukeboxState && (
-                <JukeboxPlayer
-                    currentSong={jukeboxState.song}
-                    videoId={jukeboxState.videoId}
-                    playlist={sortedSongs}
-                    onClose={() => setJukeboxState(null)}
-                    onNextSong={handleJukeboxNextSong}
-                    onVote={(songId, delta) => handleVote(songId, delta as 1 | -1)}
-                    onKarmaEarned={handleJukeboxKarmaEarned}
-                    visitorId={visitorId || undefined}
-                />
-            )}
+            {
+                jukeboxState && (
+                    <JukeboxPlayer
+                        currentSong={jukeboxState.song}
+                        videoId={jukeboxState.videoId}
+                        playlist={sortedSongs}
+                        onClose={() => setJukeboxState(null)}
+                        onNextSong={handleJukeboxNextSong}
+                        onVote={(songId, delta) => handleVote(songId, delta as 1 | -1)}
+                        onKarmaEarned={handleJukeboxKarmaEarned}
+                        visitorId={visitorId || undefined}
+                    />
+                )
+            }
 
             {/* �🎬 Video Preview Popup (fallback - now mainly used for Jukebox) */}
-            {videoPreview && !jukeboxState && (
-                <VideoPreview
-                    videoId={videoPreview.videoId}
-                    songName={videoPreview.songName}
-                    artistName={videoPreview.artistName}
-                    anchorRect={videoPreview.anchorRect}
-                    onClose={() => setVideoPreview(null)}
-                />
-            )}
+            {
+                videoPreview && !jukeboxState && (
+                    <VideoPreview
+                        videoId={videoPreview.videoId}
+                        songName={videoPreview.songName}
+                        artistName={videoPreview.artistName}
+                        anchorRect={videoPreview.anchorRect}
+                        onClose={() => setVideoPreview(null)}
+                    />
+                )
+            }
 
             {/* 🍞 TOAST NOTIFICATIONS */}
             <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
-        </div>
+        </div >
     );
 }

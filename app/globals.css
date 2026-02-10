@@ -2607,39 +2607,157 @@ body::before {
   cursor: not-allowed;
 }
 
-.join-rsvp-section {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 16px;
+/* ── Onboarding Step Indicator ── */
+.onboarding-steps-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+}
+
+.step-dot.active {
+  background: var(--orange-primary);
+  box-shadow: 0 0 8px rgba(211, 119, 29, 0.5);
+  transform: scale(1.2);
+}
+
+/* ── Step 2: DJ Type Buttons ── */
+.step2-emoji,
+.step3-emoji {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+  animation: emojiFloat 2s ease-in-out infinite;
+}
+
+.step2-crate-icon {
+  width: 56px;
+  height: 56px;
+  display: block;
+  margin: 0 auto;
+  filter: drop-shadow(0 2px 8px rgba(211, 119, 29, 0.4));
+}
+
+@keyframes emojiFloat {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.dj-type-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0 16px;
+}
+
+.dj-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  color: var(--text-primary);
+}
+
+.dj-type-btn:hover {
+  background: rgba(211, 119, 29, 0.12);
+  border-color: var(--orange-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(211, 119, 29, 0.2);
+}
+
+.dj-type-btn .dj-type-icon {
+  font-size: 1.8rem;
+}
+
+.dj-type-btn .dj-type-label {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.dj-type-btn .dj-type-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── Step 3: Capture Section ── */
+.join-capture-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kartra-error {
+  color: var(--error);
+  font-size: 0.8rem;
+  margin: 0;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.join-privacy-note {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin: 4px 0 12px;
+  opacity: 0.7;
+}
+
+/* ── Back Button (all steps) ── */
+.step-back-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 6px 12px;
+  transition: color 0.2s;
   margin-top: 4px;
 }
 
-.join-rsvp-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin: 0 0 10px;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-}
-
-.join-rsvp-btn {
-  display: inline-block;
-  padding: 10px 24px;
-  font-size: 0.85rem;
-  font-weight: 600;
+.step-back-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  text-decoration: none;
-  transition: all 0.2s;
+}
+
+/* ── Skip Onboarding Button ── */
+.skip-onboarding-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: 'Rubik', sans-serif;
+  cursor: pointer;
+  padding: 8px 16px;
+  margin-top: 8px;
+  transition: color 0.2s, opacity 0.2s;
+  opacity: 0.7;
   letter-spacing: 0.3px;
 }
 
-.join-rsvp-btn:hover {
-  background: rgba(211, 119, 29, 0.15);
-  border-color: var(--orange-primary);
-  color: var(--orange-primary);
-  transform: scale(1.03);
+.skip-onboarding-btn:hover {
+  color: var(--text-primary);
+  opacity: 1;
 }
 
 /* ── Rules Popover (from ℹ️ icon) ── */
@@ -3160,6 +3278,117 @@ body::before {
   opacity: 0.8;
   max-width: 300px;
   margin: 0 auto;
+}
+
+/* 📬 Waiting Screen RSVP - Mailing list signup */
+.waiting-rsvp {
+  margin-top: 28px;
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.08), rgba(224, 159, 36, 0.04));
+  border: 1px solid rgba(211, 119, 29, 0.25);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.waiting-rsvp-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: 0.2px;
+}
+
+.waiting-rsvp-form {
+  display: flex;
+  gap: 8px;
+}
+
+.waiting-rsvp-input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.waiting-rsvp-input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+  box-shadow: 0 0 0 2px rgba(211, 119, 29, 0.15);
+}
+
+.waiting-rsvp-input::placeholder {
+  color: var(--text-muted);
+}
+
+.waiting-rsvp-input:disabled {
+  opacity: 0.6;
+}
+
+.waiting-rsvp-btn {
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.waiting-rsvp-btn:hover:not(:disabled) {
+  transform: scale(1.03);
+}
+
+.waiting-rsvp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.waiting-rsvp-error {
+  font-size: 0.8rem;
+  color: var(--error);
+  margin-top: 8px;
+}
+
+.waiting-rsvp-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: #22c55e;
+  font-weight: 500;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.waiting-rsvp-check {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* Mobile adjustments for RSVP form */
+@media (max-width: 480px) {
+  .waiting-rsvp {
+    padding: 16px 18px;
+  }
+
+  .waiting-rsvp-form {
+    flex-direction: column;
+  }
+
+  .waiting-rsvp-btn {
+    width: 100%;
+    padding: 12px;
+  }
 }
 
 /* Added by user name */
@@ -5597,6 +5826,92 @@ body::before {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   📡 BROADCAST SCHEDULE BAR - Countdown to next live show
+   ───────────────────────────────────────────────────────────────────────── */
+.broadcast-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 5px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.broadcast-text {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.broadcast-countdown {
+  font-weight: 800;
+  color: var(--orange-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.broadcast-schedule {
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-size: 0.65rem;
+}
+
+/* ON AIR state — vibrant, attention-grabbing */
+.broadcast-bar.broadcast-live {
+  background: linear-gradient(90deg, rgba(255, 68, 68, 0.15), rgba(255, 107, 0, 0.15), rgba(255, 68, 68, 0.15));
+  background-size: 200% 100%;
+  animation: broadcast-live-sweep 3s ease-in-out infinite;
+  border-bottom-color: rgba(255, 68, 68, 0.25);
+}
+
+.broadcast-bar.broadcast-live .broadcast-text {
+  color: #ff4444;
+  font-weight: 800;
+}
+
+.broadcast-bar.broadcast-live .broadcast-schedule {
+  color: rgba(255, 255, 255, 0.6);
+  opacity: 1;
+}
+
+.broadcast-live-dot {
+  width: 8px;
+  height: 8px;
+  background: #ff4444;
+  border-radius: 50%;
+  animation: pulse-live 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(255, 68, 68, 0.6);
+}
+
+@keyframes broadcast-live-sweep {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Mobile: slightly smaller text */
+@media (max-width: 640px) {
+  .broadcast-bar {
+    padding: 4px 12px;
+    gap: 6px;
+    font-size: 0.65rem;
+  }
+
+  .broadcast-schedule {
+    font-size: 0.6rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    NOTIFICATION CENTER - Top Right, longer duration, slow fade
    ───────────────────────────────────────────────────────────────────────── */
 .notification-center {
@@ -5926,6 +6241,55 @@ body::before {
   transition: transform 0.2s;
 }
 
+/* Master logo — prominent header branding with CRATE HACKERS text */
+.master-logo {
+  height: 36px;
+  width: auto;
+  transition: transform 0.2s, filter 0.2s;
+  filter: drop-shadow(0 1px 4px rgba(211, 119, 29, 0.3));
+}
+
+.logo-home-link:hover .master-logo {
+  transform: scale(1.05);
+  filter: drop-shadow(0 2px 8px rgba(211, 119, 29, 0.5));
+}
+
+/* Inline crate icon — replaces generic emojis for brand consistency */
+.inline-crate-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  display: inline-block;
+  margin-right: 2px;
+  filter: drop-shadow(0 1px 2px rgba(211, 119, 29, 0.3));
+}
+
+/* Larger inline crate icon inside stat counters */
+.stat-counter .inline-crate-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Empty state crate icon — big, centered, with glow */
+.empty-crate-icon {
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 4px 16px rgba(211, 119, 29, 0.4));
+  animation: empty-crate-float 3s ease-in-out infinite;
+}
+
+@keyframes empty-crate-float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
 .brand-name {
   font-family: 'Rubik', sans-serif;
   font-weight: 700;
@@ -5934,6 +6298,8 @@ body::before {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  display: none;
+  /* Hidden — master logo replaces text branding */
 }
 
 /* Subtle admin link - visible but discrete */
@@ -6033,6 +6399,8 @@ body::before {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .stat-counter {
@@ -6102,20 +6470,41 @@ body::before {
   }
 }
 
-/* Responsive - slightly smaller on mobile */
-@media (max-width: 480px) {
+/* Responsive - compact on tablet */
+@media (max-width: 1024px) {
+  .action-stats {
+    gap: 6px;
+  }
+
+  .stat-counter {
+    padding: 3px 8px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Responsive - tighter on mobile */
+@media (max-width: 640px) {
   .action-stats {
     gap: 4px;
   }
 
   .stat-counter {
-    padding: 3px 8px;
-    font-size: 0.75rem;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    gap: 2px;
   }
 
   .god-mode-badge {
     padding: 3px 8px;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-counter {
+    padding: 2px 5px;
+    font-size: 0.65rem;
   }
 }
 
@@ -6231,6 +6620,13 @@ body::before {
   color: var(--text-secondary);
 }
 
+/* Brighter info button — stands out more in the header */
+.rules-info-bright {
+  opacity: 1 !important;
+  font-size: 1rem;
+  filter: brightness(1.3);
+}
+
 /* Mobile adjustments */
 @media (max-width: 640px) {
   .stream-layout .voting-closed-banner {
@@ -6284,7 +6680,30 @@ body::before {
 }
 
 .search-input-stream::placeholder {
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Disabled search state — shown when user has exhausted song adds */
+.search-input-stream.search-input-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-color: var(--border-color);
+  box-shadow: none;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
+.search-input-stream.search-input-disabled::placeholder {
+  color: var(--text-muted);
+}
+
+/* Search empty state — no results found */
+.search-empty-state {
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
 }
 
 .search-spinner {
@@ -6442,6 +6861,7 @@ body::before {
    ───────────────────────────────────────────────────────────────────────── */
 .song-list-stream {
   padding: 8px;
+  padding-bottom: 20px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -6484,18 +6904,19 @@ body::before {
 .song-row-stream.my-song::after {
   content: '★ YOURS';
   position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  font-size: 0.65rem;
+  top: 4px;
+  right: 4px;
+  font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #fff;
   background: var(--orange-primary);
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
   box-shadow: 0 2px 8px rgba(211, 119, 29, 0.4);
+  z-index: 2;
+  pointer-events: none;
 }
 
 .song-row-stream.move-up {
@@ -6886,20 +7307,103 @@ body::before {
 /* ─────────────────────────────────────────────────────────────────────────
    RESPONSIVE - Mobile adjustments
    ───────────────────────────────────────────────────────────────────────── */
+/* ── Tablet: Slightly tighter header ── */
+@media (max-width: 1024px) {
+  .stream-header {
+    padding: 6px 12px;
+  }
+
+  .header-right {
+    gap: 6px;
+  }
+
+  .master-logo {
+    height: 32px;
+  }
+}
+
 @media (max-width: 640px) {
+
+  /* ── Header: 2-row layout — logo row + stats row ── */
   .stream-header {
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 4px;
+    padding: 6px 8px;
   }
 
   .header-left {
     flex: 1;
+    min-width: 0;
+    /* allow shrinking */
+    gap: 4px;
+  }
+
+  /* Slightly smaller master logo on small phones */
+  .master-logo {
+    height: 26px;
+  }
+
+  /* Hide admin cog + rules info on mobile — desktop-only experience */
+  .admin-link-subtle {
+    display: none;
+  }
+
+  .rules-popover-wrapper {
+    display: none;
+  }
+
+  /* Tighter LIVE badge on mobile so it doesn't overflow */
+  .live-badge-inline {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+    margin-left: 2px;
+    white-space: nowrap;
+  }
+
+  .live-badge-inline .live-pulse {
+    width: 5px;
+    height: 5px;
+  }
+
+  /* Hide viewer count on mobile to save space */
+  .live-badge-inline .viewer-count {
+    display: none;
   }
 
   .header-right {
     flex-wrap: wrap;
     justify-content: flex-end;
+    gap: 3px;
+    max-width: 60%;
+  }
+
+  /* Hide RSVP calendar pill on mobile (it's in the stream header already) */
+  .stat-pill.rsvp-pill {
+    display: none;
+  }
+
+  /* Truncate long username on mobile */
+  .user-pill {
+    max-width: 90px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.7rem;
+    padding: 3px 8px;
+  }
+
+  .user-pill-avatar {
+    font-size: 0.75rem;
+  }
+
+  .edit-hint {
+    display: none;
+  }
+
+  /* Capacity pill tighter on mobile */
+  .stat-pill.capacity {
+    padding: 3px 7px;
+    font-size: 0.65rem;
   }
 
   .playlist-title {
@@ -6946,8 +7450,14 @@ body::before {
   }
 
   .song-row-stream {
-    padding: 6px 10px;
-    gap: 8px;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  /* "★ YOURS" badge: already top-right via base styles */
+  .song-row-stream.my-song {
+    padding-top: 16px;
+    /* space for the badge */
   }
 
   .album-thumb {
@@ -6956,22 +7466,39 @@ body::before {
   }
 
   .thumb-btn {
-    width: 28px;
-    height: 28px;
-    font-size: 0.9rem;
+    width: 30px;
+    height: 30px;
+    font-size: 0.95rem;
   }
 
   .rank-badge {
-    width: 28px;
+    width: 24px;
     font-size: 0.75rem;
   }
 
   .song-title {
     font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .song-artist {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Tighter vote score column */
+  .vote-score {
+    min-width: 22px;
+    font-size: 0.8rem;
+  }
+
+  /* Safe zone: song list bottom padding so PiP doesn't block last songs */
+  .song-list-stream {
+    padding-bottom: 100px;
   }
 }
 
@@ -10047,6 +10574,221 @@ input:disabled {
   border: none;
 }
 
+/* ── Docked Twitch Chat — fixed bottom panel for chatting while scrolling ── */
+.docked-chat-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  background: #18181b;
+  border-top: 2px solid rgba(145, 70, 255, 0.4);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6), 0 0 12px rgba(145, 70, 255, 0.1);
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+  animation: dock-slide-up 0.3s ease-out;
+}
+
+@keyframes dock-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.docked-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(145, 70, 255, 0.1);
+  border-bottom: 1px solid rgba(145, 70, 255, 0.15);
+}
+
+.docked-chat-handle {
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 auto 0 0;
+}
+
+.docked-chat-title {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #b388ff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex: 1;
+}
+
+.docked-chat-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.docked-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.docked-chat-btn:hover {
+  background: rgba(145, 70, 255, 0.3);
+  color: #fff;
+}
+
+.docked-chat-iframe {
+  width: 100%;
+  height: 280px;
+  border: none;
+}
+
+/* ── Docked Song Search — inside the docked chat panel ── */
+.docked-search-container {
+  position: relative;
+  padding: 8px 10px;
+  background: rgba(145, 70, 255, 0.06);
+  border-bottom: 1px solid rgba(145, 70, 255, 0.12);
+}
+
+.docked-search-input {
+  width: 100%;
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5px solid rgba(145, 70, 255, 0.25);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #fff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.docked-search-input:focus {
+  outline: none;
+  border-color: #9146ff;
+  background: rgba(145, 70, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(145, 70, 255, 0.15), 0 2px 12px rgba(145, 70, 255, 0.2);
+}
+
+.docked-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.docked-search-spinner {
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #b388ff;
+  font-size: 0.8rem;
+}
+
+/* Dropdown opens UPWARD from the docked panel to overlay chat */
+.docked-search-dropdown {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 8px;
+  right: 8px;
+  background: #1e1e2e;
+  border: 1.5px solid rgba(145, 70, 255, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5), 0 0 16px rgba(145, 70, 255, 0.12);
+  z-index: 1200;
+  overflow: hidden;
+  animation: dock-dropdown-up 0.2s ease-out;
+}
+
+@keyframes dock-dropdown-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.docked-search-dropdown .search-results-header {
+  background: linear-gradient(135deg, rgba(145, 70, 255, 0.15) 0%, rgba(145, 70, 255, 0.06) 100%);
+  border-bottom-color: rgba(145, 70, 255, 0.2);
+  color: #b388ff;
+}
+
+.docked-search-dropdown .search-result-row {
+  padding: 8px 12px;
+}
+
+.docked-search-dropdown .search-result-row img {
+  width: 36px;
+  height: 36px;
+  border-radius: 5px;
+}
+
+.docked-search-dropdown .result-name {
+  font-size: 0.82rem;
+}
+
+.docked-search-dropdown .result-artist {
+  font-size: 0.72rem;
+}
+
+/* Active state for dock chat button */
+.stream-rsvp-btn.twitch-rsvp.active {
+  background: rgba(145, 70, 255, 0.3);
+  border-color: #9146ff;
+  box-shadow: 0 0 8px rgba(145, 70, 255, 0.3);
+}
+
+/* Desktop: narrower docked panel */
+@media (min-width: 641px) {
+  .docked-chat-panel {
+    max-width: 400px;
+    right: 16px;
+    left: auto;
+    border-radius: 16px 16px 0 0;
+  }
+}
+
+/* Mobile: full-width docked chat */
+@media (max-width: 640px) {
+  .docked-chat-iframe {
+    height: 220px;
+  }
+
+  .docked-search-input {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  .docked-search-dropdown .search-result-row {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .docked-search-dropdown .search-result-row img {
+    width: 32px;
+    height: 32px;
+  }
+}
+
 /* ── PiP "Tap for sound" overlay ── */
 .pip-expand-overlay {
   position: absolute;
@@ -10097,6 +10839,175 @@ input:disabled {
   }
 }
 
+/* ── Expanded "Tap for sound" overlay (scroll-triggered expand, still muted) ── */
+.expanded-sound-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.2));
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.expanded-sound-overlay:hover {
+  background: linear-gradient(to top, rgba(255, 107, 0, 0.35), rgba(0, 0, 0, 0.3));
+}
+
+.expanded-sound-overlay.twitch-pip-overlay:hover {
+  background: linear-gradient(to top, rgba(145, 70, 255, 0.35), rgba(0, 0, 0, 0.3));
+}
+
+/* ── PiP Docked Song Search — Add songs while watching in PiP ── */
+.pip-docked-search {
+  position: relative;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border-top: 1px solid rgba(211, 119, 29, 0.2);
+  border-radius: 0 0 12px 12px;
+}
+
+.pip-docked-search.twitch-pip-search {
+  border-top-color: rgba(145, 70, 255, 0.2);
+}
+
+.pip-search-input {
+  width: 100%;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(211, 119, 29, 0.3);
+  border-radius: 16px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #fff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.twitch-pip-search .pip-search-input {
+  border-color: rgba(145, 70, 255, 0.3);
+}
+
+.pip-search-input:focus {
+  outline: none;
+  border-color: var(--orange-primary, #d3771d);
+  background: rgba(211, 119, 29, 0.08);
+  box-shadow: 0 0 0 2px rgba(211, 119, 29, 0.15);
+}
+
+.twitch-pip-search .pip-search-input:focus {
+  border-color: #9146ff;
+  background: rgba(145, 70, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(145, 70, 255, 0.15);
+}
+
+.pip-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.75rem;
+}
+
+.pip-search-spinner {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--orange-primary, #d3771d);
+  font-size: 0.75rem;
+}
+
+.twitch-pip-search .pip-search-spinner {
+  color: #b388ff;
+}
+
+/* Dropdown opens UPWARD from PiP to avoid getting clipped */
+.pip-search-dropdown {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 4px;
+  right: 4px;
+  background: rgba(18, 14, 10, 0.97);
+  border: 1.5px solid rgba(211, 119, 29, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6), 0 0 16px rgba(211, 119, 29, 0.1);
+  z-index: 1200;
+  overflow: hidden;
+  animation: pip-dropdown-up 0.2s ease-out;
+  min-width: 280px;
+}
+
+.pip-search-dropdown.twitch-search-dropdown {
+  border-color: rgba(145, 70, 255, 0.35);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6), 0 0 16px rgba(145, 70, 255, 0.1);
+}
+
+@keyframes pip-dropdown-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pip-search-dropdown .search-results-header {
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--orange-primary, #d3771d);
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.12) 0%, rgba(211, 119, 29, 0.04) 100%);
+  border-bottom: 1px solid rgba(211, 119, 29, 0.15);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pip-search-dropdown.twitch-search-dropdown .search-results-header {
+  color: #b388ff;
+  background: linear-gradient(135deg, rgba(145, 70, 255, 0.12) 0%, rgba(145, 70, 255, 0.04) 100%);
+  border-bottom-color: rgba(145, 70, 255, 0.15);
+}
+
+.pip-search-dropdown .search-result-row {
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+.pip-search-dropdown .search-result-row img {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+}
+
+.pip-search-dropdown .result-name {
+  font-size: 0.78rem;
+}
+
+.pip-search-dropdown .result-artist {
+  font-size: 0.68rem;
+}
+
+.pip-search-dropdown .search-empty-state {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* On PiP focus, expand the PiP width so the search is usable */
+.stream-host.pip-mode:has(.pip-search-input:focus),
+.stream-host.pip-mode:has(.pip-search-dropdown) {
+  width: 340px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* ── RSVP Button in stream header ── */
 .stream-rsvp-btn {
   display: inline-flex;
@@ -10138,31 +11049,46 @@ input:disabled {
 /* ── Mobile responsive ── */
 @media (max-width: 640px) {
 
-  /* PiP: wider on mobile for better touch & visibility */
+  /* PiP: MUCH smaller on mobile — must not block voting buttons */
   .stream-host.pip-mode {
-    width: 55vw;
-    max-width: 260px;
-    bottom: 12px;
-    right: 12px;
+    width: 35vw;
+    max-width: 140px;
+    bottom: 80px;
+    /* above thumb zone, clear of song rows */
+    right: 8px;
+    opacity: 0.9;
+    transition: opacity 0.2s;
+  }
+
+  .stream-host.pip-mode:hover,
+  .stream-host.pip-mode:active {
+    opacity: 1;
   }
 
   .pip-expand-overlay {
-    height: 52px;
+    height: 48px;
   }
 
   .pip-sound-prompt {
-    font-size: 0.8rem;
+    font-size: 0.7rem;
   }
 
-  /* Expanded: full-width, no side margins */
+  /* Expanded: full-bleed but capped height — don't consume entire viewport */
   .stream-host.expanded-mode {
     max-width: 100%;
-    margin: 8px 0;
-    border-radius: var(--radius-md);
+    max-height: 35vh;
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    overflow: hidden;
   }
 
   .stream-host.twitch-host.expanded-mode {
     max-width: 100%;
+    max-height: 35vh;
+    margin: 0;
+    border-radius: 0;
   }
 
   /* Stack player + chat on mobile */
@@ -10180,21 +11106,44 @@ input:disabled {
   }
 
   .live-host-badge {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
+  }
+
+  /* Bigger toggle button on mobile — easier thumb target */
+  .stream-toggle-btn {
+    padding: 6px 14px;
+    font-size: 0.7rem;
   }
 
   .stream-rsvp-btn {
     font-size: 0.65rem;
     padding: 3px 8px;
   }
+
+  /* Stream header: tighter padding on mobile */
+  .stream-host-header {
+    padding: 6px 10px;
+  }
+
+  /* PiP docked search: hide on mobile — PiP is too small */
+  .pip-docked-search {
+    display: none;
+  }
+
+  /* Don't expand pip width on mobile */
+  .stream-host.pip-mode:has(.pip-search-input:focus),
+  .stream-host.pip-mode:has(.pip-search-dropdown) {
+    width: 35vw;
+    max-width: 140px;
+  }
 }
 
 @media (max-width: 400px) {
   .stream-host.pip-mode {
-    width: 60vw;
-    max-width: 220px;
-    bottom: 8px;
-    right: 8px;
+    width: 30vw;
+    max-width: 120px;
+    bottom: 70px;
+    right: 6px;
   }
 }
 
@@ -10410,66 +11359,7 @@ input:disabled {
   border-radius: 6px;
 }
 
-/* ── AddEvent Embed Container ── */
-.gate-addevent-container {
-  margin-bottom: 16px;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
-}
-
-/* Placeholder (remove once AddEvent embed code is added) */
-.gate-addevent-placeholder {
-  padding: 20px 16px;
-  text-align: center;
-}
-
-.gate-addevent-icon {
-  font-size: 2rem;
-  display: block;
-  margin-bottom: 8px;
-}
-
-.gate-addevent-placeholder p {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  margin: 0 0 12px;
-}
-
-.gate-addevent-btn {
-  display: inline-block;
-  padding: 10px 24px;
-  background: var(--accent-gradient);
-  color: white;
-  font-family: 'Rubik', sans-serif;
-  font-weight: 700;
-  font-size: 0.85rem;
-  text-decoration: none;
-  border-radius: 8px;
-  transition: all 0.2s;
-}
-
-.gate-addevent-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-glow);
-}
-
-.gate-addevent-hint {
-  color: var(--text-muted) !important;
-  font-size: 0.7rem !important;
-  font-style: italic;
-  margin-top: 10px !important;
-  opacity: 0.6;
-}
-
-/* ── AddEvent iframe (when embedded) ── */
-.gate-addevent-container iframe {
-  width: 100%;
-  min-height: 320px;
-  border: none;
-  background: var(--bg-tertiary);
-}
+/* ── AddEvent styles removed (replaced by Kartra direct integration) ── */
 
 /* ── DJ Confirmation Checkbox ── */
 .gate-checkbox-label {
