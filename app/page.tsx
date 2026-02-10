@@ -462,13 +462,27 @@ export default function HomePage() {
     const [showRulesPopover, setShowRulesPopover] = useState(false);
     const [userLocation, setUserLocation] = useState<string | null>(null);  // User's location for tracking
 
-    // 🎯 Multi-step onboarding state
-    const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
-    const [isProfessionalDJ, setIsProfessionalDJ] = useState<boolean | null>(null);
+    // 🎯 Multi-step onboarding state (2 steps: Name → Email)
+    const [onboardingStep, setOnboardingStep] = useState<1 | 2>(1);
     const [emailInput, setEmailInput] = useState('');
     const [phoneInput, setPhoneInput] = useState('');
     const [isSubmittingKartra, setIsSubmittingKartra] = useState(false);
     const [kartraError, setKartraError] = useState<string | null>(null);
+
+    // 📊 SESSION RECAP - End-of-session summary + returning user memory
+    interface SessionRecap {
+        date: string;
+        topSongName: string | null;
+        topSongRank: number | null;
+        totalSongsAdded: number;
+        totalVotesCast: number;
+        karmaEarned: number;
+        participantCount: number;
+        playlistSize: number;
+    }
+    const [showSessionRecap, setShowSessionRecap] = useState(false);
+    const [sessionRecap, setSessionRecap] = useState<SessionRecap | null>(null);
+    const [lastSession, setLastSession] = useState<SessionRecap | null>(null);
 
     // Color options for user name
     // Color options for user name - limited to readable colors on dark background
@@ -521,6 +535,32 @@ export default function HomePage() {
     // 📡 BROADCAST COUNTDOWN - Next Tuesday 8 PM ET
     const [broadcastCountdown, setBroadcastCountdown] = useState<string>('');
     const [isBroadcastLive, setIsBroadcastLive] = useState(false);
+
+    // 📅 ADD TO CALENDAR helper - generates Google Calendar URL for Tuesday 8 PM ET
+    const generateCalendarUrl = useCallback(() => {
+        // Find next Tuesday 8 PM ET
+        const now = new Date();
+        const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const target = new Date(etNow);
+        target.setHours(20, 0, 0, 0);
+        let daysUntilTuesday = (2 - etNow.getDay() + 7) % 7;
+        if (daysUntilTuesday === 0 && etNow.getHours() >= 23) daysUntilTuesday = 7;
+        target.setDate(target.getDate() + daysUntilTuesday);
+
+        // Convert back to UTC for Google Calendar
+        const startUTC = new Date(target.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        // Adjust to actual UTC by computing offset
+        const etOffset = target.getTime() - startUTC.getTime();
+        const utcStart = new Date(target.getTime() - etOffset);
+        const utcEnd = new Date(utcStart.getTime() + 3 * 60 * 60 * 1000); // 3 hours
+
+        const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+        const title = encodeURIComponent('Crate Hackers Live — Vote Night 🎧');
+        const details = encodeURIComponent('Add songs, vote, and build the playlist together!\n\nJoin at: https://crateoftheweek.com');
+        const recur = encodeURIComponent('RRULE:FREQ=WEEKLY;BYDAY=TU');
+
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(utcStart)}/${fmt(utcEnd)}&details=${details}&recur=${recur}&ctz=America/New_York`;
+    }, []);
 
     // 📬 WAITING SCREEN RSVP - Mailing list signup for idle visitors
     const [waitingEmail, setWaitingEmail] = useState('');
@@ -689,6 +729,16 @@ export default function HomePage() {
                 setWaitingRsvpAlreadyDone(true);
             }
 
+            // 📊 Load last session recap for welcome-back state
+            try {
+                const savedSession = localStorage.getItem('crate-last-session');
+                if (savedSession) {
+                    setLastSession(JSON.parse(savedSession));
+                }
+            } catch (e) {
+                // Corrupted data, ignore
+            }
+
             // Initialize sound effects on first interaction
             SoundEffects.init();
 
@@ -719,7 +769,7 @@ export default function HomePage() {
     };
 
     // Save username with loading feedback
-    // Step 1 → Step 2: Validate DJ name and advance
+    // Step 1 → Step 2: Validate DJ name and advance to email capture
     const handleStep1Next = () => {
         const name = usernameInput.trim();
         if (name.length === 0) {
@@ -733,11 +783,7 @@ export default function HomePage() {
         setOnboardingStep(2);
     };
 
-    // Step 2 → Step 3: Pro DJ answer and advance
-    const handleStep2Next = (isPro: boolean) => {
-        setIsProfessionalDJ(isPro);
-        setOnboardingStep(3);
-    };
+    // (Step 2 "Are you a DJ?" removed — isProfessionalDJ was never used in the codebase)
 
     // Step 3: Submit to Kartra and complete onboarding
     const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -1045,6 +1091,19 @@ export default function HomePage() {
                 }
             }
 
+            // ⏱️ Extract timer data from the merged response (eliminates separate /api/timer fetch)
+            if (data.timer) {
+                setTimerRunning(data.timer.running);
+                setTimerEndTime(data.timer.endTime);
+                setIsBanned(data.timer.isBanned);
+
+                if (data.timer.running && data.timer.endTime) {
+                    setTimerRemaining(Math.max(0, data.timer.endTime - Date.now()));
+                } else {
+                    setTimerRemaining(0);
+                }
+            }
+
             // 📢 Process live activity from server
             if (data.recentActivity && Array.isArray(data.recentActivity)) {
                 const newActivities = data.recentActivity.filter(
@@ -1082,34 +1141,15 @@ export default function HomePage() {
     }, [visitorId]);
 
     // Fetch timer status
-    const fetchTimer = useCallback(async () => {
-        try {
-            const res = await fetchWithTimeout('/api/timer', {
-                headers: visitorId ? { 'x-visitor-id': visitorId } : {},
-            }, 5000); // 5 second timeout for timer
-            const data: TimerStatus = await res.json();
-            setTimerRunning(data.running);
-            setTimerEndTime(data.endTime);
-            setIsBanned(data.isBanned);
-
-            if (data.running && data.endTime) {
-                setTimerRemaining(Math.max(0, data.endTime - Date.now()));
-            } else {
-                setTimerRemaining(0);
-            }
-        } catch (error: any) {
-            console.error('Failed to fetch timer:', error);
-            // Silent fail for timer - it's not critical
-        }
-    }, [visitorId]);
+    // Timer data is now merged into the /api/songs response — no separate fetchTimer needed.
+    // This eliminates one HTTP request per poll cycle (~50% reduction in polling traffic).
 
     // Initial fetch
     useEffect(() => {
         if (visitorId) {
             fetchPlaylist();
-            fetchTimer();
         }
-    }, [fetchPlaylist, fetchTimer, visitorId]);
+    }, [fetchPlaylist, visitorId]);
 
     // 📢 Auto-clear toast notifications after 8 seconds
     useEffect(() => {
@@ -1143,6 +1183,7 @@ export default function HomePage() {
 
     // REAL-TIME POLLING - optimized for 1000+ concurrent users
     // Uses 15s base interval + random jitter to prevent thundering herd
+    // Timer data is now merged into the songs response — single fetch per cycle
     useEffect(() => {
         if (!visitorId) return;
 
@@ -1150,22 +1191,17 @@ export default function HomePage() {
         const jitter = Math.random() * 5000;
         const baseInterval = 15000; // 15 seconds base
 
-        const poll = () => {
-            fetchPlaylist();
-            fetchTimer();
-        };
-
         // Initial delayed start with jitter
-        const initialTimeout = setTimeout(poll, jitter);
+        const initialTimeout = setTimeout(fetchPlaylist, jitter);
 
         // Subsequent polls at regular interval
-        const interval = setInterval(poll, baseInterval);
+        const interval = setInterval(fetchPlaylist, baseInterval);
 
         return () => {
             clearTimeout(initialTimeout);
             clearInterval(interval);
         };
-    }, [visitorId, fetchPlaylist, fetchTimer]);
+    }, [visitorId, fetchPlaylist]);
 
 
 
@@ -1271,7 +1307,7 @@ export default function HomePage() {
         return () => clearInterval(interval);
     }, [timerRunning, timerEndTime]);
 
-    // 🏆 WINNER DETECTION - When round ends, check if user won
+    // 🏆 WINNER DETECTION + SESSION RECAP - When round ends
     useEffect(() => {
         // Detect transition from running to stopped (round ended)
         if (previousTimerRunning.current && !timerRunning && songs.length > 0) {
@@ -1282,9 +1318,56 @@ export default function HomePage() {
                 setWinnerSongName(topSong.name);
                 setShowWinnerSplash(true);
             }
+
+            // 📊 SESSION RECAP - Compute and save personalized summary
+            const mySongs = songs.filter(s => s.addedBy === visitorId);
+            const sorted = [...songs].sort((a, b) => {
+                const aUnvoted = a.score === 0;
+                const bUnvoted = b.score === 0;
+                if (aUnvoted && !bUnvoted) return -1;
+                if (!aUnvoted && bUnvoted) return 1;
+                if (aUnvoted && bUnvoted) return b.addedAt - a.addedAt;
+                if (b.score !== a.score) return b.score - a.score;
+                return a.addedAt - b.addedAt;
+            });
+
+            // Find best-ranked song by this user
+            let bestRank: number | null = null;
+            let bestSongName: string | null = null;
+            sorted.forEach((s, i) => {
+                if (s.addedBy === visitorId && (bestRank === null || i + 1 < bestRank)) {
+                    bestRank = i + 1;
+                    bestSongName = s.name;
+                }
+            });
+
+            const recap: SessionRecap = {
+                date: new Date().toISOString(),
+                topSongName: bestSongName,
+                topSongRank: bestRank,
+                totalSongsAdded: mySongs.length,
+                totalVotesCast: (userVotes.upvotedSongIds?.length || 0) + (userVotes.downvotedSongIds?.length || 0),
+                karmaEarned: karmaBonuses.karma || 0,
+                participantCount: viewerCount || 0,
+                playlistSize: songs.length,
+            };
+
+            setSessionRecap(recap);
+            setLastSession(recap);
+
+            // Show recap overlay after a brief delay (let winner splash show first if applicable)
+            const recapDelay = topSong?.addedBy === visitorId ? 6000 : 1500;
+            setTimeout(() => setShowSessionRecap(true), recapDelay);
+
+            // Persist to localStorage for welcome-back state
+            try {
+                localStorage.setItem('crate-last-session', JSON.stringify(recap));
+            } catch (e) {
+                // localStorage full or disabled
+            }
         }
         previousTimerRunning.current = timerRunning;
-    }, [timerRunning, songs, visitorId]);
+    }, [timerRunning, songs, visitorId, userVotes, karmaBonuses, viewerCount]);
 
     // 📺 YOUTUBE/JUKEBOX SYNC - Mute YouTube when Jukebox opens, restore when it closes
     useEffect(() => {
@@ -1329,7 +1412,7 @@ export default function HomePage() {
                 setDeleteWindow(prev => ({ ...prev, active: false, canDelete: false }));
                 fetchPlaylist(); // Refresh when window ends
             }
-        }, 100); // Update frequently for smooth countdown
+        }, 1000); // Update every second (was 100ms — countdown only shows seconds)
 
         return () => clearInterval(interval);
     }, [deleteWindow.active, deleteWindow.endTime, fetchPlaylist]);
@@ -1413,7 +1496,7 @@ export default function HomePage() {
                 // Battle ended - refresh to get results
                 fetchPlaylist();
             }
-        }, 100);
+        }, 1000); // Update every second (was 100ms — countdown only shows seconds)
 
         return () => clearInterval(interval);
     }, [versusBattle.active, versusBattle.endTime, fetchPlaylist]);
@@ -1965,7 +2048,7 @@ export default function HomePage() {
         if (isRefreshCooldown) return;
         setIsRefreshCooldown(true);
         fetchPlaylist(true);
-        fetchTimer();
+        // Timer data is now included in the songs response
         // 2 second cooldown between manual refreshes
         setTimeout(() => setIsRefreshCooldown(false), 2000);
     };
@@ -1978,8 +2061,9 @@ export default function HomePage() {
         }
     }, [message]);
 
-    // Check if song is already in playlist
-    const isSongInPlaylist = (trackId: string) => songs.some(s => s.id === trackId);
+    // Check if song is already in playlist — O(1) via memoized Set (was O(n) per call)
+    const playlistIdSet = useMemo(() => new Set(songs.map(s => s.id)), [songs]);
+    const isSongInPlaylist = (trackId: string) => playlistIdSet.has(trackId);
 
     // Scroll to a song already in the playlist (for "already added" click)
     const scrollToSongInPlaylist = (trackId: string) => {
@@ -2042,7 +2126,6 @@ export default function HomePage() {
                         <div className="onboarding-steps-indicator">
                             <span className={`step-dot ${onboardingStep >= 1 ? 'active' : ''}`} />
                             <span className={`step-dot ${onboardingStep >= 2 ? 'active' : ''}`} />
-                            <span className={`step-dot ${onboardingStep >= 3 ? 'active' : ''}`} />
                         </div>
 
                         {/* ── STEP 1: DJ Name ── */}
@@ -2080,40 +2163,10 @@ export default function HomePage() {
                             </>
                         )}
 
-                        {/* ── STEP 2: Professional DJ? ── */}
-                        {onboardingStep === 2 && (
-                            <>
-                                <div className="step2-emoji"><img src="/logo.png" alt="Crate Hackers" className="step2-crate-icon" /></div>
-                                <h2 className="join-title">Are you a DJ?</h2>
-                                <p className="join-subtitle">
-                                    DJs see BPM and key data alongside each song.
-                                </p>
-                                <div className="dj-type-buttons">
-                                    <button
-                                        className="dj-type-btn pro"
-                                        onClick={() => handleStep2Next(true)}
-                                    >
-                                        <span className="dj-type-icon">🎧</span>
-                                        <span className="dj-type-label">Yes, I DJ</span>
-                                        <span className="dj-type-hint">Any level</span>
-                                    </button>
-                                    <button
-                                        className="dj-type-btn fan"
-                                        onClick={() => handleStep2Next(false)}
-                                    >
-                                        <span className="dj-type-icon">🎶</span>
-                                        <span className="dj-type-label">No, I'm here for the music</span>
-                                        <span className="dj-type-hint">I've got great taste</span>
-                                    </button>
-                                </div>
-                                <button className="step-back-btn" onClick={() => setOnboardingStep(1)}>
-                                    ← Back
-                                </button>
-                            </>
-                        )}
+                        {/* Step 2 ("Are you a DJ?") removed — unused flag, adds friction */}
 
-                        {/* ── STEP 3: Email + Phone (Kartra capture) ── */}
-                        {onboardingStep === 3 && (
+                        {/* ── STEP 2: Email + Phone (Kartra capture) ── */}
+                        {onboardingStep === 2 && (
                             <>
                                 <div className="step3-emoji">🚀</div>
                                 <h2 className="join-title">Get Notified When We Go Live</h2>
@@ -2158,7 +2211,7 @@ export default function HomePage() {
                                 <p className="join-privacy-note">
                                     🔒 Unsubscribe anytime. We never share your info.
                                 </p>
-                                <button className="step-back-btn" onClick={() => setOnboardingStep(2)}>
+                                <button className="step-back-btn" onClick={() => setOnboardingStep(1)}>
                                     ← Back
                                 </button>
                             </>
@@ -2585,7 +2638,7 @@ export default function HomePage() {
                 </div>
             </header>
 
-            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 8 PM ET */}
+            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 8 PM ET + Calendar CTA */}
             <div className={`broadcast-bar ${isBroadcastLive ? 'broadcast-live' : ''}`}>
                 {isBroadcastLive ? (
                     <>
@@ -2598,6 +2651,15 @@ export default function HomePage() {
                         <span className="broadcast-text">NEXT LIVE EVENT</span>
                         <span className="broadcast-countdown">{broadcastCountdown}</span>
                         <span className="broadcast-schedule">Every Tue · 8 PM ET</span>
+                        <a
+                            href={generateCalendarUrl()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="calendar-cta-btn"
+                            title="Add recurring reminder to Google Calendar"
+                        >
+                            📅 Add to Calendar
+                        </a>
                     </>
                 )}
             </div>
@@ -3167,13 +3229,65 @@ export default function HomePage() {
                                 <div className="empty-title">
                                     Welcome back, {username}! 🎧
                                 </div>
-                                <div className="empty-subtitle">
-                                    No live event right now. We go live weekly — add songs, vote, and build playlists together.
-                                </div>
-                                {broadcastCountdown && (
-                                    <div className="empty-countdown">🕐 Next live event in <strong>{broadcastCountdown}</strong></div>
+
+                                {/* 📊 WELCOME-BACK CARD — Show last session recap if available */}
+                                {lastSession ? (
+                                    <div className="welcome-back-card">
+                                        <div className="welcome-back-header">Your Last Session</div>
+                                        <div className="welcome-back-stats">
+                                            {lastSession.topSongName && lastSession.topSongRank && (
+                                                <div className="welcome-back-stat">
+                                                    <span className="wb-stat-icon">{lastSession.topSongRank <= 3 ? '🏆' : '🎵'}</span>
+                                                    <span className="wb-stat-text">
+                                                        <strong>&ldquo;{lastSession.topSongName}&rdquo;</strong> finished <strong>#{lastSession.topSongRank}</strong>
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {lastSession.totalVotesCast > 0 && (
+                                                <div className="welcome-back-stat">
+                                                    <span className="wb-stat-icon">🗳️</span>
+                                                    <span className="wb-stat-text">{lastSession.totalVotesCast} votes cast</span>
+                                                </div>
+                                            )}
+                                            {lastSession.totalSongsAdded > 0 && (
+                                                <div className="welcome-back-stat">
+                                                    <span className="wb-stat-icon">🎶</span>
+                                                    <span className="wb-stat-text">{lastSession.totalSongsAdded} songs added</span>
+                                                </div>
+                                            )}
+                                            {lastSession.karmaEarned > 0 && (
+                                                <div className="welcome-back-stat">
+                                                    <span className="wb-stat-icon">⭐</span>
+                                                    <span className="wb-stat-text">+{lastSession.karmaEarned} karma earned</span>
+                                                </div>
+                                            )}
+                                            {lastSession.playlistSize > 0 && (
+                                                <div className="welcome-back-stat">
+                                                    <span className="wb-stat-icon">📋</span>
+                                                    <span className="wb-stat-text">{lastSession.playlistSize} songs in playlist · {lastSession.participantCount || '?'} participants</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="empty-subtitle">
+                                        No live event right now. We go live weekly — add songs, vote, and build playlists together.
+                                    </div>
                                 )}
-                                <div className="empty-hint">Enter your email to get notified.</div>
+
+                                {broadcastCountdown && (
+                                    <div className="empty-countdown">
+                                        🕐 Next live event in <strong>{broadcastCountdown}</strong>
+                                        <a
+                                            href={generateCalendarUrl()}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="countdown-calendar-link"
+                                        >
+                                            📅 Add to Calendar
+                                        </a>
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <>
@@ -3184,16 +3298,25 @@ export default function HomePage() {
                                     Every week we go live. Add songs, vote, and build the playlist together.
                                 </div>
                                 {broadcastCountdown && (
-                                    <div className="empty-countdown">🕐 Next live event in <strong>{broadcastCountdown}</strong></div>
+                                    <div className="empty-countdown">
+                                        🕐 Next live event in <strong>{broadcastCountdown}</strong>
+                                        <a
+                                            href={generateCalendarUrl()}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="countdown-calendar-link"
+                                        >
+                                            📅 Add to Calendar
+                                        </a>
+                                    </div>
                                 )}
-                                <div className="empty-hint">Enter your email to get notified.</div>
                             </>
                         )}
 
-                        {/* 📬 Mailing List RSVP — only shown when session is NOT active */}
-                        {!timerRunning && (
+                        {/* 📬 Mailing List RSVP — only shown when session is NOT active AND user hasn't already signed up */}
+                        {!timerRunning && !waitingRsvpAlreadyDone && (
                             <div className="waiting-rsvp">
-                                {waitingRsvpStatus === 'success' || waitingRsvpAlreadyDone ? (
+                                {waitingRsvpStatus === 'success' ? (
                                     <div className="waiting-rsvp-success">
                                         <span className="waiting-rsvp-check">✅</span> You're on the list! We'll notify you before the next event.
                                     </div>
@@ -3221,7 +3344,6 @@ export default function HomePage() {
                                                     setWaitingRsvpAlreadyDone(true);
                                                     try { localStorage.setItem('crate-rsvp-done', 'true'); } catch (_) { }
                                                 } else {
-                                                    // "already exists" is still a win
                                                     if (data.error?.includes('already')) {
                                                         setWaitingRsvpStatus('success');
                                                         setWaitingRsvpAlreadyDone(true);
@@ -3257,6 +3379,13 @@ export default function HomePage() {
                                         )}
                                     </>
                                 )}
+                            </div>
+                        )}
+
+                        {/* ✅ Already on the list — subtle confirmation */}
+                        {!timerRunning && waitingRsvpAlreadyDone && (
+                            <div className="waiting-rsvp-already">
+                                ✅ You're on the list — we'll email you before the next event.
                             </div>
                         )}
                     </div>
@@ -3394,6 +3523,76 @@ export default function HomePage() {
                     />
                 )
             }
+
+            {/* 📊 SESSION RECAP OVERLAY — Personalized end-of-session summary */}
+            {showSessionRecap && sessionRecap && (
+                <div className="session-recap-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowSessionRecap(false); }}>
+                    <div className="session-recap-card">
+                        <button className="recap-close" onClick={() => setShowSessionRecap(false)}>✕</button>
+                        <div className="recap-header">
+                            <img src="/logo.png" alt="" className="recap-logo" />
+                            <h2 className="recap-title">Session Complete! 🎧</h2>
+                        </div>
+                        <div className="recap-stats">
+                            {sessionRecap.topSongName && sessionRecap.topSongRank && (
+                                <div className="recap-stat highlight">
+                                    <span className="recap-stat-icon">{sessionRecap.topSongRank === 1 ? '👑' : sessionRecap.topSongRank <= 3 ? '🏆' : '🎵'}</span>
+                                    <div className="recap-stat-content">
+                                        <span className="recap-stat-label">Your Best Song</span>
+                                        <span className="recap-stat-value">&ldquo;{sessionRecap.topSongName}&rdquo; — #{sessionRecap.topSongRank}</span>
+                                    </div>
+                                </div>
+                            )}
+                            {sessionRecap.totalSongsAdded > 0 && (
+                                <div className="recap-stat">
+                                    <span className="recap-stat-icon">🎶</span>
+                                    <div className="recap-stat-content">
+                                        <span className="recap-stat-label">Songs Added</span>
+                                        <span className="recap-stat-value">{sessionRecap.totalSongsAdded}</span>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="recap-stat">
+                                <span className="recap-stat-icon">🗳️</span>
+                                <div className="recap-stat-content">
+                                    <span className="recap-stat-label">Votes Cast</span>
+                                    <span className="recap-stat-value">{sessionRecap.totalVotesCast}</span>
+                                </div>
+                            </div>
+                            {sessionRecap.karmaEarned > 0 && (
+                                <div className="recap-stat">
+                                    <span className="recap-stat-icon">⭐</span>
+                                    <div className="recap-stat-content">
+                                        <span className="recap-stat-label">Karma Earned</span>
+                                        <span className="recap-stat-value">+{sessionRecap.karmaEarned}</span>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="recap-stat">
+                                <span className="recap-stat-icon">📋</span>
+                                <div className="recap-stat-content">
+                                    <span className="recap-stat-label">Playlist</span>
+                                    <span className="recap-stat-value">{sessionRecap.playlistSize} songs · {sessionRecap.participantCount || '?'} participants</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="recap-footer">
+                            <p className="recap-next">Next session: <strong>Tuesday 8 PM ET</strong></p>
+                            <a
+                                href={generateCalendarUrl()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="recap-calendar-btn"
+                            >
+                                📅 Add to Calendar
+                            </a>
+                            <button className="recap-dismiss-btn" onClick={() => setShowSessionRecap(false)}>
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 🍞 TOAST NOTIFICATIONS */}
             <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />

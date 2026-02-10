@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap');
+/* Google Fonts loaded via <link> in layout.tsx for faster parallel loading */
 
 :root {
   /* DJ Booth color palette */
@@ -59,6 +59,9 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* P2-5: Prevent horizontal scroll from any single element overflow */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 /* Subtle grid pattern background */
@@ -3391,6 +3394,358 @@ body::before {
   }
 }
 
+/* ── Already on the list — subtle confirmation ── */
+.waiting-rsvp-already {
+  font-size: 0.85rem;
+  color: rgba(34, 197, 94, 0.8);
+  padding: 10px 16px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ============================================
+   📅 CALENDAR CTA BUTTON — Broadcast Bar
+   ============================================ */
+.calendar-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: rgba(211, 119, 29, 0.15);
+  border: 1px solid rgba(211, 119, 29, 0.3);
+  border-radius: 12px;
+  color: var(--orange-primary);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-decoration: none;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.calendar-cta-btn:hover {
+  background: rgba(211, 119, 29, 0.25);
+  border-color: rgba(211, 119, 29, 0.5);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(211, 119, 29, 0.3);
+}
+
+/* Calendar link inline with countdown text */
+.countdown-calendar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 10px;
+  padding: 2px 8px;
+  background: rgba(211, 119, 29, 0.12);
+  border: 1px solid rgba(211, 119, 29, 0.25);
+  border-radius: 10px;
+  color: var(--orange-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.countdown-calendar-link:hover {
+  background: rgba(211, 119, 29, 0.2);
+  border-color: rgba(211, 119, 29, 0.4);
+  transform: scale(1.03);
+}
+
+@media (max-width: 640px) {
+  .calendar-cta-btn {
+    display: none;
+  }
+
+  .countdown-calendar-link {
+    display: block;
+    margin-left: 0;
+    margin-top: 8px;
+    text-align: center;
+    padding: 6px 12px;
+  }
+}
+
+/* ============================================
+   📊 SESSION RECAP OVERLAY
+   ============================================ */
+.session-recap-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: recap-overlay-in 0.4s ease;
+}
+
+@keyframes recap-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.session-recap-card {
+  background: linear-gradient(145deg, rgba(30, 30, 34, 0.98), rgba(22, 22, 26, 0.98));
+  border: 1px solid rgba(211, 119, 29, 0.3);
+  border-radius: 20px;
+  padding: 28px 24px;
+  max-width: 380px;
+  width: 100%;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(211, 119, 29, 0.1);
+  animation: recap-card-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes recap-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.recap-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.recap-close:hover {
+  color: var(--text-primary);
+  transform: scale(1.2);
+}
+
+.recap-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.recap-logo {
+  width: 36px;
+  height: 36px;
+  filter: drop-shadow(0 2px 6px rgba(211, 119, 29, 0.4));
+}
+
+.recap-title {
+  font-family: 'Rubik', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.recap-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.recap-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.recap-stat.highlight {
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.12), rgba(245, 158, 11, 0.08));
+  border-color: rgba(211, 119, 29, 0.25);
+}
+
+.recap-stat-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.recap-stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recap-stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.recap-stat-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recap-footer {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.recap-next {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.recap-calendar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.2), rgba(245, 158, 11, 0.15));
+  border: 1px solid rgba(211, 119, 29, 0.4);
+  border-radius: 12px;
+  color: var(--orange-primary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.recap-calendar-btn:hover {
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.3), rgba(245, 158, 11, 0.25));
+  border-color: rgba(211, 119, 29, 0.6);
+  transform: scale(1.03);
+  box-shadow: 0 4px 16px rgba(211, 119, 29, 0.3);
+}
+
+.recap-dismiss-btn {
+  padding: 8px 24px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recap-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+/* ============================================
+   🏠 WELCOME-BACK CARD — Returning user state
+   ============================================ */
+.welcome-back-card {
+  margin: 16px auto;
+  max-width: 360px;
+  width: 100%;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(211, 119, 29, 0.2);
+  border-radius: 16px;
+  padding: 16px 18px;
+  animation: wb-card-in 0.6s ease;
+}
+
+@keyframes wb-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcome-back-header {
+  font-family: 'Rubik', sans-serif;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--orange-primary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(211, 119, 29, 0.15);
+}
+
+.welcome-back-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.welcome-back-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.wb-stat-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.wb-stat-text {
+  line-height: 1.3;
+}
+
+.wb-stat-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .session-recap-card {
+    padding: 20px 18px;
+  }
+
+  .recap-title {
+    font-size: 1.1rem;
+  }
+
+  .welcome-back-card {
+    margin: 12px auto;
+    padding: 14px 16px;
+  }
+}
+
 /* Added by user name */
 .added-by {
   color: var(--text-muted);
@@ -3598,7 +3953,8 @@ body::before {
   background: rgba(26, 26, 26, 0.9);
   border: 1px solid rgba(211, 119, 29, 0.3);
   border-radius: 12px;
-  z-index: 100;
+  z-index: 90;
+  /* P3-1: Below PiP z-index to avoid collision */
 }
 
 .qr-code-img {
@@ -3984,7 +4340,17 @@ body::before {
   position: relative;
 }
 
-/* Mobile responsive for activity feed */
+/* P2-1: Activity feed — collapse to bottom on tablet to avoid overlapping content */
+@media (max-width: 1024px) {
+  .activity-feed {
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+    left: auto;
+    max-width: 250px;
+  }
+}
+
 @media (max-width: 768px) {
   .activity-feed {
     top: auto;
@@ -5799,6 +6165,13 @@ body::before {
   padding: 8px;
 }
 
+/* P2-3: Leaderboard grid — 2 columns on tablet too */
+@media (max-width: 768px) {
+  .leaderboard-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .voting-closed-banner {
     padding: 16px;
@@ -5907,6 +6280,16 @@ body::before {
   }
 
   .broadcast-schedule {
+    font-size: 0.6rem;
+  }
+}
+
+/* P3-4: Broadcast bar — wrap on ultra small phones */
+@media (max-width: 400px) {
+  .broadcast-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
     font-size: 0.6rem;
   }
 }
@@ -6726,6 +7109,26 @@ body::before {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(224, 159, 36, 0.2);
   z-index: 50;
   overflow: hidden;
+  /* P0-3: Constrain height and allow scroll */
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* P0-3: Fixed bottom sheet dropdown on mobile — stays above keyboard */
+@media (max-width: 640px) {
+  .search-dropdown-stream {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 55vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    z-index: 200;
+    border-bottom: none;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(224, 159, 36, 0.2);
+  }
 }
 
 /* Search Results Header - Clear label */
@@ -7375,6 +7778,8 @@ body::before {
     justify-content: flex-end;
     gap: 3px;
     max-width: 60%;
+    overflow: hidden;
+    /* P0-2: Prevent header-right from causing horizontal scroll */
   }
 
   /* Hide RSVP calendar pill on mobile (it's in the stream header already) */
@@ -7454,10 +7859,9 @@ body::before {
     gap: 6px;
   }
 
-  /* "★ YOURS" badge: already top-right via base styles */
+  /* P3-2: "★ YOURS" badge — reduced to 12px for more consistent row height */
   .song-row-stream.my-song {
-    padding-top: 16px;
-    /* space for the badge */
+    padding-top: 12px;
   }
 
   .album-thumb {
@@ -7465,10 +7869,11 @@ body::before {
     height: 36px;
   }
 
+  /* P1-1: Vote buttons — enlarged to 40px for reliable thumb taps (44px HIG target) */
   .thumb-btn {
-    width: 30px;
-    height: 30px;
-    font-size: 0.95rem;
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
   }
 
   .rank-badge {
@@ -7476,11 +7881,15 @@ body::before {
     font-size: 0.75rem;
   }
 
+  /* P1-2: Song title — allow 2-line wrap instead of truncation on mobile */
   .song-title {
     font-size: 0.85rem;
-    white-space: nowrap;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .song-artist {
@@ -7499,6 +7908,11 @@ body::before {
   /* Safe zone: song list bottom padding so PiP doesn't block last songs */
   .song-list-stream {
     padding-bottom: 100px;
+  }
+
+  /* P1-3: Safe zone for docked Twitch chat panel */
+  .song-list-stream.chat-docked {
+    padding-bottom: 240px;
   }
 }
 
@@ -7826,10 +8240,12 @@ body::before {
     padding: 2px 10px;
   }
 
+  /* P3-5: Chaos delete buttons — slightly larger + margin for accidental tap prevention */
   .chaos-delete-btn {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     font-size: 1.1rem;
+    margin: 2px 0;
   }
 }
 
@@ -7849,37 +8265,42 @@ body::before {
   font-weight: 500;
 }
 
+/* P1-4: Versus Battle responsive — proper class-based selectors (no !important) */
 @media (max-width: 640px) {
   .versus-battle-banner {
-    padding: 16px !important;
-    margin: 0 8px 16px !important;
+    padding: 16px;
+    margin: 0 8px 16px;
   }
 
-  .versus-battle-banner h2 {
-    font-size: 1rem !important;
-    letter-spacing: 1px !important;
+  .battle-title {
+    font-size: 1rem;
+    letter-spacing: 1px;
   }
 
   /* Stack songs vertically on mobile */
-  .versus-battle-banner>div:nth-child(2) {
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
+  .battle-arena {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
-  /* Make VS smaller and inline */
-  .versus-battle-banner>div:nth-child(2)>div:nth-child(2) {
-    font-size: 1.2rem !important;
-    order: 0;
-    margin: -8px 0;
+  /* VS divider between stacked cards */
+  .battle-vs {
+    order: -1;
+    margin: -4px 0;
   }
 
-  /* Song cards stack */
-  .versus-battle-banner>div:nth-child(2)>div:first-child {
-    order: 1;
+  .battle-vs span {
+    font-size: 1.2rem;
   }
 
-  .versus-battle-banner>div:nth-child(2)>div:last-child {
-    order: 2;
+  .battle-album-art {
+    width: 56px;
+    height: 56px;
+  }
+
+  .battle-song-name,
+  .battle-song-artist {
+    max-width: 100%;
   }
 }
 
@@ -9098,15 +9519,16 @@ input:disabled {
   }
 
   .admin-tab {
-    padding: 8px 4px;
+    padding: 8px 6px;
   }
 
   .admin-tab .tab-icon {
-    font-size: 1rem;
+    font-size: 1.2rem;
   }
 
+  /* P2-4: Admin tabs — hide text on mobile, icon-only for readability */
   .admin-tab .tab-label {
-    font-size: 0.6rem;
+    display: none;
   }
 
   .tab-panel {
@@ -9441,6 +9863,34 @@ input:disabled {
   width: 90%;
   max-height: 70vh;
   overflow-y: auto;
+  position: relative;
+  /* P2-2: Anchor for close X button */
+}
+
+/* P2-2: Close X button on prediction modal */
+.prediction-modal .modal-close-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  z-index: 10;
+}
+
+.prediction-modal .modal-close-x:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: #ef4444;
+  color: white;
 }
 
 .prediction-modal h3 {
@@ -11497,17 +11947,19 @@ input:disabled {
 }
 
 /* ── Mobile responsive ── */
+/* P0-1: Consolidated PiP position rules — single source of truth, no !important */
 @media (max-width: 640px) {
 
-  /* PiP: MUCH smaller on mobile — must not block voting buttons */
+  /* PiP: Positioned top-right on mobile — must not block voting buttons */
   .stream-host.pip-mode {
+    top: 8px;
+    bottom: auto;
+    right: 8px;
     width: 35vw;
     max-width: 140px;
-    bottom: 80px;
-    /* above thumb zone, clear of song rows */
-    right: 8px;
     opacity: 0.9;
     transition: opacity 0.2s;
+    z-index: 90;
   }
 
   .stream-host.pip-mode:hover,
@@ -11523,20 +11975,20 @@ input:disabled {
     font-size: 0.7rem;
   }
 
-  /* Expanded: full-bleed but capped height — don't consume entire viewport */
+  /* P1-5: Expanded: full-bleed, more generous height cap for small phones */
   .stream-host.expanded-mode {
     max-width: 100%;
-    max-height: 35vh;
+    max-height: 40vh;
     margin: 0;
     border-radius: 0;
     border-left: none;
     border-right: none;
-    overflow: hidden;
+    overflow: auto;
   }
 
   .stream-host.twitch-host.expanded-mode {
     max-width: 100%;
-    max-height: 35vh;
+    max-height: 40vh;
     margin: 0;
     border-radius: 0;
   }
@@ -11588,12 +12040,11 @@ input:disabled {
   }
 }
 
+/* P0-1: Ultra-small PiP adjustment */
 @media (max-width: 400px) {
   .stream-host.pip-mode {
     width: 30vw;
     max-width: 120px;
-    bottom: 70px;
-    right: 6px;
   }
 }
 
@@ -11924,6 +12375,19 @@ input:disabled {
   }
 }
 
+/* P2-6: Onboarding scroll on short viewports (landscape phones, small phones) */
+@media (max-height: 600px) {
+  .dj-signup-gate {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .dj-signup-gate h2 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+  }
+}
+
 /* ── Join Social Proof (viewerCount on Step 1) ── */
 .join-social-proof {
   font-size: 0.8rem;
@@ -11964,6 +12428,7 @@ input:disabled {
   }
 }
 
+/* P3-3: Coach mark — clamp position to viewport to prevent off-screen clips */
 .coach-mark-tooltip {
   position: absolute;
   bottom: -40px;
@@ -11979,6 +12444,7 @@ input:disabled {
   z-index: 100;
   box-shadow: 0 4px 16px rgba(211, 119, 29, 0.4);
   animation: coachBounce 1.5s ease-in-out infinite;
+  max-width: 90vw;
 }
 
 .coach-mark-tooltip::before {
@@ -12254,19 +12720,69 @@ input:disabled {
   margin-top: 4px;
 }
 
-/* Fix 14: PiP safe zone on mobile — ensure it doesn't overlap vote buttons */
-@media (max-width: 640px) {
-  .stream-host.pip-mode {
-    top: 8px !important;
-    bottom: auto !important;
-    right: 8px !important;
-    width: 140px !important;
-    z-index: 90;
+/* Fix 14: PiP safe zone — consolidated into main mobile block (P0-1) */
+/* Removed duplicate !important rules — refer to line ~11503 */
+
+/* Ensure join-card has position:relative for the close X */
+.join-card {
+  position: relative;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   P0-2: EMERGENCY COMPACTION — Ultra-small phones (≤400px)
+   Galaxy Fold outer screen (280px), iPhone SE, etc.
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 400px) {
+  .stream-header {
+    padding: 4px 6px;
   }
 
-  /* Ensure join-card has position:relative for the close X */
-  .join-card {
-    position: relative;
+  .header-right {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px;
+  }
+
+  /* Hide individual stat counters on ultra-small — too cramped */
+  .stat-counter {
+    display: none;
+  }
+
+  /* Tighter user pill */
+  .user-pill {
+    max-width: 70px;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  /* Smaller master logo */
+  .master-logo {
+    height: 22px;
+  }
+
+  /* Compact capacity pill */
+  .stat-pill.capacity {
+    font-size: 0.6rem;
+    padding: 2px 5px;
+  }
+
+  /* Tighter song rows */
+  .song-row-stream {
+    padding: 4px 6px;
+    gap: 4px;
+  }
+
+  .album-thumb {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Vote buttons still meet minimum tap target */
+  .thumb-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
   }
 }
 

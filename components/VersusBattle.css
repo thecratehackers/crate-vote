@@ -234,15 +234,46 @@
     color: #4ade80;
 }
 
-/* Mobile Responsive */
-@media (max-width: 480px) {
+/* Standard Mobile Responsive (640px) */
+@media (max-width: 640px) {
     .versus-battle-banner {
         padding: 16px;
     }
 
+    .battle-arena {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .battle-vs {
+        order: -1;
+        margin: -4px 0;
+    }
+
+    .battle-vs span {
+        font-size: 1.2rem;
+    }
+
     .battle-album-art {
-        width: 60px;
-        height: 60px;
+        width: 64px;
+        height: 64px;
+    }
+
+    .battle-song-name,
+    .battle-song-artist {
+        max-width: 100%;
+    }
+}
+
+/* Small Phone Responsive (480px) */
+@media (max-width: 480px) {
+    .versus-battle-banner {
+        padding: 12px;
+    }
+
+    .battle-album-art {
+        width: 50px;
+        height: 50px;
     }
 
     .battle-song-name,
@@ -251,6 +282,6 @@
     }
 
     .battle-vs span {
-        font-size: 1.25rem;
+        font-size: 1rem;
     }
 }
