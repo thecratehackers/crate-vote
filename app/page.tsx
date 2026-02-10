@@ -532,26 +532,26 @@ export default function HomePage() {
     // 📢 AUTO SHOUT-OUTS - Rotating encouragement messages
     const [currentShoutout, setCurrentShoutout] = useState<string | null>(null);
 
-    // 📡 BROADCAST COUNTDOWN - Next Tuesday 8 PM ET
+    // 📡 BROADCAST COUNTDOWN - Next Tuesday 7 PM CT
     const [broadcastCountdown, setBroadcastCountdown] = useState<string>('');
     const [isBroadcastLive, setIsBroadcastLive] = useState(false);
 
-    // 📅 ADD TO CALENDAR helper - generates Google Calendar URL for Tuesday 8 PM ET
+    // 📅 ADD TO CALENDAR helper - generates Google Calendar URL for Tuesday 7 PM CT
     const generateCalendarUrl = useCallback(() => {
-        // Find next Tuesday 8 PM ET
+        // Find next Tuesday 7 PM CT
         const now = new Date();
-        const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-        const target = new Date(etNow);
-        target.setHours(20, 0, 0, 0);
-        let daysUntilTuesday = (2 - etNow.getDay() + 7) % 7;
-        if (daysUntilTuesday === 0 && etNow.getHours() >= 23) daysUntilTuesday = 7;
+        const ctNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+        const target = new Date(ctNow);
+        target.setHours(19, 0, 0, 0);
+        let daysUntilTuesday = (2 - ctNow.getDay() + 7) % 7;
+        if (daysUntilTuesday === 0 && ctNow.getHours() >= 22) daysUntilTuesday = 7;
         target.setDate(target.getDate() + daysUntilTuesday);
 
         // Convert back to UTC for Google Calendar
-        const startUTC = new Date(target.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const startUTC = new Date(target.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
         // Adjust to actual UTC by computing offset
-        const etOffset = target.getTime() - startUTC.getTime();
-        const utcStart = new Date(target.getTime() - etOffset);
+        const ctOffset = target.getTime() - startUTC.getTime();
+        const utcStart = new Date(target.getTime() - ctOffset);
         const utcEnd = new Date(utcStart.getTime() + 3 * 60 * 60 * 1000); // 3 hours
 
         const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
@@ -559,7 +559,7 @@ export default function HomePage() {
         const details = encodeURIComponent('Add songs, vote, and build the playlist together!\n\nJoin at: https://crateoftheweek.com');
         const recur = encodeURIComponent('RRULE:FREQ=WEEKLY;BYDAY=TU');
 
-        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(utcStart)}/${fmt(utcEnd)}&details=${details}&recur=${recur}&ctz=America/New_York`;
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(utcStart)}/${fmt(utcEnd)}&details=${details}&recur=${recur}&ctz=America/Chicago`;
     }, []);
 
     // 📬 WAITING SCREEN RSVP - Mailing list signup for idle visitors
@@ -578,29 +578,29 @@ export default function HomePage() {
     useEffect(() => {
         const calcCountdown = () => {
             const now = new Date();
-            // Convert to ET (America/New_York)
-            const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-            const etDay = etNow.getDay(); // 0=Sun, 2=Tue
-            const etHour = etNow.getHours();
+            // Convert to CT (America/Chicago)
+            const ctNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+            const ctDay = ctNow.getDay(); // 0=Sun, 2=Tue
+            const ctHour = ctNow.getHours();
 
-            // Broadcast window: Tuesday 8 PM - 11 PM ET
-            if (etDay === 2 && etHour >= 20 && etHour < 23) {
+            // Broadcast window: Tuesday 7 PM - 10 PM CT
+            if (ctDay === 2 && ctHour >= 19 && ctHour < 22) {
                 setIsBroadcastLive(true);
                 setBroadcastCountdown('');
                 return;
             }
             setIsBroadcastLive(false);
 
-            // Calculate next Tuesday 8 PM ET
-            // Build target date in ET
-            const target = new Date(etNow);
-            target.setHours(20, 0, 0, 0);
-            let daysUntilTuesday = (2 - etDay + 7) % 7;
+            // Calculate next Tuesday 7 PM CT
+            // Build target date in CT
+            const target = new Date(ctNow);
+            target.setHours(19, 0, 0, 0);
+            let daysUntilTuesday = (2 - ctDay + 7) % 7;
             // If it's Tuesday but past broadcast window, next week
-            if (daysUntilTuesday === 0 && etHour >= 23) daysUntilTuesday = 7;
+            if (daysUntilTuesday === 0 && ctHour >= 22) daysUntilTuesday = 7;
             target.setDate(target.getDate() + daysUntilTuesday);
 
-            const diff = target.getTime() - etNow.getTime();
+            const diff = target.getTime() - ctNow.getTime();
             if (diff <= 0) {
                 setBroadcastCountdown('Soon!');
                 return;
@@ -2638,19 +2638,19 @@ export default function HomePage() {
                 </div>
             </header>
 
-            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 8 PM ET + Calendar CTA */}
+            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 7 PM CT + Calendar CTA */}
             <div className={`broadcast-bar ${isBroadcastLive ? 'broadcast-live' : ''}`}>
                 {isBroadcastLive ? (
                     <>
                         <span className="broadcast-live-dot" />
                         <span className="broadcast-text">LIVE NOW</span>
-                        <span className="broadcast-schedule">Every Tue · 8 PM ET</span>
+                        <span className="broadcast-schedule">Every Tue · 7 PM CT</span>
                     </>
                 ) : (
                     <>
                         <span className="broadcast-text">NEXT LIVE EVENT</span>
                         <span className="broadcast-countdown">{broadcastCountdown}</span>
-                        <span className="broadcast-schedule">Every Tue · 8 PM ET</span>
+                        <span className="broadcast-schedule">Every Tue · 7 PM CT</span>
                         <a
                             href={generateCalendarUrl()}
                             target="_blank"
@@ -3577,7 +3577,7 @@ export default function HomePage() {
                             </div>
                         </div>
                         <div className="recap-footer">
-                            <p className="recap-next">Next session: <strong>Tuesday 8 PM ET</strong></p>
+                            <p className="recap-next">Next event: <strong>Tuesday 7 PM CT</strong></p>
                             <a
                                 href={generateCalendarUrl()}
                                 target="_blank"
