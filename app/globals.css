@@ -11923,3 +11923,355 @@ input:disabled {
     font-size: 0.78rem;
   }
 }
+
+/* ── Join Social Proof (viewerCount on Step 1) ── */
+.join-social-proof {
+  font-size: 0.8rem;
+  color: var(--orange-primary);
+  margin: -12px 0 16px;
+  font-weight: 600;
+  opacity: 0.9;
+  animation: socialPulse 2s ease-in-out infinite;
+}
+
+@keyframes socialPulse {
+
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ── First-Time Coach Mark Tooltip (search bar highlight) ── */
+.coach-highlight {
+  position: relative;
+  animation: coachPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes coachPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(211, 119, 29, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(211, 119, 29, 0.15);
+  }
+}
+
+.coach-mark-tooltip {
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--orange-primary);
+  color: var(--bg-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  white-space: nowrap;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(211, 119, 29, 0.4);
+  animation: coachBounce 1.5s ease-in-out infinite;
+}
+
+.coach-mark-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  background: var(--orange-primary);
+}
+
+@keyframes coachBounce {
+
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(4px);
+  }
+}
+
+/* ── Coach Mark Banner (vote instruction) ── */
+.coach-mark-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.15), rgba(211, 119, 29, 0.08));
+  border-bottom: 1px solid rgba(211, 119, 29, 0.3);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: coachSlideIn 0.5s ease;
+}
+
+@keyframes coachSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.coach-dismiss {
+  background: var(--orange-primary);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.coach-dismiss:hover {
+  transform: scale(1.05);
+}
+
+/* ── Stale Data Indicator ── */
+.stale-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  font-size: 0.82rem;
+  font-weight: 500;
+  animation: coachSlideIn 0.3s ease;
+}
+
+.stale-retry-btn {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stale-retry-btn:hover {
+  background: rgba(245, 158, 11, 0.3);
+}
+
+/* ── Ban Banner Detail Text ── */
+.banned-detail {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .coach-mark-tooltip {
+    font-size: 0.75rem;
+    padding: 6px 12px;
+    bottom: -36px;
+  }
+
+  .coach-mark-banner {
+    font-size: 0.78rem;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* ============================================
+   🔴 RAGE-CLICK AUDIT FIX STYLES
+   ============================================ */
+
+/* Fix 8: Inline email validation hint */
+.inline-validation-hint {
+  color: #f97316;
+  font-size: 0.78rem;
+  margin: -4px 0 8px;
+  padding: 0 4px;
+  font-weight: 500;
+  animation: slide-in 0.2s ease-out;
+}
+
+.input-invalid {
+  border-color: #f97316 !important;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15) !important;
+}
+
+/* Fix 15: Modal close X button */
+.modal-close-x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.modal-close-x:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+/* Fix 1: Vote button participation-locked visual state */
+.thumb-btn.participation-locked {
+  opacity: 0.45;
+  filter: grayscale(0.4);
+}
+
+.thumb-btn.participation-locked:hover {
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+/* Fix 13: Purge armed confirmation state */
+.chaos-delete-btn.armed {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  border-color: #fef08a !important;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: white;
+  animation: armedPulse 0.4s ease-in-out infinite alternate !important;
+}
+
+@keyframes armedPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+  }
+
+  100% {
+    transform: scale(1.08);
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.7);
+  }
+}
+
+/* Fix 4: Highlight flash for scroll-to-song */
+@keyframes highlightFlash {
+  0% {
+    background-color: rgba(211, 119, 29, 0.3);
+    box-shadow: 0 0 20px rgba(211, 119, 29, 0.3);
+  }
+
+  50% {
+    background-color: rgba(211, 119, 29, 0.15);
+    box-shadow: 0 0 10px rgba(211, 119, 29, 0.2);
+  }
+
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.highlight-flash {
+  animation: highlightFlash 2s ease-out !important;
+  border-color: var(--orange-primary) !important;
+}
+
+/* Fix 4: Already-added in search is now clickable */
+.search-result-row.in-playlist {
+  cursor: pointer !important;
+}
+
+.search-result-row.in-playlist:hover .already-added {
+  text-decoration: underline;
+  color: var(--orange-primary);
+}
+
+/* Fix 12: Prediction modal scroll hint and artist name */
+.prediction-scroll-hint {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 4px 0 12px;
+  opacity: 0.7;
+  animation: bounce-hint 2s ease-in-out infinite;
+}
+
+@keyframes bounce-hint {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+.pred-artist {
+  font-size: 0.7em;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Fix 16: Empty state countdown and hint */
+.empty-countdown {
+  font-size: 1.1rem;
+  color: var(--orange-primary);
+  margin: 12px 0 4px;
+  font-weight: 600;
+}
+
+.empty-hint {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Fix 14: PiP safe zone on mobile — ensure it doesn't overlap vote buttons */
+@media (max-width: 640px) {
+  .stream-host.pip-mode {
+    top: 8px !important;
+    bottom: auto !important;
+    right: 8px !important;
+    width: 140px !important;
+    z-index: 90;
+  }
+
+  /* Ensure join-card has position:relative for the close X */
+  .join-card {
+    position: relative;
+  }
+}
+
+/* Fix 9: Play button loading text fits in compact space */
+.play-preview-btn.loading {
+  font-size: 0.6rem;
+  white-space: nowrap;
+}

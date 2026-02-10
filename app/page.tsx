@@ -219,6 +219,8 @@ export default function HomePage() {
     });
     const [deleteWindowRemaining, setDeleteWindowRemaining] = useState(0);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [purgeArmedSongId, setPurgeArmedSongId] = useState<string | null>(null);
+    const purgeArmTimeout = useRef<NodeJS.Timeout | null>(null);
 
     // 🎚️ SESSION PERMISSIONS - Admin can toggle voting/adding
     const [permissions, setPermissions] = useState<{ canVote: boolean; canAddSongs: boolean }>({
@@ -526,6 +528,13 @@ export default function HomePage() {
     const [waitingRsvpError, setWaitingRsvpError] = useState<string | null>(null);
     const [waitingRsvpAlreadyDone, setWaitingRsvpAlreadyDone] = useState(false);
 
+    // 🎓 FIRST-TIME COACH MARKS - Guide new users
+    const [showCoachMark, setShowCoachMark] = useState<'search' | 'vote' | null>(null);
+
+    // 📡 STALE DATA INDICATOR - Show when offline
+    const [consecutiveFailures, setConsecutiveFailures] = useState(0);
+    const [isStale, setIsStale] = useState(false);
+
     useEffect(() => {
         const calcCountdown = () => {
             const now = new Date();
@@ -781,6 +790,16 @@ export default function HomePage() {
         setShowUsernameModal(false);
         setOnboardingStep(1); // Reset for next time
         setMessage({ type: 'success', text: `Welcome to the community, ${name}! 🎧` });
+
+        // Mark RSVP as done to suppress duplicate email capture on waiting screen
+        setWaitingRsvpAlreadyDone(true);
+        try { localStorage.setItem('crate-rsvp-done', 'true'); } catch (_) { }
+
+        // Show first-time coach mark after a short delay
+        const coachDone = localStorage.getItem('crate-coach-done');
+        if (!coachDone) {
+            setTimeout(() => setShowCoachMark('search'), 1500);
+        }
     };
 
     // Skip Step 3: Let users in without email capture
@@ -804,6 +823,12 @@ export default function HomePage() {
         setShowUsernameModal(false);
         setOnboardingStep(1);
         setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
+
+        // Show first-time coach mark after a short delay
+        const coachDone = localStorage.getItem('crate-coach-done');
+        if (!coachDone) {
+            setTimeout(() => setShowCoachMark('search'), 1500);
+        }
     };
 
     // Legacy handler for profile editing (re-opening modal when already logged in)
@@ -854,6 +879,10 @@ export default function HomePage() {
 
             const data = await res.json();
             const newSongs: Song[] = data.songs;
+
+            // Reset stale indicator on successful fetch
+            setConsecutiveFailures(0);
+            if (isStale) setIsStale(false);
 
             // 🎉 DOPAMINE: Track rank changes
             const newRanks: Record<string, number> = {};
@@ -1036,6 +1065,12 @@ export default function HomePage() {
             }
         } catch (error: any) {
             console.error('Failed to fetch playlist:', error);
+            // Track consecutive failures for stale data indicator
+            setConsecutiveFailures(prev => {
+                const newCount = prev + 1;
+                if (newCount >= 3) setIsStale(true);
+                return newCount;
+            });
             // Show user-friendly error for network issues
             if (error.message?.includes('timed out') || error.message?.includes('connection')) {
                 setMessage({ type: 'error', text: 'Slow connection - retrying...' });
@@ -1504,6 +1539,11 @@ export default function HomePage() {
             setNoSearchResults(false);
             fetchPlaylist();
 
+            // Advance coach mark: after first song add, show vote coach mark
+            if (showCoachMark === 'search') {
+                setShowCoachMark('vote');
+            }
+
             // 🔊 Play sound effect
             if (soundsEnabled) {
                 SoundEffects.addSong();
@@ -1729,15 +1769,35 @@ export default function HomePage() {
 
     // Vote on song - NEW MODEL: user gets ONE upvote and ONE downvote total
     const handleVote = async (songId: string, vote: 1 | -1) => {
-        if (!visitorId || isBanned) {
-            toast.error(isBanned ? 'You are banned from voting' : 'Please wait...');
+        if (!visitorId) {
+            toast.info('Please wait — loading your session...');
+            return;
+        }
+        if (isBanned) {
+            toast.error('Your access was paused by a moderator for this session');
+            return;
+        }
+
+        // 🔒 Participation gate — explain WHY voting is unavailable
+        const sessionActive = timerRunning && timerRemaining > 0;
+        if (!isAdminOnFrontPage && !((!isBanned && !isLocked && !!username && sessionActive))) {
+            if (!sessionActive) {
+                toast.info('⏸️ Voting opens when the session starts');
+            } else if (isLocked) {
+                toast.info('🔒 The host has locked participation');
+            } else if (!username) {
+                toast.info('👤 Set your DJ name first to vote');
+                setShowUsernameModal(true);
+            } else {
+                toast.info('Voting is not available right now');
+            }
             return;
         }
 
         // ⏱️ RATE LIMITING - Check if too soon since last vote on this song
         const lastVoteTime = voteTimestamps.current.get(songId);
         if (lastVoteTime && Date.now() - lastVoteTime < VOTE_COOLDOWN_MS) {
-            toast.info('Slow down! Wait a moment before voting again.');
+            toast.info('One vote per song every few seconds — keeps it fair for everyone 🎯');
             return;
         }
         voteTimestamps.current.set(songId, Date.now());
@@ -1798,7 +1858,8 @@ export default function HomePage() {
                     s.id === songId ? { ...s, score: s.score + 1 } : s
                 ));
             } else {
-                setMessage({ type: 'error', text: 'No upvotes remaining!' });
+                toast.info('All upvotes used! Earn karma by staying active for 5 min 🎧');
+                setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
         } else {
@@ -1834,7 +1895,8 @@ export default function HomePage() {
                     s.id === songId ? { ...s, score: s.score - 1 } : s
                 ));
             } else {
-                setMessage({ type: 'error', text: 'No downvotes remaining!' });
+                toast.info('All downvotes used! Earn karma by staying active for 5 min 🎧');
+                setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
         }
@@ -1867,13 +1929,20 @@ export default function HomePage() {
                     // Song was deleted or playlist was locked - refresh to sync
                     toast.info('Song was modified - refreshing...');
                     fetchPlaylist();
+                } else if (res.status === 429) {
+                    // Rate limited — friendly countdown
+                    const retryAfter = res.headers.get('Retry-After') || '10';
+                    toast.info(`Cooling down... ready in ${retryAfter}s — keeps it fair for everyone 🎯`);
                 } else {
                     toast.error(data.error || 'Vote failed');
                 }
             } else {
-                // Success - brief confirmation (only show occasionally to avoid spam)
-                if (Math.random() < 0.3) {
-                    toast.success(vote === 1 ? '👍 Upvoted!' : '👎 Downvoted!');
+                // Success — always confirm so users know their vote counted
+                toast.success(vote === 1 ? '👍 Vote counted!' : '👎 Vote counted!');
+                // Dismiss vote coach mark on first successful vote
+                if (showCoachMark === 'vote') {
+                    setShowCoachMark(null);
+                    try { localStorage.setItem('crate-coach-done', 'true'); } catch (_) { }
                 }
             }
         } catch (error) {
@@ -1911,6 +1980,18 @@ export default function HomePage() {
 
     // Check if song is already in playlist
     const isSongInPlaylist = (trackId: string) => songs.some(s => s.id === trackId);
+
+    // Scroll to a song already in the playlist (for "already added" click)
+    const scrollToSongInPlaylist = (trackId: string) => {
+        const songEl = document.querySelector(`[data-song-id="${trackId}"]`);
+        if (songEl) {
+            songEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            songEl.classList.add('highlight-flash');
+            setTimeout(() => songEl.classList.remove('highlight-flash'), 2000);
+        }
+        setShowResults(false);
+        setSearchQuery('');
+    };
 
     // Can user participate?
     // Session must be active (timer running) to participate
@@ -1968,10 +2049,15 @@ export default function HomePage() {
                         {onboardingStep === 1 && (
                             <>
                                 <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
-                                <h2 className="join-title">Welcome to the Crate Hackathon 🎧</h2>
+                                <h2 className="join-title">Welcome to the Crate Hackathon</h2>
                                 <p className="join-subtitle">
-                                    Pick the tracks. Cast your vote. Shape the playlist — live.
+                                    Search songs. Vote them up. Build the ultimate playlist — together.
                                 </p>
+                                {viewerCount > 0 && (
+                                    <p className="join-social-proof">
+                                        👁 {viewerCount} {viewerCount === 1 ? 'person' : 'people'} voting right now
+                                    </p>
+                                )}
                                 <div className="join-name-section">
                                     <input
                                         type="text"
@@ -2000,7 +2086,7 @@ export default function HomePage() {
                                 <div className="step2-emoji"><img src="/logo.png" alt="Crate Hackers" className="step2-crate-icon" /></div>
                                 <h2 className="join-title">What&apos;s your vibe?</h2>
                                 <p className="join-subtitle">
-                                    We&apos;re building the future of music curation and your perspective matters.
+                                    DJs get extra tools like BPM and key matching. This helps us tailor your experience.
                                 </p>
                                 <div className="dj-type-buttons">
                                     <button
@@ -2030,24 +2116,27 @@ export default function HomePage() {
                         {onboardingStep === 3 && (
                             <>
                                 <div className="step3-emoji">🚀</div>
-                                <h2 className="join-title">Stay in the Loop</h2>
+                                <h2 className="join-title">Want Session Alerts?</h2>
                                 <p className="join-subtitle">
-                                    Your contact info is required for music reporting and record label communications. This ensures the integrity of our data.
+                                    We&apos;ll let you know when the next session goes live. No spam, ever.
                                 </p>
                                 <div className="join-capture-section">
                                     <input
                                         type="email"
-                                        className="join-name-input"
+                                        className={`join-name-input ${emailInput && !isValidEmail(emailInput) ? 'input-invalid' : ''}`}
                                         placeholder="Email address *"
                                         value={emailInput}
                                         onChange={(e) => { setEmailInput(e.target.value); setKartraError(null); }}
                                         onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
                                         autoFocus
                                     />
+                                    {emailInput && !isValidEmail(emailInput) && (
+                                        <p className="inline-validation-hint">Double-check your email format (e.g. you@example.com)</p>
+                                    )}
                                     <input
                                         type="tel"
                                         className="join-name-input"
-                                        placeholder="Phone number *"
+                                        placeholder="Phone (optional — for text alerts)"
                                         value={phoneInput}
                                         onChange={(e) => setPhoneInput(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
@@ -2058,13 +2147,16 @@ export default function HomePage() {
                                     <button
                                         className="join-go-btn"
                                         onClick={handleOnboardingComplete}
-                                        disabled={!isValidEmail(emailInput) || !phoneInput.trim() || isSubmittingKartra}
+                                        disabled={!isValidEmail(emailInput) || isSubmittingKartra}
                                     >
-                                        {isSubmittingKartra ? 'Joining the community...' : "I'm In! 🎉"}
+                                        {isSubmittingKartra ? 'Joining...' : "Let's Go! 🎉"}
                                     </button>
                                 </div>
+                                <button className="skip-onboarding-btn" onClick={handleSkipOnboarding}>
+                                    Skip for now →
+                                </button>
                                 <p className="join-privacy-note">
-                                    🔒 Your information is securely stored and used solely for hackathon communications.
+                                    🔒 Unsubscribe anytime. We never share your info.
                                 </p>
                                 <button className="step-back-btn" onClick={() => setOnboardingStep(2)}>
                                     ← Back
@@ -2079,8 +2171,9 @@ export default function HomePage() {
             {/* 🔒 PROFILE EDIT OVERLAY — simple name edit for existing users */}
             {
                 showUsernameModal && username && (
-                    <div className="join-overlay">
+                    <div className="join-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowUsernameModal(false); }}>
                         <div className="join-card">
+                            <button className="modal-close-x" onClick={() => setShowUsernameModal(false)} aria-label="Close">✕</button>
                             <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
                             <h2 className="join-title">Edit Your Profile</h2>
                             <div className="join-name-section">
@@ -2377,6 +2470,22 @@ export default function HomePage() {
                 )
             }
 
+            {/* ⚠️ STALE DATA INDICATOR - Show when offline */}
+            {isStale && (
+                <div className="stale-indicator">
+                    ⚠️ Offline — showing last known data
+                    <button className="stale-retry-btn" onClick={() => { fetchPlaylist(); }}>{isRefreshing ? 'Retrying...' : 'Retry'}</button>
+                </div>
+            )}
+
+            {/* 🎓 FIRST-TIME COACH MARKS */}
+            {showCoachMark === 'vote' && sortedSongs.length > 0 && (
+                <div className="coach-mark-banner">
+                    <span>🏆 Now vote on other tracks — top 3 win prizes!</span>
+                    <button className="coach-dismiss" onClick={() => { setShowCoachMark(null); try { localStorage.setItem('crate-coach-done', 'true'); } catch (_) { } }}>Got it!</button>
+                </div>
+            )}
+
             {/* ═══════════════════════════════════════════════════════════
                 COMPACT TOP BAR - Everything important on 1-2 lines
                ═══════════════════════════════════════════════════════════ */}
@@ -2403,9 +2512,9 @@ export default function HomePage() {
                                 <div className="rules-popover-arrow" />
                                 <h4><img src="/logo.png" alt="" className="inline-crate-icon" /> How to Play</h4>
                                 <ul>
-                                    <li><img src="/logo.png" alt="" className="inline-crate-icon" /> Add up to 5 songs</li>
-                                    <li>🗳️ 10 upvotes & 10 downvotes</li>
-                                    <li>🏆 Top 3 songs win!</li>
+                                    <li><img src="/logo.png" alt="" className="inline-crate-icon" /> Drop up to 5 tracks on the playlist</li>
+                                    <li>👍 10 upvotes + 👎 10 downvotes to shape the outcome</li>
+                                    <li>🏆 Top 3 songs win prizes + karma!</li>
                                 </ul>
                                 <button className="rules-popover-close" onClick={() => setShowRulesPopover(false)}>Got it!</button>
                             </div>
@@ -2457,7 +2566,7 @@ export default function HomePage() {
                     )}
 
                     <span className="stat-pill capacity" data-tooltip={`Playlist: ${playlistStats.current} of ${playlistStats.max} songs`} tabIndex={0}>
-                        {playlistStats.current}/{playlistStats.max}
+                        🎵 {playlistStats.current}/{playlistStats.max}
                     </span>
                     {username && (
                         <button
@@ -2486,7 +2595,7 @@ export default function HomePage() {
                     </>
                 ) : (
                     <>
-                        <span className="broadcast-text">NEXT HACKATHON</span>
+                        <span className="broadcast-text">NEXT SESSION</span>
                         <span className="broadcast-countdown">{broadcastCountdown}</span>
                         <span className="broadcast-schedule">Tuesdays 8 PM ET</span>
                     </>
@@ -2581,7 +2690,7 @@ export default function HomePage() {
                                     placeholder="🔍 Add a song..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    onBlur={() => setTimeout(() => setShowResults(false), 300)}
+                                    onBlur={() => setTimeout(() => setShowResults(false), 450)}
                                     onFocus={() => searchResults.length > 0 && setShowResults(true)}
                                 />
                                 {isSearching && <span className="pip-search-spinner">...</span>}
@@ -2594,7 +2703,7 @@ export default function HomePage() {
                                             <div
                                                 key={track.id}
                                                 className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
-                                                onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
+                                                onMouseDown={() => isSongInPlaylist(track.id) ? scrollToSongInPlaylist(track.id) : (!isAddingSong && handleAddSong(track))}
                                             >
                                                 <img src={track.albumArt || '/placeholder.svg'} alt="" />
                                                 <div className="result-info">
@@ -2710,7 +2819,7 @@ export default function HomePage() {
                                     placeholder="🔍 Add a song..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    onBlur={() => setTimeout(() => setShowResults(false), 300)}
+                                    onBlur={() => setTimeout(() => setShowResults(false), 450)}
                                     onFocus={() => searchResults.length > 0 && setShowResults(true)}
                                 />
                                 {isSearching && <span className="pip-search-spinner">...</span>}
@@ -2723,7 +2832,7 @@ export default function HomePage() {
                                             <div
                                                 key={track.id}
                                                 className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
-                                                onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
+                                                onMouseDown={() => isSongInPlaylist(track.id) ? scrollToSongInPlaylist(track.id) : (!isAddingSong && handleAddSong(track))}
                                             >
                                                 <img src={track.albumArt || '/placeholder.svg'} alt="" />
                                                 <div className="result-info">
@@ -2797,7 +2906,7 @@ export default function HomePage() {
                                     placeholder="Search any song on Spotify..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    onBlur={() => setTimeout(() => setShowResults(false), 300)}
+                                    onBlur={() => setTimeout(() => setShowResults(false), 450)}
                                     onFocus={() => searchResults.length > 0 && setShowResults(true)}
                                 />
                                 {isSearching && <span className="docked-search-spinner">...</span>}
@@ -2881,18 +2990,19 @@ export default function HomePage() {
                             <h3>🎯 Predict the Winner!</h3>
                             <p>Which song will be #1 when voting ends?<br />Correct predictions earn <strong>+3 karma!</strong></p>
                             <div className="prediction-list">
-                                {sortedSongs.slice(0, 10).map((song) => (
+                                {sortedSongs.slice(0, 10).map((song, idx) => (
                                     <button
                                         key={song.id}
                                         className="prediction-option"
                                         onClick={() => handleMakePrediction(song.id)}
                                     >
                                         <img src={song.albumArt || '/placeholder.svg'} alt="" />
-                                        <span className="pred-name">{song.name.length > 25 ? song.name.slice(0, 25) + '…' : song.name}</span>
+                                        <span className="pred-name">{song.name.length > 22 ? song.name.slice(0, 22) + '…' : song.name} <span className="pred-artist">— {song.artist}</span></span>
                                         <span className="pred-score">+{song.score}</span>
                                     </button>
                                 ))}
                             </div>
+                            <p className="prediction-scroll-hint">↓ Scroll for more options</p>
                             <button className="cancel-btn" onClick={() => setShowPredictionModal(false)}>Cancel</button>
                         </div>
                     </div>
@@ -2933,7 +3043,7 @@ export default function HomePage() {
                     title="Export playlist to Spotify anytime!"
                 >
                     <img src="/spotify-logo.png" alt="" className="spotify-icon-sm" />
-                    {isExporting ? '...' : 'Export'}
+                    {isExporting ? 'Opening Spotify...' : 'Export'}
                 </button>
             </div>
 
@@ -2956,14 +3066,14 @@ export default function HomePage() {
                 )
             }
 
-            {isBanned && <div className="banned-banner">⚠️ Your participation has been paused for this session</div>}
+            {isBanned && <div className="banned-banner">⚠️ Your access was paused by a moderator. <span className="banned-detail">This resets automatically next round. Watching and browsing still work! Questions? Ask in the stream chat.</span></div>}
 
             {/* ═══════════════════════════════════════════════════════════
                 SEARCH BAR - Only when session active and adding is enabled
                ═══════════════════════════════════════════════════════════ */}
             {
                 (isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) ? (
-                    <div className="search-bar-container">
+                    <div className={`search-bar-container ${showCoachMark === 'search' ? 'coach-highlight' : ''}`}>
                         <input
                             id="search-input"
                             type="text"
@@ -2971,9 +3081,14 @@ export default function HomePage() {
                             placeholder="Search any song on Spotify..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            onBlur={() => setTimeout(() => setShowResults(false), 300)}
-                            onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                            onBlur={() => setTimeout(() => setShowResults(false), 450)}
+                            onFocus={() => { searchResults.length > 0 && setShowResults(true); if (showCoachMark === 'search') setShowCoachMark(null); }}
                         />
+                        {showCoachMark === 'search' && (
+                            <div className="coach-mark-tooltip">
+                                🎵 Drop your first track — search any song on Spotify
+                            </div>
+                        )}
                         {isSearching && <span className="search-spinner">...</span>}
 
                         {showResults && searchResults.length > 0 && (
@@ -2985,7 +3100,7 @@ export default function HomePage() {
                                     <div
                                         key={track.id}
                                         className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
-                                        onMouseDown={() => !isSongInPlaylist(track.id) && !isAddingSong && handleAddSong(track)}
+                                        onMouseDown={() => isSongInPlaylist(track.id) ? scrollToSongInPlaylist(track.id) : (!isAddingSong && handleAddSong(track))}
                                     >
                                         <img src={track.albumArt || '/placeholder.svg'} alt="" />
                                         <div className="result-info">
@@ -2995,7 +3110,7 @@ export default function HomePage() {
                                         {isAddingSong === track.id ? (
                                             <span className="adding-spinner">⏳</span>
                                         ) : isSongInPlaylist(track.id) ? (
-                                            <span className="already-added">✓ Added</span>
+                                            <span className="already-added">✓ In playlist ↓</span>
                                         ) : (
                                             <span className="add-btn-stream">+ ADD</span>
                                         )}
@@ -3011,16 +3126,23 @@ export default function HomePage() {
                             </div>
                         )}
                     </div>
-                ) : (permissions.canAddSongs && canParticipate && userStatus.songsRemaining <= 0 && karmaBonuses.bonusSongAdds <= 0) ? (
+                ) : (
                     <div className="search-bar-container">
                         <input
                             type="text"
                             className="search-input-stream search-input-disabled"
-                            placeholder={`You've added ${userStatus.songsAdded}/${userStatus.songsAdded} songs — vote on existing ones!`}
+                            placeholder={
+                                !(timerRunning && timerRemaining > 0) ? '🎵 Song adding opens when a session is live' :
+                                    isLocked ? '🔒 The host has paused new additions' :
+                                        !permissions.canAddSongs ? '🔒 Song adding is currently disabled by the host' :
+                                            !username ? '👤 Set your DJ name to add songs' :
+                                                (userStatus.songsRemaining <= 0 && karmaBonuses.bonusSongAdds <= 0) ? `You've used all ${userStatus.songsAdded} song slots! Vote on tracks to shape the playlist.` :
+                                                    'Search any song on Spotify...'
+                            }
                             disabled
                         />
                     </div>
-                ) : null
+                )
             }
 
             {/* ═══════════════════════════════════════════════════════════
@@ -3030,14 +3152,42 @@ export default function HomePage() {
                 {sortedSongs.length === 0 ? (
                     <div className="empty-state">
                         <div className="empty-icon"><img src="/logo.png" alt="" className="empty-crate-icon" /></div>
-                        <div className="empty-title">
-                            {timerRunning ? 'Be the first to drop a track 🔥' : 'The next session starts soon — hang tight!'}
-                        </div>
-                        <div className="empty-subtitle">
-                            {timerRunning
-                                ? 'Use the search bar above to add the first song and get the party started!'
-                                : 'The admin will start a voting session soon.'}
-                        </div>
+                        {timerRunning ? (
+                            <>
+                                <div className="empty-title">
+                                    The playlist is empty — you could be the first name on it 🔥
+                                </div>
+                                <div className="empty-subtitle">
+                                    Use the search bar above to add the first song and get the party started!
+                                </div>
+                            </>
+                        ) : username ? (
+                            <>
+                                <div className="empty-title">
+                                    Welcome back, {username}! 🎧
+                                </div>
+                                <div className="empty-subtitle">
+                                    No live session right now — we go live every week where you add songs, vote, and build playlists together in real-time.
+                                </div>
+                                {broadcastCountdown && (
+                                    <div className="empty-countdown">🕐 Next session in <strong>{broadcastCountdown}</strong></div>
+                                )}
+                                <div className="empty-hint">Drop your email below to get notified when we go live!</div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="empty-title">
+                                    Welcome to Crate Vote 📦
+                                </div>
+                                <div className="empty-subtitle">
+                                    Every week, we go live and let the crowd build the playlist. Add songs, vote, and see your picks climb the charts in real-time.
+                                </div>
+                                {broadcastCountdown && (
+                                    <div className="empty-countdown">🕐 Next session in <strong>{broadcastCountdown}</strong></div>
+                                )}
+                                <div className="empty-hint">Sign up below to get notified when the next session drops!</div>
+                            </>
+                        )}
 
                         {/* 📬 Mailing List RSVP — only shown when session is NOT active */}
                         {!timerRunning && (
@@ -3119,6 +3269,7 @@ export default function HomePage() {
                         return (
                             <div
                                 key={song.id}
+                                data-song-id={song.id}
                                 className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''}`}
                                 onMouseEnter={markInteraction}
                                 onTouchStart={markInteraction}
@@ -3141,9 +3292,9 @@ export default function HomePage() {
                                 <button
                                     className={`play-preview-btn ${isLoadingVideo === song.id ? 'loading' : ''}`}
                                     onClick={(e) => handleOpenVideoPreview(song.id, song.name, song.artist, e)}
-                                    title="Preview music video"
+                                    title="Preview music video on YouTube"
                                 >
-                                    {isLoadingVideo === song.id ? '⏳' : '▶'}
+                                    {isLoadingVideo === song.id ? '⏳ Finding...' : '▶'}
                                 </button>
 
                                 {/* Song Info - super compact */}
@@ -3159,9 +3310,9 @@ export default function HomePage() {
                                 {permissions.canVote && (
                                     <div className="vote-inline">
                                         <button
-                                            className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
+                                            className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''} ${!canParticipate && !isAdminOnFrontPage ? 'participation-locked' : ''}`}
                                             onClick={() => handleVote(song.id, -1)}
-                                            disabled={!canParticipate || votingInProgress.has(song.id)}
+                                            disabled={votingInProgress.has(song.id)}
                                             aria-label={hasDownvoted ? `Remove downvote from ${song.name}` : `Downvote ${song.name}`}
                                             data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote this song'}
                                         >
@@ -3176,9 +3327,9 @@ export default function HomePage() {
                                             {song.score > 0 ? '+' : ''}{song.score}
                                         </span>
                                         <button
-                                            className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''}`}
+                                            className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''} ${!canParticipate && !isAdminOnFrontPage ? 'participation-locked' : ''}`}
                                             onClick={() => handleVote(song.id, 1)}
-                                            disabled={!canParticipate || votingInProgress.has(song.id)}
+                                            disabled={votingInProgress.has(song.id)}
                                             aria-label={hasUpvoted ? `Remove upvote from ${song.name}` : `Upvote ${song.name}`}
                                             data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote this song'}
                                         >
@@ -3190,12 +3341,22 @@ export default function HomePage() {
                                 {/* 💀 THE PURGE - Only visible during purge window */}
                                 {deleteWindow.active && deleteWindow.canDelete && (
                                     <button
-                                        className="chaos-delete-btn"
-                                        onClick={() => handleWindowDelete(song.id)}
+                                        className={`chaos-delete-btn ${purgeArmedSongId === song.id ? 'armed' : ''}`}
+                                        onClick={() => {
+                                            if (purgeArmedSongId === song.id) {
+                                                handleWindowDelete(song.id);
+                                                setPurgeArmedSongId(null);
+                                                if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
+                                            } else {
+                                                setPurgeArmedSongId(song.id);
+                                                if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
+                                                purgeArmTimeout.current = setTimeout(() => setPurgeArmedSongId(null), 3000);
+                                            }
+                                        }}
                                         disabled={isDeleting}
-                                        title="PURGE this song!"
+                                        title={purgeArmedSongId === song.id ? 'Tap again to confirm!' : 'PURGE this song!'}
                                     >
-                                        💀
+                                        {purgeArmedSongId === song.id ? '⚠️ Confirm?' : '💀'}
                                     </button>
                                 )}
                             </div>
