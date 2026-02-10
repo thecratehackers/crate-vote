@@ -2587,31 +2587,31 @@ export default function HomePage() {
                         <div className="action-stats">
                             {/* Songs remaining - hide if adding disabled */}
                             {permissions.canAddSongs && (
-                                <span className="stat-counter songs" data-tooltip={`You can add ${userStatus.songsRemaining} more song${userStatus.songsRemaining !== 1 ? 's' : ''}`} tabIndex={0}>
+                                <span className="stat-counter songs" data-tooltip={`${userStatus.songsRemaining} song${userStatus.songsRemaining !== 1 ? 's' : ''} left`} tabIndex={0}>
                                     <img src="/logo.png" alt="" className="inline-crate-icon" /> {userStatus.songsRemaining}
                                 </span>
                             )}
                             {/* Upvotes remaining - hide if voting disabled */}
                             {permissions.canVote && (
-                                <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvote${userStatus.upvotesRemaining !== 1 ? 's' : ''} left — boost songs you like!`} tabIndex={0}>
+                                <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvote${userStatus.upvotesRemaining !== 1 ? 's' : ''} left`} tabIndex={0}>
                                     👍 {userStatus.upvotesRemaining}
                                 </span>
                             )}
                             {/* Downvotes remaining - hide if voting disabled */}
                             {permissions.canVote && (
-                                <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvote${userStatus.downvotesRemaining !== 1 ? 's' : ''} left — sink songs you don't want`} tabIndex={0}>
+                                <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvote${userStatus.downvotesRemaining !== 1 ? 's' : ''} left`} tabIndex={0}>
                                     👎 {userStatus.downvotesRemaining}
                                 </span>
                             )}
                             {/* Karma - only show if > 0 */}
                             {karmaBonuses.karma > 0 && (
-                                <span className="stat-counter karma" data-tooltip="Karma points! Each gives +1 song & +1 vote" tabIndex={0}>
+                                <span className="stat-counter karma" data-tooltip="Karma: each point = +1 song slot & +1 vote" tabIndex={0}>
                                     ✨ {karmaBonuses.karma}
                                 </span>
                             )}
                             {/* 👑 GOD MODE - User's song is #1 (unlimited votes, extra purge deletes) */}
                             {userStatus.isGodMode && (
-                                <span className="god-mode-badge" data-tooltip="Your song is #1! Unlimited votes + extra Purge power!" tabIndex={0}>
+                                <span className="god-mode-badge" data-tooltip="Your song is #1 — unlimited votes unlocked!" tabIndex={0}>
                                     👑 GOD MODE
                                 </span>
                             )}
@@ -2825,7 +2825,7 @@ export default function HomePage() {
                                         <button
                                             className={`stream-rsvp-btn twitch-rsvp ${chatDocked ? 'active' : ''}`}
                                             onClick={() => setChatDocked(!chatDocked)}
-                                            title={chatDocked ? 'Undock chat' : 'Dock chat to bottom'}
+                                            title={chatDocked ? 'Unpin chat' : 'Pin chat'}
                                         >
                                             {chatDocked ? 'Unpin Chat' : '💬 Pin Chat'}
                                         </button>
@@ -2953,7 +2953,7 @@ export default function HomePage() {
                                 <button
                                     className="docked-chat-btn"
                                     onClick={() => setChatDocked(false)}
-                                    title="Undock chat"
+                                    title="Unpin chat"
                                 >
                                     ✕
                                 </button>
@@ -3407,7 +3407,7 @@ export default function HomePage() {
                                 {/* Rank */}
                                 <span
                                     className={`rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}
-                                    data-tooltip={index < 3 ? `Top 3 = +5 karma reward!` : `Rank #${index + 1}`}
+                                    data-tooltip={index < 3 ? `Top 3 earn +5 karma` : `Rank #${index + 1}`}
                                     tabIndex={0}
                                 >
                                     {index === 0 ? '👑' : `#${index + 1}`}

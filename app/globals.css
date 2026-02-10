@@ -4366,9 +4366,10 @@ body::before {
   }
 }
 
-/* Prefers reduced motion */
+/* Prefers reduced motion — WCAG 2.1 compliance */
 @media (prefers-reduced-motion: reduce) {
 
+  /* Song list animations */
   .song-row.moving-up,
   .song-row.moving-down,
   .song-row.moving-new,
@@ -4379,6 +4380,101 @@ body::before {
   .activity-item,
   .container.urgency-mode {
     animation: none !important;
+  }
+
+  /* Mega-announcement overlays */
+  .mega-announcement,
+  .mega-announcement.purge,
+  .mega-announcement.karma-rain,
+  .mega-announcement.wipe,
+  .mega-icon,
+  .mega-title,
+  .mega-subtitle,
+  .mega-countdown {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Particle systems */
+  .purge-particle,
+  .karma-drop,
+  .prize-particle,
+  .king-particle,
+  .rain-drop,
+  .burst-emoji,
+  .confetti-overlay .confetti-piece,
+  .purge-particles,
+  .karma-rain-enhanced,
+  .prize-drop-particles,
+  .king-crown-particles {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Winner / Prize overlays */
+  .winner-announcement,
+  .winner-modal,
+  .prize-drop-overlay,
+  .prize-drop-modal,
+  .prize-drop-broadcast,
+  .leaderboard-king-overlay,
+  .leaderboard-king-modal,
+  .leaderboard-king-broadcast,
+  .prize-drop-mega-icon,
+  .prize-drop-title,
+  .king-mega-icon,
+  .king-title {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Confetti & Karma rain overlays */
+  .confetti-overlay,
+  .karma-rain-overlay,
+  .karma-rain-overlay .rain-drop {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Jukebox idle mode */
+  .idle-mode-overlay,
+  .idle-emoji,
+  .idle-headline,
+  .idle-subtext,
+  .idle-arrows,
+  .idle-qr,
+  .emoji-burst-container,
+  .emoji-burst-container .burst-emoji {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* PiP and stream animations */
+  .live-pulse,
+  .pip-glow,
+  .highlight-flash,
+  .vote-animation,
+  .score-delta-animation,
+  .rank-alert {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Session recap & coach marks */
+  .session-recap-overlay,
+  .session-recap-card,
+  .coach-mark-banner {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Global catch-all for remaining transitions */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

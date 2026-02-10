@@ -408,12 +408,6 @@ export default function JukeboxPlayer({
     // Rotating idle mode messages for variety
     const idleMessages = [
         {
-            headline: 'YOUR VOTE MATTERS!',
-            subtext: 'Shape the playlist • Earn karma • Win bragging rights',
-            cta: 'VOTE NOW',
-            emojis: ['🎧', '🔥', '🎵', '⚡', '🏆', '💿']
-        },
-        {
             headline: 'BE THE DJ!',
             subtext: 'Add songs • Cast votes • Control the vibe',
             cta: 'JOIN IN',
@@ -438,22 +432,10 @@ export default function JukeboxPlayer({
             emojis: ['👀', '📱', '🗳️', '✊', '🎵', '💪']
         },
         {
-            headline: 'CROWD CONTROL!',
-            subtext: 'The audience decides what plays',
-            cta: 'JOIN NOW',
-            emojis: ['👥', '🎛️', '🎵', '🔥', '🏆', '💿']
-        },
-        {
             headline: 'EARN KARMA!',
             subtext: 'Vote more • Gain power • Unlock perks',
             cta: 'START NOW',
             emojis: ['⚡', '💎', '🏆', '📈', '✨', '🔥']
-        },
-        {
-            headline: 'WHAT PLAYS NEXT?',
-            subtext: 'You decide! Upvote your favorites',
-            cta: 'VOTE UP',
-            emojis: ['❓', '🎵', '👍', '⬆️', '🔥', '🎧']
         },
     ];
 
