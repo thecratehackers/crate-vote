@@ -14,6 +14,13 @@ interface Song {
     addedByName?: string;
     addedByLocation?: string;
     addedByColor?: string;
+    // DJ metadata
+    bpm?: number | null;
+    energy?: number | null;
+    valence?: number | null;
+    danceability?: number | null;
+    camelotKey?: string | null;
+    popularity?: number;
 }
 
 interface ServerActivity {
@@ -189,6 +196,161 @@ function generateFacts(songName: string, artistName: string, releaseYear: number
     return facts;
 }
 
+// ===== 🎛️ CRATE COACH — DJ Intel Tips Engine =====
+// A seasoned DJ mentor whispering pro advice in your ear.
+// DISTINCT from Pop-Up Video facts: no trivia, no culture, no era — pure craft.
+// Voice: direct, opinionated, practical. Like a DJ mentor at the booth.
+function generateDJTips(song: Song): string[] {
+    const tips: string[] = [];
+    const bpm = song.bpm;
+    const energy = song.energy;
+    const valence = song.valence;
+    const dance = song.danceability;
+    const key = song.camelotKey;
+
+    // ── BPM TECHNIQUE ──
+    if (bpm) {
+        // Tempo classification
+        if (bpm < 95) {
+            tips.push(`At ${bpm} BPM, you're in slow-burn territory. Don't rush it — let the groove breathe.`);
+            tips.push(`${bpm} BPM is first-dance speed. Wedding DJs, bookmark this one.`);
+        } else if (bpm < 108) {
+            tips.push(`${bpm} BPM — hip-hop / R&B pocket. Layer this with a sub-bass intro for max impact.`);
+            tips.push(`This tempo sits in the late-night R&B zone. Dim the lights and let it ride.`);
+        } else if (bpm < 120) {
+            tips.push(`${bpm} BPM — mid-tempo sweet spot. Pairs well before or after a high-energy run.`);
+            tips.push(`At ${bpm}, you can pitch up +3% into club range or down into groove territory. Versatile.`);
+        } else if (bpm < 130) {
+            tips.push(`${bpm} BPM is the four-on-the-floor sweet spot. This is where clubs live.`);
+            tips.push(`Classic dance tempo at ${bpm}. You can ride here for 3-4 tracks without losing the floor.`);
+        } else if (bpm < 140) {
+            tips.push(`${bpm} BPM — you're pushing energy. Don't stay here too long or the crowd will burn out.`);
+        } else {
+            tips.push(`${bpm} BPM is full send. Use this as your climax moment, then bring it back down.`);
+        }
+        tips.push(`Mixing window: stay within ${bpm - 3}–${bpm + 3} BPM to keep transitions invisible.`);
+        tips.push(`Beyond ±5 BPM and your beatmatch will sound forced. Pitch-ride or cut-mix instead.`);
+    }
+
+    // ── CAMELOT KEY THEORY ──
+    if (key) {
+        const num = parseInt(key);
+        const letter = key.replace(/[0-9]/g, '');
+        if (!isNaN(num)) {
+            const prev = num === 1 ? 12 : num - 1;
+            const next = num === 12 ? 1 : num + 1;
+            const opposite = letter === 'A' ? 'B' : 'A';
+            tips.push(`Camelot ${key} → your safe moves are ${prev}${letter}, ${next}${letter}, or ${num}${opposite}. Anything else, tread carefully.`);
+            tips.push(`Jump to ${next}${letter} for a lift. Drop to ${prev}${letter} to pull the mood down. That's your storytelling dial.`);
+            tips.push(`${num}${opposite} is your energy flip — same pitch center, different emotion. Use it for dramatic shifts.`);
+        }
+        tips.push(`Key-locked mixing is the difference between sounding smooth and sounding like two songs fighting.`);
+    }
+
+    // ── ENERGY ARC MANAGEMENT ──
+    if (energy !== null && energy !== undefined) {
+        if (energy >= 0.85) {
+            tips.push('This track is a room-shaker. Drop it when the floor is already warm — never cold-open with a peak.');
+            tips.push('After a track this intense, give the crowd a 15-second breather. A quick breakdown does wonders.');
+            tips.push('Peak energy — if you play two of these back-to-back, the third better be a cooldown or you\'ll empty the floor.');
+        } else if (energy >= 0.65) {
+            tips.push('Solid build energy. This is your "second gear" — prime the room before you drop the hammer.');
+            tips.push('Mid-high energy is workhouse territory. These are the tracks that hold a set together between peaks.');
+        } else if (energy >= 0.4) {
+            tips.push('Controlled energy here. Perfect for rebuilding after a peak or pacing a long set.');
+            tips.push('This energy level is your reset button. Use it after every 3-4 high-energy tracks.');
+        } else {
+            tips.push('Low energy — this is an opening track or a post-peak cool-down. Set the mood, don\'t chase the hype.');
+            tips.push('Ambient energy. The pros know: sometimes the most powerful move is pulling back.');
+        }
+    }
+
+    // ── FLOOR READINESS ──
+    if (dance !== null && dance !== undefined) {
+        if (dance >= 0.85) {
+            tips.push('Danceability is off the charts. If the floor isn\'t moving, check the sound system — not the track.');
+            tips.push('This groove is automatic. You could literally walk away from the decks and the floor would hold.');
+        } else if (dance >= 0.65) {
+            tips.push('Strong groove. Most crowds will move to this — your safe pick when you\'re reading a new room.');
+        } else if (dance >= 0.45) {
+            tips.push('Moderate groove. This works if the crowd is already warmed up. Risky as an opener.');
+        } else {
+            tips.push('Low groove factor. This isn\'t a floor-filler — use it as texture between bangers or during dinner service.');
+        }
+    }
+
+    // ── MOOD CONTROL ──
+    if (valence !== null && valence !== undefined) {
+        if (valence >= 0.75) {
+            tips.push('Happy track. The crowd will sing along if they know the words — give them the chance.');
+            tips.push('Positive energy radiates. Stack a few of these back-to-back for an euphoric run.');
+        } else if (valence >= 0.45) {
+            tips.push('Emotionally neutral. This is your "connective tissue" — bridges two different moods seamlessly.');
+        } else {
+            tips.push('Darker mood. Build tension with this, then release it with something bright. That\'s storytelling.');
+            tips.push('Moody tracks need the right moment. Don\'t drop these when the crowd is shouting for bangers.');
+        }
+    }
+
+    // ── CROWD INTELLIGENCE ──
+    if (song.popularity !== undefined) {
+        if (song.popularity >= 80) {
+            tips.push('High recognition. Play the intro and watch heads turn — that\'s your cue to drop the bass.');
+            tips.push('Everyone knows this one. The trick is WHEN you play it, not IF. Save it for the right moment.');
+        } else if (song.popularity >= 60) {
+            tips.push('Familiar enough to land. Won\'t get a singalong, but nobody\'s leaving the floor either.');
+        } else if (song.popularity >= 35) {
+            tips.push('Deeper pick. You\'ll separate yourself from the playlist DJs with selections like this.');
+            tips.push('Not a mainstream pick, but that\'s the point. The real ones will notice.');
+        } else {
+            tips.push('Underground heat. The crowd won\'t know this yet — which means they\'ll remember YOU for playing it.');
+        }
+    }
+
+    // ── SCENARIO READS (combined features) ──
+    if (bpm && energy !== null && energy !== undefined) {
+        if (bpm >= 120 && bpm <= 130 && energy >= 0.75) {
+            tips.push('Club-ready in every category. This is the track you play when you feel the room lock in.');
+        }
+        if (bpm >= 118 && bpm <= 132 && energy >= 0.5 && energy <= 0.75) {
+            tips.push('Wedding reception sweet spot — energetic enough to keep people up, controlled enough to not scare grandma.');
+        }
+    }
+    if (dance !== null && dance !== undefined && valence !== null && valence !== undefined) {
+        if (dance >= 0.75 && valence >= 0.65) {
+            tips.push('Danceability + happiness = the crowd is about to go off. This is your "hands in the air" moment.');
+        }
+        if (dance >= 0.6 && valence < 0.35) {
+            tips.push('Groovy but moody — underground club vibes. Dark rooms and strobe lights were made for this.');
+        }
+    }
+    if (bpm && dance !== null && dance !== undefined) {
+        if (bpm < 100 && dance >= 0.7) {
+            tips.push('Slow BPM with high groove is a deadly combo. Think late-night after-party. This track owns that space.');
+        }
+    }
+
+    // ── CRAFT FUNDAMENTALS (always rotate a few) ──
+    tips.push('EQ your bass during transitions. Two bass lines at once is amateur hour.');
+    tips.push('Loop the last 4 bars of the outro — gives you an extra 16 beats to nail the transition.');
+    tips.push('Watch the crowd\'s feet, not their phones. Feet tell you the truth about whether they\'re feeling it.');
+    tips.push('High-pass filter into the next track creates tension. Cut the filter at the drop for maximum impact.');
+    tips.push('The best DJs play for the room, not for themselves. Your personal taste is the starting point, not the destination.');
+    tips.push('Dead air is death. Always have your next track cued and ready before the current one hits the outro.');
+    tips.push('If you\'re reaching for the mic, you better have something worth saying. Let the music do the talking.');
+    tips.push('Three bangers in a row, then a breather. The human body literally can\'t sustain peak energy for more than 10 minutes.');
+    tips.push('The transition IS the performance. Anyone can play great songs — the mix in between is where DJs earn respect.');
+    tips.push('Never apologize for your track selection on the mic. Confidence is contagious — own every song you play.');
+
+    // Shuffle for variety
+    for (let i = tips.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [tips[i], tips[j]] = [tips[j], tips[i]];
+    }
+
+    return tips;
+}
+
 // Pop-up bubble positions
 const POPUP_POSITIONS = [
     { top: '8%', left: '5%' },
@@ -226,6 +388,10 @@ export default function JukeboxPlayer({
     const [nextLiveCountdown, setNextLiveCountdown] = useState('');
     const [eqBars, setEqBars] = useState<number[]>(Array(16).fill(20));
     const [glowIntensity, setGlowIntensity] = useState(0);
+
+    // 🎛️ DJ INTEL CARD state
+    const [djTips, setDjTips] = useState<string[]>([]);
+    const [currentDJTipIndex, setCurrentDJTipIndex] = useState(0);
 
 
     // 🎬 POP-UP VIDEO FACTS (dual-bubble VH1 style)
@@ -370,11 +536,11 @@ export default function JukeboxPlayer({
                 ].some(filler => f.text.includes(filler)));
 
             // Priority merge: Perplexity (real trivia) → Genius (metadata) → Era (culture)
-            // Take all Perplexity, all Genius, and up to 6 era facts
+            // Include ALL facts to ensure full song coverage without repeats
             const allFacts = [
                 ...perplexityFacts,
                 ...geniusFacts,
-                ...eraFacts.slice(0, 6),
+                ...eraFacts,
             ];
 
             // Shuffle within priority bands (keep Perplexity facts weighted toward front)
@@ -386,7 +552,7 @@ export default function JukeboxPlayer({
                 [premiumFacts[i], premiumFacts[j]] = [premiumFacts[j], premiumFacts[i]];
             }
             // Band 2: Era facts shuffled
-            const eraSlice = eraFacts.slice(0, 6);
+            const eraSlice = [...eraFacts];
             for (let i = eraSlice.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [eraSlice[i], eraSlice[j]] = [eraSlice[j], eraSlice[i]];
@@ -401,6 +567,22 @@ export default function JukeboxPlayer({
 
         fetchAllFacts();
     }, [currentSong.id, currentSong.name, currentSong.artist]);
+
+    // 🎛️ DJ INTEL: Generate tips when song changes
+    useEffect(() => {
+        const tips = generateDJTips(currentSong);
+        setDjTips(tips);
+        setCurrentDJTipIndex(0);
+    }, [currentSong.id]);
+
+    // 🎛️ DJ INTEL: Rotate tips every 8 seconds
+    useEffect(() => {
+        if (djTips.length <= 1) return;
+        const interval = setInterval(() => {
+            setCurrentDJTipIndex(prev => (prev + 1) % djTips.length);
+        }, 8000);
+        return () => clearInterval(interval);
+    }, [djTips]);
 
     // 🎬 SHOW FACTS PERIODICALLY — Dual-bubble VH1 style
     useEffect(() => {
@@ -1524,6 +1706,40 @@ export default function JukeboxPlayer({
                             <span>{formatTime((progress / 100) * duration)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
+                    </div>
+
+                    {/* 🎛️ CRATE COACH — DJ craft advice + song analytics */}
+                    <div className="dj-intel-card">
+                        <div className="dj-intel-header">
+                            <span className="dj-intel-title">🎛️ CRATE COACH</span>
+                        </div>
+                        <div className="dj-intel-stats">
+                            <div className="dj-stat-badge">
+                                <span className="dj-stat-icon">🥁</span>
+                                <span className="dj-stat-value">{currentSong.bpm ?? '—'}</span>
+                                <span className="dj-stat-label">BPM</span>
+                            </div>
+                            <div className="dj-stat-badge">
+                                <span className="dj-stat-icon">🎵</span>
+                                <span className="dj-stat-value">{currentSong.camelotKey ?? '—'}</span>
+                                <span className="dj-stat-label">KEY</span>
+                            </div>
+                            <div className="dj-stat-badge">
+                                <span className="dj-stat-icon">⚡</span>
+                                <span className="dj-stat-value">{currentSong.energy != null ? (currentSong.energy * 100).toFixed(0) : '—'}</span>
+                                <span className="dj-stat-label">ENERGY</span>
+                            </div>
+                            <div className="dj-stat-badge">
+                                <span className="dj-stat-icon">💃</span>
+                                <span className="dj-stat-value">{currentSong.danceability != null ? (currentSong.danceability * 100).toFixed(0) : '—'}</span>
+                                <span className="dj-stat-label">DANCE</span>
+                            </div>
+                        </div>
+                        {djTips.length > 0 && (
+                            <div className="dj-intel-tip">
+                                <span className="dj-tip-text" key={currentDJTipIndex}>{djTips[currentDJTipIndex]}</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* 👻 Ghost controls — discreet corner widget for all modes */}

@@ -42,24 +42,27 @@ async function fetchPerplexityFacts(artist: string, title: string): Promise<stri
         return [];
     }
 
-    const prompt = `Give me 10 fascinating, specific, little-known facts about the song "${title}" by ${artist}. 
+    const prompt = `Give me 20 fascinating, specific, little-known facts about the song "${title}" by ${artist}. I need enough facts to fill an entire music video.
 
 Style: VH1 Pop Up Video — each fact should be a single concise sentence that would pop up on screen during the music video. Mix these categories:
-- Behind-the-scenes recording stories
-- Chart positions and commercial success  
-- Who played instruments or contributed to the song
-- Connections to movies, TV shows, or cultural moments
-- Surprising things about the lyrics or meaning
-- What the artist was going through when they wrote/recorded it
-- Awards or notable covers/samples of the song
+- Behind-the-scenes recording stories and studio anecdotes
+- Chart positions, certifications, and commercial success
+- Who played instruments, sang backup, or contributed to the song
+- Connections to movies, TV shows, commercials, or cultural moments
+- Surprising things about the lyrics, meaning, or inspiration
+- What the artist was going through personally when they wrote/recorded it
+- Awards, Grammy nominations, or notable covers/samples of the song
+- Interesting facts about the music video
+- The artist's other hits or career milestones around the same time
+- How fans or critics reacted when it first came out
 
 Rules:
 - Each fact must be ONE sentence, max 120 characters
 - Be SPECIFIC — include names, dates, numbers, and details
-- No generic filler like "this song is a classic"
+- No generic filler like "this song is a classic" or "this artist is legendary"
 - Start each fact with an emoji that matches the category
-- Number each fact 1-10
-- If you don't know enough specific facts about this exact song, include facts about the artist from the same era`;
+- Number each fact 1-20
+- If you don't know 20 facts about this exact song, include facts about the artist from the same era or album`;
 
     try {
         const response = await fetch('https://api.perplexity.ai/chat/completions', {
@@ -80,7 +83,7 @@ Rules:
                         content: prompt,
                     },
                 ],
-                max_tokens: 800,
+                max_tokens: 1500,
                 temperature: 0.7,
             }),
         });

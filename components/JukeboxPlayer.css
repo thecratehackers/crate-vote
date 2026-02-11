@@ -5,7 +5,7 @@
 .jukebox-overlay {
     position: fixed;
     inset: 0;
-    background: #000;
+    background: #0d0a07;
     z-index: 9999;
     display: flex;
     align-items: center;
@@ -30,7 +30,7 @@
     width: calc(100% + 80px);
     height: calc(100% + 80px);
     object-fit: cover;
-    filter: blur(60px) brightness(0.25) saturate(1.4);
+    filter: blur(60px) brightness(0.3) saturate(1.2) sepia(0.15) hue-rotate(-10deg);
     transform: scale(1.1);
 }
 
@@ -2686,6 +2686,119 @@
 .broadcast-mode .jukebox-close-fixed,
 .broadcast-mode .jukebox-corner-close {
     display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   🎛️ DJ INTEL CARD — Persistent song stats + rotating tips
+   ═══════════════════════════════════════════════════════════ */
+
+.dj-intel-card {
+    margin: 8px 16px 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(211, 119, 29, 0.2);
+    border-radius: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.dj-intel-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 14px;
+    background: linear-gradient(90deg, rgba(211, 119, 29, 0.12) 0%, rgba(224, 159, 36, 0.08) 50%, rgba(211, 119, 29, 0.12) 100%);
+    border-bottom: 1px solid rgba(211, 119, 29, 0.15);
+}
+
+.dj-intel-title {
+    font-family: 'Rubik', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(211, 119, 29, 0.9);
+}
+
+.dj-intel-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    padding: 10px 12px;
+}
+
+.dj-stat-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 4px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+.dj-stat-badge:hover {
+    background: rgba(211, 119, 29, 0.1);
+}
+
+.dj-stat-icon {
+    font-size: 1rem;
+}
+
+.dj-stat-value {
+    font-family: 'Rubik', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: white;
+    line-height: 1.2;
+}
+
+.dj-stat-label {
+    font-family: 'Rubik', sans-serif;
+    font-size: 0.55rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.dj-intel-tip {
+    padding: 8px 14px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dj-tip-text {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    text-align: center;
+    line-height: 1.4;
+    animation: djTipFadeIn 0.5s ease-out;
+}
+
+@keyframes djTipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile: stack 2x2 on very small screens */
+@media (max-width: 380px) {
+    .dj-intel-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
