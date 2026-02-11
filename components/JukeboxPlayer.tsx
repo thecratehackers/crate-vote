@@ -1153,9 +1153,9 @@ export default function JukeboxPlayer({
                     <div className="crowdsource-banner">
                         <div className="crowdsource-label">
                             <span className="live-dot" />
-                            <span>LIVE VOTING</span>
+                            <span>🗳️ VOTING OPEN</span>
                         </div>
-                        <h2 className="crowdsource-title">Building the Playlist</h2>
+                        <h2 className="crowdsource-title">Building the Perfect Playlist</h2>
                         <p className="crowdsource-subtitle">Votes decide what plays next</p>
                     </div>
 

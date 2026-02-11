@@ -3505,7 +3505,7 @@ export default function HomePage() {
                                 {/* 📊 WELCOME-BACK CARD — Show last session recap if available */}
                                 {lastSession ? (
                                     <div className="welcome-back-card">
-                                        <div className="welcome-back-header">Your Last Session</div>
+                                        <div className="welcome-back-header">Your Last Event</div>
                                         <div className="welcome-back-stats">
                                             {lastSession.topSongName && lastSession.topSongRank && (
                                                 <div className="welcome-back-stat">
@@ -3817,7 +3817,7 @@ export default function HomePage() {
                         <button className="recap-close" onClick={() => setShowSessionRecap(false)}>✕</button>
                         <div className="recap-header">
                             <img src="/logo.png" alt="" className="recap-logo" />
-                            <h2 className="recap-title">Session Complete! 🎧</h2>
+                            <h2 className="recap-title">Event Complete! 🎧</h2>
                         </div>
                         <div className="recap-stats">
                             {sessionRecap.topSongName && sessionRecap.topSongRank && (
