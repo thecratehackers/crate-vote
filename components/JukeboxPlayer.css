@@ -555,6 +555,13 @@
     background: rgba(211, 119, 29, 0.5);
 }
 
+.stream-ctrl-karma {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 0 4px;
+    white-space: nowrap;
+}
+
 /* Karma Indicator */
 .jukebox-karma {
     text-align: center;

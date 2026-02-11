@@ -1386,45 +1386,23 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {streamMode ? (
-                        /* 📺 STREAM MODE: Discreet corner controls — blends into atmosphere */
-                        <div className="stream-controls-widget">
-                            <button className="stream-ctrl-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
-                                {isMuted ? '🔇' : '🔊'}
-                            </button>
-                            <button className="stream-ctrl-btn stream-ctrl-play" onClick={togglePlayPause}>
-                                {isPlaying ? '⏸' : '▶'}
-                            </button>
-                            <button className="stream-ctrl-btn" onClick={skipToNext} disabled={!nextSong} title={nextSong ? `Next: ${nextSong.name}` : 'End of list'}>
-                                ⏭
-                            </button>
-                        </div>
-                    ) : (
-                        /* Normal mode: Full centered controls */
-                        <>
-                            <div className="jukebox-controls">
-                                <button className="control-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
-                                    {isMuted ? '🔇' : '🔊'}
-                                </button>
-                                <button className="control-btn play-btn" onClick={togglePlayPause}>
-                                    {isPlaying ? '⏸' : '▶'}
-                                </button>
-                                <button className="control-btn" onClick={skipToNext} disabled={!nextSong} title={nextSong ? `Skip to: ${nextSong.name}` : 'No more songs'}>
-                                    ⏭
-                                </button>
-                            </div>
-
-                            {watchTime > 0 && (
-                                <div className="jukebox-karma">
-                                    {karmaEarned ? (
-                                        <span className="karma-earned">✨ +1 Karma earned!</span>
-                                    ) : (
-                                        <span className="karma-progress">🎧 Watch 60s for +1 karma: {watchTime}/60</span>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    )}
+                    {/* 👻 Ghost controls — discreet corner widget for all modes */}
+                    <div className="stream-controls-widget">
+                        <button className="stream-ctrl-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
+                            {isMuted ? '🔇' : '🔊'}
+                        </button>
+                        <button className="stream-ctrl-btn stream-ctrl-play" onClick={togglePlayPause}>
+                            {isPlaying ? '⏸' : '▶'}
+                        </button>
+                        <button className="stream-ctrl-btn" onClick={skipToNext} disabled={!nextSong} title={nextSong ? `Next: ${nextSong.name}` : 'End of list'}>
+                            ⏭
+                        </button>
+                        {!streamMode && watchTime > 0 && (
+                            <span className="stream-ctrl-karma" title={karmaEarned ? 'Karma earned!' : `${watchTime}/60s`}>
+                                {karmaEarned ? '✨' : `🎧${watchTime}`}
+                            </span>
+                        )}
+                    </div>
 
                     {playlist.length > 1 && (
                         <div className="jukebox-queue">
