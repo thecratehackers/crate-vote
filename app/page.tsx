@@ -3798,6 +3798,7 @@ export default function HomePage() {
                         bombCount={nowPlaying?.bombCount ?? 0}
                         bombThreshold={nowPlaying?.bombThreshold ?? 5}
                         onBomb={handleBombSong}
+                        liveActivity={toastQueue}
                     />
                 )
             }

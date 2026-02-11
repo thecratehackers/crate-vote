@@ -16,6 +16,14 @@ interface Song {
     addedByColor?: string;
 }
 
+interface ServerActivity {
+    id: string;
+    type: 'add' | 'upvote' | 'downvote';
+    userName: string;
+    songName: string;
+    timestamp: number;
+}
+
 interface JukeboxPlayerProps {
     currentSong: Song;
     videoId: string;
@@ -33,6 +41,8 @@ interface JukeboxPlayerProps {
     bombCount?: number;
     bombThreshold?: number;
     onBomb?: (songId: string) => void;
+    // 📢 LIVE ACTIVITY from server
+    liveActivity?: ServerActivity[];
 }
 
 declare global {
@@ -208,6 +218,7 @@ export default function JukeboxPlayer({
     bombCount = 0,
     bombThreshold = 5,
     onBomb,
+    liveActivity = [],
 }: JukeboxPlayerProps) {
     const [isPlaying, setIsPlaying] = useState(true);
     const [isMuted, setIsMuted] = useState(true);
@@ -239,6 +250,7 @@ export default function JukeboxPlayer({
         timestamp: number;
     }
     const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
+    const seenServerActivityRef = useRef<Set<string>>(new Set());
     const [lastScore, setLastScore] = useState<number | null>(null);
     const [lastRank, setLastRank] = useState<number | null>(null);
     const [scoreAnimation, setScoreAnimation] = useState<{ delta: number; key: number } | null>(null);
@@ -517,6 +529,46 @@ export default function JukeboxPlayer({
             boostHype(15); // 📺 BROADCAST: New songs boost hype more
         }
     }, [triggerEmojiBurst, boostHype]);
+
+    // 📢 Ingest server-side activity into the jukebox feed
+    useEffect(() => {
+        if (!liveActivity || liveActivity.length === 0) return;
+
+        const newItems: ActivityItem[] = [];
+        for (const sa of liveActivity) {
+            if (seenServerActivityRef.current.has(sa.id)) continue;
+            seenServerActivityRef.current.add(sa.id);
+
+            const icon = sa.type === 'add' ? '🎵' : sa.type === 'upvote' ? '👍' : '👎';
+            const action = sa.type === 'add' ? 'added' : sa.type === 'upvote' ? 'upvoted' : 'downvoted';
+            const shortSong = sa.songName.length > 18 ? sa.songName.slice(0, 18) + '…' : sa.songName;
+
+            newItems.push({
+                id: `srv-${sa.id}`,
+                type: sa.type === 'add' ? 'newSong' : 'vote',
+                text: `${sa.userName} ${action} "${shortSong}"`,
+                icon,
+                timestamp: sa.timestamp,
+            });
+        }
+
+        if (newItems.length > 0) {
+            setActivityFeed(prev => [...newItems, ...prev].slice(0, 12));
+            setLastActivityTime(Date.now());
+            setIdleMode(false);
+            // Boost hype for server-side activity too
+            newItems.forEach(item => {
+                if (item.type === 'vote') boostHype(5);
+                else if (item.type === 'newSong') boostHype(12);
+            });
+        }
+
+        // Cap seen set to prevent memory leak in long sessions
+        if (seenServerActivityRef.current.size > 300) {
+            const entries = Array.from(seenServerActivityRef.current);
+            seenServerActivityRef.current = new Set(entries.slice(entries.length - 150));
+        }
+    }, [liveActivity, boostHype]);
 
     // Check for idle mode every 5 seconds (desktop only - mobile users are active voters)
     useEffect(() => {
