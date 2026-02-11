@@ -1312,7 +1312,7 @@ export default function JukeboxPlayer({
                         <div className="jukebox-queue">
                             <span className="queue-label">🗂️ Up Next ({playlist.length - currentIndex - 1} songs)</span>
                             <div className="queue-items">
-                                {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
+                                {playlist.slice(currentIndex + 1, currentIndex + 11).map((song, i) => (
                                     <div key={song.id} className="queue-item">
                                         <span className="queue-position">{i + 1}</span>
                                         <img src={song.albumArt} alt="" className="queue-album" onClick={() => onNextSong(song.id)} title="Skip to this song" />
