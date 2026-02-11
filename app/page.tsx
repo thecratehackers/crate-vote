@@ -455,7 +455,7 @@ export default function HomePage() {
     }, [songs, isUserInteracting]);
 
     // Pre-selected avatar emojis - music/DJ themed, clean and minimal
-    const AVATAR_OPTIONS = ['🎧', '🎛️', '🎚️', '💿', '💽', '🔊', '📡', '📱', '🤖', '🖥️'];
+    const AVATAR_OPTIONS = ['🎧', '🎛️', '🎚️', '💿', '💽', '🔊', '📡', '📱', '📻', '🖥️'];
 
     // Username and avatar state - profile entry
     const [username, setUsername] = useState<string | null>(null);
@@ -2392,7 +2392,7 @@ export default function HomePage() {
                                     animationDuration: `${1.5 + Math.random() * 1}s`,
                                 }}
                             >
-                                {['💿', '⚡', '📡', '🎧', '🔊'][i % 5]}
+                                {['💿', '⚡', '📡', '🎧', '💎'][i % 5]}
                             </span>
                         ))}
                     </div>
@@ -2440,7 +2440,7 @@ export default function HomePage() {
                                         animationDelay: `${Math.random() * 2}s`,
                                     }}
                                 >
-                                    {['⚡', '📡', '🎧', '🔊', '💽'][i % 5]}
+                                    {['⚡', '📡', '🎧', '⭐', '💎'][i % 5]}
                                 </span>
                             ))}
                         </div>
@@ -2494,7 +2494,7 @@ export default function HomePage() {
                                 rel="noopener noreferrer"
                                 className="winner-calendar-link"
                             >
-                                📡 Never miss a vote — Add to Calendar
+                                📅 Never miss a vote — Add to Calendar
                             </a>
                         </div>
                     </div>
@@ -2517,7 +2517,7 @@ export default function HomePage() {
                                             top: `${Math.random() * 100}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['🎧', '📦', '⚡', '📡', '💽'][i % 5]}
+                                            {['🎧', '📦', '⚡', '📡', '💎'][i % 5]}
                                         </span>
                                     ))}
                                 </div>
@@ -2551,7 +2551,7 @@ export default function HomePage() {
                                             top: `${Math.random() * 100}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['🎧', '📦', '⚡', '📡', '💽'][i % 5]}
+                                            {['🎧', '📦', '⚡', '📡', '💎'][i % 5]}
                                         </span>
                                     ))}
                                 </div>
@@ -2581,7 +2581,7 @@ export default function HomePage() {
                                             top: `${10 + Math.random() * 80}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['👑', '⚡', '📡', '🏆'][i % 4]}
+                                            {['👑', '⭐', '📡', '🏆'][i % 4]}
                                         </span>
                                     ))}
                                 </div>
@@ -2615,7 +2615,7 @@ export default function HomePage() {
                                             top: `${10 + Math.random() * 80}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['👑', '⚡', '📡', '🏆'][i % 4]}
+                                            {['👑', '⭐', '📡', '🏆'][i % 4]}
                                         </span>
                                     ))}
                                 </div>
@@ -2629,7 +2629,7 @@ export default function HomePage() {
                                     rel="noopener noreferrer"
                                     className="king-calendar-link"
                                 >
-                                    📡 Come back next Tuesday — Add to Calendar
+                                    📅 Come back next Tuesday — Add to Calendar
                                 </a>
                             </div>
                         )}
@@ -2783,7 +2783,7 @@ export default function HomePage() {
                             className="calendar-cta-btn"
                             title="Add recurring reminder to Google Calendar"
                         >
-                            📡 Add to Calendar
+                            📅 Add to Calendar
                         </a>
                     </>
                 )}
@@ -3445,7 +3445,7 @@ export default function HomePage() {
                                             )}
                                             {lastSession.karmaEarned > 0 && (
                                                 <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">⚡</span>
+                                                    <span className="wb-stat-icon">⭐</span>
                                                     <span className="wb-stat-text">+{lastSession.karmaEarned} karma earned</span>
                                                 </div>
                                             )}
@@ -3462,7 +3462,7 @@ export default function HomePage() {
                                             rel="noopener noreferrer"
                                             className="welcome-back-calendar"
                                         >
-                                            📡 Add to Calendar
+                                            📅 Add to Calendar
                                         </a>
                                     </div>
                                 ) : (
@@ -3480,7 +3480,7 @@ export default function HomePage() {
                                             rel="noopener noreferrer"
                                             className="countdown-calendar-link"
                                         >
-                                            📡 Add to Calendar
+                                            📅 Add to Calendar
                                         </a>
                                     </div>
                                 )}
@@ -3502,7 +3502,7 @@ export default function HomePage() {
                                             rel="noopener noreferrer"
                                             className="countdown-calendar-link"
                                         >
-                                            📡 Add to Calendar
+                                            📅 Add to Calendar
                                         </a>
                                     </div>
                                 )}
@@ -3762,7 +3762,7 @@ export default function HomePage() {
                             </div>
                             {sessionRecap.karmaEarned > 0 && (
                                 <div className="recap-stat">
-                                    <span className="recap-stat-icon">⚡</span>
+                                    <span className="recap-stat-icon">⭐</span>
                                     <div className="recap-stat-content">
                                         <span className="recap-stat-label">Karma Earned</span>
                                         <span className="recap-stat-value">+{sessionRecap.karmaEarned}</span>
@@ -3785,7 +3785,7 @@ export default function HomePage() {
                                 rel="noopener noreferrer"
                                 className="recap-calendar-btn"
                             >
-                                📡 Add to Calendar
+                                📅 Add to Calendar
                             </a>
                             <button className="recap-dismiss-btn" onClick={() => setShowSessionRecap(false)}>
                                 Done

@@ -177,7 +177,7 @@ function generateFacts(songName: string, artistName: string, releaseYear: number
     facts.push({ category: 'Karma', emoji: '⚡', text: `Watch 60 seconds to earn +1 karma!`, id: `karma-1` });
     facts.push({ category: 'Tip', emoji: '🎚️', text: `Your votes shape what plays next.`, id: `tip-1` });
     facts.push({ category: 'Music', emoji: '🔊', text: `${artistName} knows how to deliver a hit.`, id: `artist-praise` });
-    facts.push({ category: 'Stats', emoji: '🖥️', text: `Only the top-voted songs make the final playlist.`, id: `stats-1` });
+    facts.push({ category: 'Stats', emoji: '📊', text: `Only the top-voted songs make the final playlist.`, id: `stats-1` });
     facts.push({ category: 'Competition', emoji: '🏆', text: `Can "${songName}" reach the top 3?`, id: `compete-1` });
 
     // Shuffle
@@ -495,7 +495,7 @@ export default function JukeboxPlayer({
             headline: 'EARN KARMA!',
             subtext: 'Vote more • Gain power • Unlock perks',
             cta: 'START NOW',
-            emojis: ['⚡', '💽', '🏆', '📡', '🎧', '🔊']
+            emojis: ['⚡', '💎', '🏆', '📡', '🎧', '🔊']
         },
     ];
 
@@ -1066,7 +1066,7 @@ export default function JukeboxPlayer({
                     {/* 📺 Hype Meter */}
                     {streamMode && (
                         <div className="sidebar-section hype-section" style={{ borderColor: hypeInfo.color }}>
-                            <h3 className="sidebar-title">🖥️ Hype Level</h3>
+                            <h3 className="sidebar-title">📊 Hype Level</h3>
                             <div className="hype-meter">
                                 <div className="hype-bar">
                                     <div
