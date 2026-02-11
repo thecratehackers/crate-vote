@@ -493,6 +493,68 @@
     box-shadow: 0 0 30px rgba(211, 119, 29, 0.5);
 }
 
+/* 📺 STREAM MODE: Discreet corner controls — nearly invisible, part of atmosphere */
+.stream-controls-widget {
+    position: fixed;
+    bottom: 14px;
+    left: 14px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    opacity: 0.3;
+    transition: opacity 0.3s ease, background 0.3s ease;
+    z-index: 9999;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.stream-controls-widget:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.7);
+    border-color: rgba(211, 119, 29, 0.25);
+}
+
+.stream-ctrl-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
+.stream-ctrl-btn:hover:not(:disabled) {
+    color: white;
+    background: rgba(211, 119, 29, 0.3);
+}
+
+.stream-ctrl-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+.stream-ctrl-btn.stream-ctrl-play {
+    width: 32px;
+    height: 32px;
+    background: rgba(211, 119, 29, 0.25);
+    font-size: 0.9rem;
+}
+
+.stream-ctrl-btn.stream-ctrl-play:hover {
+    background: rgba(211, 119, 29, 0.5);
+}
+
 /* Karma Indicator */
 .jukebox-karma {
     text-align: center;
