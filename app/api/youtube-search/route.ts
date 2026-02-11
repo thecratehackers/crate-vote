@@ -1,15 +1,8 @@
 import { NextResponse } from 'next/server';
-import { searchMusicVideo, isYouTubeConfigured } from '@/lib/youtube';
+import { searchMusicVideo } from '@/lib/youtube';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export async function GET(request: Request) {
-    // Check if YouTube API is configured
-    if (!isYouTubeConfigured()) {
-        return NextResponse.json(
-            { error: 'YouTube API not configured', videoId: null },
-            { status: 503 }
-        );
-    }
 
     const { searchParams } = new URL(request.url);
     const song = searchParams.get('song');

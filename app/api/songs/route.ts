@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getNowPlayingBombCount } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 
     // Fetch data in parallel - most of these are cached
     // Timer + ban status included here to eliminate separate /api/timer polling
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying, nowPlayingBombData] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
@@ -76,7 +76,6 @@ export async function GET(request: Request) {
         getTimerStatus(),
         visitorId ? isUserBanned(visitorId) : Promise.resolve(false),
         getNowPlaying(),
-        getNowPlayingBombCount(),
     ]);
 
     // Check if user can delete during window
@@ -137,12 +136,7 @@ export async function GET(request: Request) {
             ...timerStatus,
             isBanned,
         },
-        // 💣 Now-playing + bomb data for bomb feature
-        nowPlaying: nowPlaying ? {
-            ...nowPlaying,
-            bombCount: nowPlayingBombData.bombCount,
-            bombThreshold: nowPlayingBombData.threshold,
-        } : null,
+        nowPlaying: nowPlaying || null,
     });
 }
 

@@ -37,10 +37,6 @@ interface JukeboxPlayerProps {
     streamMode?: boolean;
     viewerCount?: number;
     currentTheme?: { name: string; emoji: string; endsAt: number };
-    // 💣 BOMB FEATURE
-    bombCount?: number;
-    bombThreshold?: number;
-    onBomb?: (songId: string) => void;
     // 📢 LIVE ACTIVITY from server
     liveActivity?: ServerActivity[];
 }
@@ -215,9 +211,6 @@ export default function JukeboxPlayer({
     streamMode = false,
     viewerCount = 0,
     currentTheme,
-    bombCount = 0,
-    bombThreshold = 5,
-    onBomb,
     liveActivity = [],
 }: JukeboxPlayerProps) {
     const [isPlaying, setIsPlaying] = useState(true);
@@ -230,10 +223,6 @@ export default function JukeboxPlayer({
     const [showNextHint, setShowNextHint] = useState(false);
     const [currentTipIndex, setCurrentTipIndex] = useState(0);
 
-    // 💣 BOMB STATE
-    const [hasBombed, setHasBombed] = useState(false);
-    const [bombAnimation, setBombAnimation] = useState(false);
-    const [showBombedOverlay, setShowBombedOverlay] = useState(false);
 
     // 🎬 POP-UP VIDEO FACTS
     const [popUpFacts, setPopUpFacts] = useState<PopUpFact[]>([]);
@@ -773,63 +762,6 @@ export default function JukeboxPlayer({
         };
     }, []);
 
-    // 💣 Broadcast now-playing state to server when song changes
-    useEffect(() => {
-        // Tell the server what's playing so other clients can see it + bomb it
-        fetch('/api/songs/bomb', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...(visitorId ? { 'x-visitor-id': visitorId } : {}) },
-            body: JSON.stringify({
-                action: 'set',
-                songId: currentSong.id,
-                songName: currentSong.name,
-                artistName: currentSong.artist,
-                albumArt: currentSong.albumArt,
-            }),
-        }).catch(console.error);
-
-        // Reset bomb state for new song
-        setHasBombed(false);
-        setShowBombedOverlay(false);
-    }, [currentSong.id, visitorId]);
-
-    // 💣 Clear now-playing on unmount (jukebox closed)
-    useEffect(() => {
-        return () => {
-            fetch('/api/songs/bomb', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', ...(visitorId ? { 'x-visitor-id': visitorId } : {}) },
-                body: JSON.stringify({ action: 'clear' }),
-            }).catch(console.error);
-        };
-    }, [visitorId]);
-
-    // 💣 Detect when song gets bombed (threshold reached) — the polling in page.tsx will clear nowPlaying
-    useEffect(() => {
-        if (bombCount >= bombThreshold && bombThreshold > 0) {
-            setShowBombedOverlay(true);
-            SoundEffects.bombed();
-            // Auto-skip after showing bombed animation (use refs to avoid stale closure)
-            setTimeout(() => {
-                setShowBombedOverlay(false);
-                const latestNext = nextSongRef.current;
-                if (latestNext) {
-                    onNextSongRef.current(latestNext.id);
-                }
-            }, 3000);
-        }
-    }, [bombCount, bombThreshold]);
-
-    // 💣 Handle bomb button click
-    const handleBomb = useCallback(() => {
-        if (hasBombed || !onBomb) return;
-        setHasBombed(true);
-        setBombAnimation(true);
-        SoundEffects.bomb();
-        onBomb(currentSong.id);
-        addActivity({ type: 'reaction', text: `💣 Bombed "${currentSong.name.slice(0, 15)}..."!`, icon: '💣' });
-        setTimeout(() => setBombAnimation(false), 600);
-    }, [hasBombed, onBomb, currentSong.id, currentSong.name, addActivity]);
 
     // Initialize player when video changes
     useEffect(() => {
@@ -1252,17 +1184,6 @@ export default function JukeboxPlayer({
                             </span>
                             <span className="vote-label">votes</span>
                         </div>
-                        {/* 💣 BOMB BUTTON */}
-                        <button
-                            className={`jukebox-bomb-badge ${hasBombed ? 'bombed' : ''} ${bombAnimation ? 'bomb-pulse' : ''}`}
-                            onClick={handleBomb}
-                            disabled={hasBombed}
-                            title={hasBombed ? 'You already bombed this song' : `Bomb this song! (${bombCount}/${bombThreshold} to skip)`}
-                        >
-                            <span className="bomb-icon">{hasBombed ? '💥' : '💣'}</span>
-                            <span className="bomb-count">{bombCount}/{bombThreshold}</span>
-                            <span className="bomb-label">{hasBombed ? 'bombed!' : 'BOMB'}</span>
-                        </button>
                     </div>
 
                     <div className="jukebox-tips-banner">
@@ -1273,17 +1194,7 @@ export default function JukeboxPlayer({
                     <div className="jukebox-video-wrapper">
                         <div id="jukebox-player" className="jukebox-video" />
 
-                        {/* 💣 BOMBED OVERLAY */}
-                        {showBombedOverlay && (
-                            <div className="jukebox-bombed-overlay">
-                                <div className="bombed-content">
-                                    <span className="bombed-emoji">💥</span>
-                                    <span className="bombed-title">BOMBED!</span>
-                                    <span className="bombed-subtitle">"{currentSong.name}" has been skipped!</span>
-                                    <span className="bombed-detail">{bombThreshold} bombs reached — moving on...</span>
-                                </div>
-                            </div>
-                        )}
+
 
                         <div className="jukebox-qr-overlay">
                             <img

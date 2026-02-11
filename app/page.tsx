@@ -385,18 +385,7 @@ export default function HomePage() {
     }
     const [jukeboxState, setJukeboxState] = useState<JukeboxState | null>(null);
 
-    // 💣 BOMB FEATURE - Track now-playing song and bomb count from server
-    interface NowPlayingState {
-        songId: string;
-        songName: string;
-        artistName: string;
-        albumArt: string;
-        bombCount: number;
-        bombThreshold: number;
-    }
-    const [nowPlaying, setNowPlaying] = useState<NowPlayingState | null>(null);
-    const [hasBombedCurrentSong, setHasBombedCurrentSong] = useState(false);
-    const [bombAnimating, setBombAnimating] = useState(false);
+
 
     // 🔒 UI STABILITY - Prevent song re-ordering during active interaction
     const [isUserInteracting, setIsUserInteracting] = useState(false);
@@ -1167,25 +1156,7 @@ export default function HomePage() {
                 }
             }
 
-            // 💣 Sync now-playing + bomb count from server
-            if (data.nowPlaying) {
-                setNowPlaying(prev => {
-                    // If song changed, reset local bomb state
-                    if (!prev || prev.songId !== data.nowPlaying.songId) {
-                        setHasBombedCurrentSong(false);
-                    }
-                    return {
-                        songId: data.nowPlaying.songId,
-                        songName: data.nowPlaying.songName,
-                        artistName: data.nowPlaying.artistName,
-                        albumArt: data.nowPlaying.albumArt,
-                        bombCount: data.nowPlaying.bombCount,
-                        bombThreshold: data.nowPlaying.bombThreshold,
-                    };
-                });
-            } else {
-                setNowPlaying(null);
-            }
+
 
             // 📢 Process live activity from server
             if (data.recentActivity && Array.isArray(data.recentActivity)) {
@@ -1988,41 +1959,7 @@ export default function HomePage() {
         }
     };
 
-    // 💣 BOMB: Handle bombing the currently playing song
-    const handleBombSong = async (songId: string) => {
-        if (!visitorId || hasBombedCurrentSong) return;
 
-        setHasBombedCurrentSong(true);
-        setBombAnimating(true);
-        setTimeout(() => setBombAnimating(false), 600);
-
-        try {
-            const res = await fetch('/api/songs/bomb', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-visitor-id': visitorId,
-                },
-                body: JSON.stringify({ songId }),
-            });
-
-            const data = await res.json();
-            if (data.success) {
-                // Update local bomb count immediately for responsiveness
-                setNowPlaying(prev => prev ? { ...prev, bombCount: data.bombCount } : null);
-
-                if (data.bombed) {
-                    // Song was bombed off! The JukeboxPlayer will handle the skip via its own effect
-                    setMessage({ type: 'success', text: '💣💥 Song BOMBED! Skipping...' });
-                }
-            } else if (data.error) {
-                setMessage({ type: 'error', text: data.error });
-            }
-        } catch (error) {
-            console.warn('Failed to bomb song:', error);
-            setHasBombedCurrentSong(false); // Allow retry on error
-        }
-    };
 
 
     // Vote on song - NEW MODEL: user gets ONE upvote and ONE downvote total
@@ -2893,7 +2830,7 @@ export default function HomePage() {
                 )
             }
 
-            {/* 📺 LIVE STREAM HOST - Dual mode: PiP (bottom-right) / Expanded (sticky top) */}
+            {/* 📺 LIVE STREAM HOST — YouTube / Twitch */}
             {/* YouTube Mode */}
             {
                 !hideStreamLocally && streamPlatform === 'youtube' && youtubeEmbed && (
@@ -2914,7 +2851,7 @@ export default function HomePage() {
                         <div className="stream-host-video">
                             <iframe
                                 ref={youtubePlayerRef}
-                                src={getYouTubeEmbedSrc(youtubeEmbed)}
+                                src={getYouTubeEmbedSrc(youtubeEmbed!)}
                                 title="Live Host Stream"
                                 frameBorder="0"
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -2991,6 +2928,7 @@ export default function HomePage() {
                     </div>
                 )
             }
+
 
             {/* Twitch Mode */}
             {
@@ -3303,34 +3241,7 @@ export default function HomePage() {
                 </div>
             )}
 
-            {/* 💣 NOW PLAYING BOMB BAR - Shows when jukebox is active, lets users bomb the song */}
-            {nowPlaying && !jukeboxState && (
-                <div className={`now-playing-bomb-bar ${bombAnimating ? 'bomb-shake' : ''}`}>
-                    <div className="npb-left">
-                        {nowPlaying.albumArt && (
-                            <img src={nowPlaying.albumArt} alt="" className="npb-album-art" />
-                        )}
-                        <div className="npb-info">
-                            <span className="npb-label">🎵 NOW PLAYING</span>
-                            <span className="npb-song">{nowPlaying.songName}</span>
-                            <span className="npb-artist">{nowPlaying.artistName}</span>
-                        </div>
-                    </div>
-                    <div className="npb-right">
-                        <div className="npb-bomb-meter">
-                            <div className="npb-bomb-fill" style={{ width: `${Math.min(100, (nowPlaying.bombCount / nowPlaying.bombThreshold) * 100)}%` }} />
-                            <span className="npb-bomb-text">{nowPlaying.bombCount}/{nowPlaying.bombThreshold} 💣</span>
-                        </div>
-                        <button
-                            className={`npb-bomb-btn ${hasBombedCurrentSong ? 'already-bombed' : ''}`}
-                            onClick={() => handleBombSong(nowPlaying.songId)}
-                            disabled={hasBombedCurrentSong}
-                        >
-                            {hasBombedCurrentSong ? '💥 Bombed!' : '💣 BOMB IT'}
-                        </button>
-                    </div>
-                </div>
-            )}
+
 
             {/* 📦 PLAYLIST HEADER - Title + Activity ticker in fixed-height banner */}
             <div className="playlist-header-bar">
@@ -3795,9 +3706,7 @@ export default function HomePage() {
                         onKarmaEarned={handleJukeboxKarmaEarned}
                         visitorId={visitorId || undefined}
                         streamMode={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stream') === 'true'}
-                        bombCount={nowPlaying?.bombCount ?? 0}
-                        bombThreshold={nowPlaying?.bombThreshold ?? 5}
-                        onBomb={handleBombSong}
+
                         liveActivity={toastQueue}
                     />
                 )
