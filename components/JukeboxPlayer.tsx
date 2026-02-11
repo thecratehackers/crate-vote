@@ -1277,14 +1277,7 @@ export default function JukeboxPlayer({
                             </div>
                         )}
 
-                        <div className="jukebox-activity-feed">
-                            {activityFeed.map((item) => (
-                                <div key={item.id} className={`activity-toast activity-${item.type}`}>
-                                    <span className="activity-icon">{item.icon}</span>
-                                    <span className="activity-text">{item.text}</span>
-                                </div>
-                            ))}
-                        </div>
+
                     </div>
 
                     <div className="jukebox-progress">
