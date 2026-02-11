@@ -117,6 +117,8 @@ export default function AdminPage() {
 
     // 🤖 AUTO-PILOT - Random surprise events during live sessions
     const [autoPilotEnabled, setAutoPilotEnabled] = useState(false);
+    const autoPilotEnabledRef = useRef(autoPilotEnabled);
+    autoPilotEnabledRef.current = autoPilotEnabled;
     const lastAutoEventTime = useRef<number>(0);
 
     // 📺 STREAM EMBED - YouTube / Twitch platform
@@ -134,6 +136,7 @@ export default function AdminPage() {
     const editingStreamTimeout = useRef<NodeJS.Timeout | null>(null);
     const streamConfigLoaded = useRef(false);
     const autoPilotTimeouts = useRef<NodeJS.Timeout[]>([]);
+    const adminFetchFailures = useRef(0);
 
     // Delete window (chaos mode) state
     const [isStartingDeleteWindow, setIsStartingDeleteWindow] = useState(false);
@@ -207,6 +210,11 @@ export default function AdminPage() {
             });
             const data = await res.json();
             setSongs(data.songs);
+            // Reset failure counter on successful fetch
+            if (adminFetchFailures.current >= 3) {
+                setMessage({ type: 'success', text: '✓ Connection restored' });
+            }
+            adminFetchFailures.current = 0;
             setIsLocked(data.isLocked);
             setStats(data.stats);
             setActiveUsers(data.activeUsers || []);
@@ -238,7 +246,11 @@ export default function AdminPage() {
             }
         } catch (error) {
             console.error('Failed to fetch playlist:', error);
-            setMessage({ type: 'error', text: 'Failed to load playlist - check your connection' });
+            // Only show error after multiple consecutive failures to avoid spam during flaky connections
+            adminFetchFailures.current++;
+            if (adminFetchFailures.current === 3) {
+                setMessage({ type: 'error', text: '⚠️ Connection issues — retrying automatically...' });
+            }
         }
     }, [isAuthenticated, adminPassword, adminId, isEditingTitle, confirmModal.isOpen]);
 
@@ -1164,8 +1176,8 @@ export default function AdminPage() {
             const eventType = pickRandomEvent();
 
             const timeout = setTimeout(async () => {
-                // Check if auto-pilot is still enabled
-                if (!autoPilotEnabled) return;
+                // Check if auto-pilot is still enabled (use ref to avoid stale closure)
+                if (!autoPilotEnabledRef.current) return;
 
                 // Minimum 60s between events
                 if (Date.now() - lastAutoEventTime.current < 60000) return;

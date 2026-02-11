@@ -1194,10 +1194,15 @@ export default function HomePage() {
                 );
 
                 if (newActivities.length > 0) {
-                    // Mark as seen
+                    // Mark as seen — cap at 500 to prevent unbounded growth over long sessions
                     setSeenActivityIds(prev => {
                         const newSet = new Set(prev);
                         newActivities.forEach((a: ActivityItem) => newSet.add(a.id));
+                        // Prune oldest entries if set grows too large (8hr stream protection)
+                        if (newSet.size > 500) {
+                            const entries = Array.from(newSet);
+                            return new Set(entries.slice(entries.length - 250));
+                        }
                         return newSet;
                     });
 

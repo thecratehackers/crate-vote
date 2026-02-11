@@ -11,8 +11,9 @@ export function middleware(request: NextRequest) {
 
     // ============ SECURITY HEADERS ============
 
-    // Prevent clickjacking
-    response.headers.set('X-Frame-Options', 'DENY');
+    // Prevent clickjacking — SAMEORIGIN allows Twitch/YouTube embeds within our own pages
+    // while still blocking external sites from framing us
+    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
 
     // Prevent MIME type sniffing
     response.headers.set('X-Content-Type-Options', 'nosniff');
