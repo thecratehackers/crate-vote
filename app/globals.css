@@ -13,10 +13,10 @@
   --bg-tertiary: #1a1a1a;
   --bg-elevated: #242424;
 
-  /* Text */
+  /* Text — boosted contrast for screen-share / jumbotron legibility */
   --text-primary: #ffffff;
-  --text-secondary: #a0a0a0;
-  --text-muted: #666666;
+  --text-secondary: #b0b0b0;
+  --text-muted: #808080;
 
   /* Accent gradient */
   --accent-gradient: linear-gradient(135deg, #d3771d 0%, #e09f24 100%);
@@ -27,11 +27,11 @@
   --error: #ef4444;
   --warning: #f59e0b;
 
-  /* Borders and effects */
-  --border-color: rgba(211, 119, 29, 0.2);
-  --border-highlight: rgba(211, 119, 29, 0.5);
-  --glass-bg: rgba(20, 20, 20, 0.8);
-  --glass-border: rgba(211, 119, 29, 0.15);
+  /* Borders and effects — stronger borders to survive video compression */
+  --border-color: rgba(211, 119, 29, 0.3);
+  --border-highlight: rgba(211, 119, 29, 0.6);
+  --glass-bg: rgba(20, 20, 20, 0.85);
+  --glass-border: rgba(211, 119, 29, 0.25);
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
@@ -59,6 +59,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Sharper glyph rendering — survives Zoom / StreamYard compression */
+  text-rendering: geometricPrecision;
   /* P2-5: Prevent horizontal scroll from any single element overflow */
   overflow-x: hidden;
   overscroll-behavior-x: none;
@@ -108,6 +110,8 @@ body::before {
   gap: 12px;
   text-transform: uppercase;
   letter-spacing: 1px;
+  /* Broadcast edge definition — gradient text can blur under compression */
+  filter: drop-shadow(0 0 1px rgba(211, 119, 29, 0.6));
 }
 
 .header p {
@@ -423,6 +427,8 @@ body::before {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 1px;
+  /* Broadcast: edge halo so title text survives compression */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .song-card .song-artist {
@@ -491,6 +497,8 @@ body::before {
   font-size: 0.9rem;
   min-width: 28px;
   text-align: center;
+  /* Broadcast: make vote numbers pop */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .vote-count.positive {
@@ -1583,6 +1591,8 @@ body::before {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin: 0;
+  /* Broadcast: gradient text needs edge definition for screen share */
+  filter: drop-shadow(0 0 1px rgba(211, 119, 29, 0.6));
 }
 
 .header-compact .tagline {
@@ -6408,14 +6418,15 @@ body::before {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(239, 68, 68, 0.9);
+  background: rgba(239, 68, 68, 0.95);
   color: white;
   padding: 8px 14px;
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 700;
   font-family: 'Rubik', sans-serif;
-  box-shadow: 0 2px 12px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 2px 12px rgba(239, 68, 68, 0.5), 0 0 20px rgba(239, 68, 68, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .live-pulse {
@@ -6445,14 +6456,16 @@ body::before {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(239, 68, 68, 0.9);
+  background: rgba(239, 68, 68, 0.95);
   color: white;
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
   font-family: 'Rubik', sans-serif;
   margin-left: 10px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
 }
 
 .live-badge-inline .live-pulse {
@@ -6494,9 +6507,11 @@ body::before {
 
 .playlist-title-text {
   font-family: 'Rubik', sans-serif;
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: 700;
+  font-size: 0.95rem;
   color: var(--orange-primary);
+  /* Broadcast: playlist title edge definition */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* Activity ticker INLINE - middle area, fixed width */
@@ -6746,7 +6761,7 @@ body::before {
   justify-content: space-between;
   padding: 8px 16px;
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 2px solid rgba(211, 119, 29, 0.3);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -6790,7 +6805,8 @@ body::before {
   height: 36px;
   width: auto;
   transition: transform 0.2s, filter 0.2s;
-  filter: drop-shadow(0 1px 4px rgba(211, 119, 29, 0.3));
+  /* Broadcast: stronger glow so logo survives video compression */
+  filter: drop-shadow(0 1px 4px rgba(211, 119, 29, 0.5)) drop-shadow(0 0 8px rgba(211, 119, 29, 0.2));
 }
 
 .logo-home-link:hover .master-logo {
@@ -7446,6 +7462,10 @@ body::before {
   background: var(--bg-secondary);
   border-radius: 8px;
   transition: all 0.15s ease;
+  /* GPU compositing — smoother rendering & sharper text under screen share */
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .song-row-stream:hover {
@@ -7566,22 +7586,27 @@ body::before {
   text-align: center;
   font-family: 'Rubik', sans-serif;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
   flex-shrink: 0;
+  /* Broadcast: make rank numbers crisp */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .rank-badge.gold {
   color: #fbbf24;
   font-size: 1.1rem;
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .rank-badge.silver {
-  color: #c0c0c0;
+  color: #d0d0d0;
+  text-shadow: 0 0 4px rgba(192, 192, 192, 0.4), 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .rank-badge.bronze {
-  color: #cd7f32;
+  color: #d48a3c;
+  text-shadow: 0 0 4px rgba(205, 127, 50, 0.4), 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* Album art wrapper - clean, no overlay */
@@ -7654,6 +7679,8 @@ body::before {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Broadcast: edge definition for stream titles */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .song-artist {
@@ -7662,6 +7689,8 @@ body::before {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Broadcast: keep artist name readable */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .by-user {
@@ -7886,16 +7915,20 @@ body::before {
   text-align: center;
   font-family: 'Rubik', sans-serif;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--text-secondary);
+  /* Broadcast: make score numbers pop on screen share */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .vote-score.positive {
   color: #22c55e;
+  text-shadow: 0 0 6px rgba(34, 197, 94, 0.3), 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .vote-score.negative {
   color: #ef4444;
+  text-shadow: 0 0 6px rgba(239, 68, 68, 0.3), 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

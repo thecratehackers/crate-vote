@@ -305,7 +305,9 @@ export default function ExportPage() {
                             Open in {serviceName}
                         </a>
                         <Link href="/" className="back-to-home-btn">
-                            <span className="btn-icon">🎵</span>
+                            <svg className="back-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="15 18 9 12 15 6" />
+                            </svg>
                             <span className="btn-text">Back to Voting</span>
                         </Link>
                     </div>
@@ -430,31 +432,37 @@ export default function ExportPage() {
                         display: inline-flex;
                         align-items: center;
                         justify-content: center;
-                        gap: 10px;
+                        gap: 8px;
                         padding: 14px 28px;
-                        background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
-                        border: 2px solid #d3771d;
-                        border-radius: 50px;
-                        color: white;
-                        font-weight: 700;
-                        font-size: 1.05rem;
+                        background: rgba(211, 119, 29, 0.08);
+                        border: 1px solid rgba(211, 119, 29, 0.35);
+                        border-radius: 12px;
+                        color: #d3771d;
+                        font-weight: 600;
+                        font-size: 0.95rem;
                         text-decoration: none;
-                        transition: all 0.3s ease;
+                        transition: all 0.25s ease;
                         width: 100%;
                         max-width: 280px;
-                        box-shadow: 0 4px 12px rgba(211, 119, 29, 0.3);
+                        backdrop-filter: blur(8px);
+                        -webkit-backdrop-filter: blur(8px);
+                        letter-spacing: 0.3px;
                     }
                     .back-to-home-btn:hover {
-                        transform: translateY(-2px) scale(1.02);
-                        border-color: #e0a030;
-                        box-shadow: 0 8px 25px rgba(211, 119, 29, 0.45);
-                        background: linear-gradient(135deg, #e0a030 0%, #d3771d 100%);
+                        background: rgba(211, 119, 29, 0.15);
+                        border-color: rgba(211, 119, 29, 0.6);
+                        color: #e0a030;
+                        box-shadow: 0 0 20px rgba(211, 119, 29, 0.15);
                     }
-                    .back-to-home-btn .btn-icon {
-                        font-size: 1.3rem;
+                    .back-to-home-btn:hover .back-chevron {
+                        transform: translateX(-3px);
+                    }
+                    .back-to-home-btn .back-chevron {
+                        transition: transform 0.25s ease;
+                        flex-shrink: 0;
                     }
                     .back-to-home-btn .btn-text {
-                        letter-spacing: 0.5px;
+                        letter-spacing: 0.3px;
                     }
                 `}</style>
             </div>
@@ -468,7 +476,9 @@ export default function ExportPage() {
         <div className="export-page">
             <header className="export-header">
                 <Link href="/" className="back-btn" title="Back to Voting">
-                    <span className="back-icon">🎵</span>
+                    <svg className="back-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
                     <span>Back</span>
                 </Link>
                 <Link href="/" className="logo-link">
@@ -638,25 +648,32 @@ export default function ExportPage() {
                 .back-btn {
                     display: inline-flex;
                     align-items: center;
-                    gap: 8px;
-                    padding: 10px 18px;
-                    background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
-                    border: none;
-                    border-radius: 50px;
-                    color: #000;
-                    font-size: 0.9rem;
+                    gap: 6px;
+                    padding: 8px 16px 8px 12px;
+                    background: rgba(211, 119, 29, 0.08);
+                    border: 1px solid rgba(211, 119, 29, 0.35);
+                    border-radius: 10px;
+                    color: #d3771d;
+                    font-size: 0.85rem;
                     text-decoration: none;
-                    transition: all 0.3s ease;
-                    font-weight: 700;
-                    box-shadow: 0 4px 15px rgba(211, 119, 29, 0.4);
+                    transition: all 0.25s ease;
+                    font-weight: 600;
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    letter-spacing: 0.3px;
                 }
                 .back-btn:hover {
-                    background: linear-gradient(135deg, #e0a030 0%, #d3771d 100%);
-                    transform: translateY(-2px) scale(1.02);
-                    box-shadow: 0 8px 25px rgba(211, 119, 29, 0.5);
+                    background: rgba(211, 119, 29, 0.15);
+                    border-color: rgba(211, 119, 29, 0.6);
+                    color: #e0a030;
+                    box-shadow: 0 0 16px rgba(211, 119, 29, 0.15);
                 }
-                .back-btn .back-icon {
-                    font-size: 1rem;
+                .back-btn:hover .back-chevron {
+                    transform: translateX(-3px);
+                }
+                .back-btn .back-chevron {
+                    transition: transform 0.25s ease;
+                    flex-shrink: 0;
                 }
                 .logo-link {
                     display: flex;
