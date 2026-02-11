@@ -3260,6 +3260,7 @@ export default function HomePage() {
 
                 {/* 🎵 SAVE TO — Spotify + TIDAL logo buttons */}
                 <div className="save-logos-group">
+                    <span className="save-logos-label">Export Playlist</span>
                     <button
                         className="save-logo-btn spotify"
                         onClick={handleExport}

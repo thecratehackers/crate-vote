@@ -6619,6 +6619,21 @@ body::before {
   flex-shrink: 0;
 }
 
+.save-logos-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .save-logos-label {
+    display: none;
+  }
+}
+
 .save-logo-btn {
   display: flex;
   align-items: center;
