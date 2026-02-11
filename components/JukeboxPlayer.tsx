@@ -222,12 +222,18 @@ export default function JukeboxPlayer({
     const [karmaEarned, setKarmaEarned] = useState(false);
     const [showNextHint, setShowNextHint] = useState(false);
     const [currentTipIndex, setCurrentTipIndex] = useState(0);
+    const [bannerIndex, setBannerIndex] = useState(0);
+    const [nextLiveCountdown, setNextLiveCountdown] = useState('');
+    const [eqBars, setEqBars] = useState<number[]>(Array(16).fill(20));
+    const [glowIntensity, setGlowIntensity] = useState(0);
 
 
-    // 🎬 POP-UP VIDEO FACTS
+    // 🎬 POP-UP VIDEO FACTS (dual-bubble VH1 style)
     const [popUpFacts, setPopUpFacts] = useState<PopUpFact[]>([]);
     const [currentFact, setCurrentFact] = useState<PopUpFact | null>(null);
+    const [secondFact, setSecondFact] = useState<PopUpFact | null>(null);
     const [factPosition, setFactPosition] = useState(0);
+    const [secondFactPosition, setSecondFactPosition] = useState(1);
     const factIndexRef = useRef(0);
 
     // 🔴 LIVE ACTIVITY FEED - Real-time engagement visibility
@@ -275,95 +281,166 @@ export default function JukeboxPlayer({
 
     // Dopamine-inducing gamification tips
     const gameTips = [
-        { icon: '🔊', text: 'Vote for your favorites to push them to #1!' },
-        { icon: '⚡', text: 'Watch 60 secs to earn +1 karma!' },
-        { icon: '🎚️', text: 'Top 3 songs earn extra karma!' },
-        { icon: '🏆', text: 'Your karma unlocks bonus votes!' },
-        { icon: '💿', text: 'Add your own songs to the queue!' },
-        { icon: '📡', text: 'Stay active for surprise karma bonuses!' },
+        { icon: '🔥', text: 'Vote for your favorites to push them to #1!' },
+        { icon: '📦', text: 'Watch 60 secs to earn +1 karma!' },
+        { icon: '🔥', text: 'Top 3 songs earn extra karma!' },
+        { icon: '📦', text: 'Your karma unlocks bonus votes!' },
+        { icon: '🔥', text: 'Add your own songs to the queue!' },
+        { icon: '📦', text: 'Stay active for surprise karma bonuses!' },
     ];
 
-    // 🎬 FETCH FACTS FROM GENIUS API + ERA DATA
+    // 🎯 Dynamic banner headlines — rotates per song, explains the vibe
+    const bannerHeadlines = [
+        { title: 'You\'re Building This Playlist Live', subtitle: 'Every vote shapes what plays next — this is YOUR soundtrack' },
+        { title: 'The Crowd Is the DJ Tonight', subtitle: 'Add songs, vote them up, and watch them climb the ranks' },
+        { title: 'Welcome to the Crate Hackers Jukebox', subtitle: 'A live, crowd-powered playlist — scan the QR to jump in' },
+        { title: 'This Playlist Builds Itself', subtitle: 'The audience picks the music — vote to keep the vibes going' },
+        { title: 'Every Vote Counts Right Now', subtitle: 'Push your favorites to #1 before the next track drops' },
+        { title: 'What Plays Next Is Up to You', subtitle: 'Real-time voting decides the queue — get your picks in' },
+        { title: 'The Playlist That Never Sleeps', subtitle: 'Songs are battling for the top spot — cast your vote now' },
+        { title: 'Live Music Democracy in Action', subtitle: 'Scan the code, pick a name, and start shaping the sound' },
+        { title: 'New Here? Jump In!', subtitle: 'Scan the QR code to add songs and vote — it\'s free and instant' },
+        { title: 'Your Votes Are Moving the Needle', subtitle: 'Watch the leaderboard shift in real time as votes pour in' },
+        { title: 'Don\'t Just Listen — Participate', subtitle: 'This isn\'t a playlist. It\'s a live experiment. Join in.' },
+        { title: 'Can Your Song Reach #1?', subtitle: 'Add it, rally the votes, and watch it climb' },
+    ];
+
+    // 🎬 FETCH FACTS FROM GENIUS + PERPLEXITY (VH1-STYLE ENRICHMENT)
     useEffect(() => {
-        const fetchGeniusFacts = async () => {
-            try {
-                const response = await fetch(
-                    `/api/genius?artist=${encodeURIComponent(currentSong.artist)}&title=${encodeURIComponent(currentSong.name)}`
-                );
+        const fetchAllFacts = async () => {
+            // Fetch from Genius and Perplexity in parallel
+            const [geniusResult, perplexityResult] = await Promise.allSettled([
+                fetch(`/api/genius?artist=${encodeURIComponent(currentSong.artist)}&title=${encodeURIComponent(currentSong.name)}`)
+                    .then(r => r.ok ? r.json() : null),
+                fetch(`/api/song-facts?artist=${encodeURIComponent(currentSong.artist)}&title=${encodeURIComponent(currentSong.name)}`)
+                    .then(r => r.ok ? r.json() : null),
+            ]);
 
-                if (response.ok) {
-                    const data = await response.json();
+            const geniusData = geniusResult.status === 'fulfilled' ? geniusResult.value : null;
+            const perplexityData = perplexityResult.status === 'fulfilled' ? perplexityResult.value : null;
 
-                    // Convert Genius facts to PopUpFact format
-                    const geniusFacts: PopUpFact[] = (data.facts || []).map((text: string, i: number) => ({
-                        category: text.startsWith('📅') ? 'Release' :
-                            text.startsWith('🎛️') ? 'Production' :
-                                text.startsWith('✍️') ? 'Credits' :
-                                    text.startsWith('🎤') ? 'Artist' :
-                                        text.startsWith('💿') ? 'Album' :
-                                            text.startsWith('🔥') || text.startsWith('👀') ? 'Stats' :
-                                                text.startsWith('📝') ? 'Info' : 'Fact',
-                        emoji: text.substring(0, 2),
-                        text: text.substring(2).trim(),
-                        id: `genius-${i}-${Date.now()}`
-                    }));
+            // Parse Perplexity facts (highest quality — real trivia)
+            const perplexityFacts: PopUpFact[] = (perplexityData?.facts || []).map((text: string, i: number) => {
+                // Extract leading emoji (first 1-2 characters if non-ASCII)
+                const firstChar = text.codePointAt(0) || 0;
+                const hasEmoji = firstChar > 255; // Non-ASCII = likely emoji
+                const emojiLen = hasEmoji ? (firstChar > 0xFFFF ? 2 : 1) : 0;
+                // Check for variation selector (️) following the emoji
+                const nextChar = emojiLen > 0 ? text.charCodeAt(emojiLen) : 0;
+                const fullEmojiLen = nextChar === 0xFE0F ? emojiLen + 1 : emojiLen;
+                const emoji = hasEmoji ? text.slice(0, fullEmojiLen) : '💎';
+                const cleanText = hasEmoji ? text.slice(fullEmojiLen).trim() : text;
+                return {
+                    category: 'Trivia',
+                    emoji,
+                    text: cleanText,
+                    id: `pplx-${i}-${Date.now()}`,
+                };
+            });
 
-                    // Also generate era facts as backup
-                    const releaseYear = data.releaseDate
-                        ? parseInt(data.releaseDate.split(', ')[1] || data.releaseDate.split(' ')[2] || '2020')
-                        : new Date().getFullYear();
-                    const eraFacts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
+            console.log(`🎯 Perplexity: ${perplexityFacts.length} facts | Source: ${perplexityData?.source || 'none'}`);
 
-                    // Combine and shuffle: Genius facts first, then era facts
-                    // Include MORE era facts for richer content - 12 instead of 8
-                    const allFacts = [...geniusFacts, ...eraFacts.slice(0, 12)];
+            // Parse Genius facts (structured metadata)
+            const geniusFacts: PopUpFact[] = geniusData
+                ? (geniusData.facts || []).map((text: string, i: number) => ({
+                    category: text.startsWith('📅') ? 'Release' :
+                        text.startsWith('🎛️') ? 'Production' :
+                            text.startsWith('✍️') ? 'Credits' :
+                                text.startsWith('🎤') ? 'Artist' :
+                                    text.startsWith('💿') ? 'Album' :
+                                        text.startsWith('🔥') || text.startsWith('👀') ? 'Stats' :
+                                            text.startsWith('📝') ? 'Info' : 'Fact',
+                    emoji: text.substring(0, 2),
+                    text: text.substring(2).trim(),
+                    id: `genius-${i}-${Date.now()}`,
+                }))
+                : [];
 
-                    // Shuffle
-                    for (let i = allFacts.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [allFacts[i], allFacts[j]] = [allFacts[j], allFacts[i]];
-                    }
+            // Generate era facts as cultural context filler
+            const releaseYear = geniusData?.releaseDate
+                ? parseInt(geniusData.releaseDate.split(', ')[1] || geniusData.releaseDate.split(' ')[2] || '2020')
+                : new Date().getFullYear();
+            const eraFacts = generateFacts(currentSong.name, currentSong.artist, releaseYear)
+                // Filter out generic filler that dilutes VH1 feel
+                .filter(f => ![
+                    'Vote to keep', 'Upvote to push', 'Your votes shape',
+                    'heating up the playlist', 'Perfect track for the moment',
+                    'knows how to deliver a hit', 'has influenced countless',
+                    'top-voted songs make', 'reach the top 3',
+                ].some(filler => f.text.includes(filler)));
 
-                    setPopUpFacts(allFacts);
-                } else {
-                    // Fallback to era facts only
-                    const releaseYear = new Date().getFullYear() - Math.floor(Math.random() * 10);
-                    const facts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
-                    setPopUpFacts(facts);
-                }
-            } catch (error) {
-                console.error('Failed to fetch Genius facts:', error);
-                // Fallback to era facts
-                const releaseYear = new Date().getFullYear() - Math.floor(Math.random() * 10);
-                const facts = generateFacts(currentSong.name, currentSong.artist, releaseYear);
-                setPopUpFacts(facts);
+            // Priority merge: Perplexity (real trivia) → Genius (metadata) → Era (culture)
+            // Take all Perplexity, all Genius, and up to 6 era facts
+            const allFacts = [
+                ...perplexityFacts,
+                ...geniusFacts,
+                ...eraFacts.slice(0, 6),
+            ];
+
+            // Shuffle within priority bands (keep Perplexity facts weighted toward front)
+            const shuffled: PopUpFact[] = [];
+            // Band 1: Perplexity + Genius interleaved
+            const premiumFacts = [...perplexityFacts, ...geniusFacts];
+            for (let i = premiumFacts.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [premiumFacts[i], premiumFacts[j]] = [premiumFacts[j], premiumFacts[i]];
             }
+            // Band 2: Era facts shuffled
+            const eraSlice = eraFacts.slice(0, 6);
+            for (let i = eraSlice.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [eraSlice[i], eraSlice[j]] = [eraSlice[j], eraSlice[i]];
+            }
+            shuffled.push(...premiumFacts, ...eraSlice);
 
+            console.log(`📺 Pop-Up Video: ${shuffled.length} total facts (${perplexityFacts.length} Perplexity + ${geniusFacts.length} Genius + ${eraSlice.length} era)`);
+
+            setPopUpFacts(shuffled.length > 0 ? shuffled : generateFacts(currentSong.name, currentSong.artist, releaseYear));
             factIndexRef.current = 0;
         };
 
-        fetchGeniusFacts();
+        fetchAllFacts();
     }, [currentSong.id, currentSong.name, currentSong.artist]);
 
-    // 🎬 SHOW FACTS PERIODICALLY
+    // 🎬 SHOW FACTS PERIODICALLY — Dual-bubble VH1 style
     useEffect(() => {
         if (popUpFacts.length === 0) return;
 
-        const showFact = () => {
-            const fact = popUpFacts[factIndexRef.current % popUpFacts.length];
+        const showFactPair = () => {
+            // First fact
+            const fact1 = popUpFacts[factIndexRef.current % popUpFacts.length];
             factIndexRef.current++;
-            setFactPosition(Math.floor(Math.random() * POPUP_POSITIONS.length));
-            setCurrentFact(fact);
+            // Pick two non-overlapping positions
+            const pos1 = Math.floor(Math.random() * POPUP_POSITIONS.length);
+            setFactPosition(pos1);
+            setCurrentFact(fact1);
 
-            // Hide after 6 seconds (longer visibility)
-            setTimeout(() => setCurrentFact(null), 6000);
+            // Second fact — staggered by 1.5s for dynamic VH1 feel
+            if (popUpFacts.length > 1) {
+                setTimeout(() => {
+                    const fact2 = popUpFacts[factIndexRef.current % popUpFacts.length];
+                    factIndexRef.current++;
+                    // Pick a different position from the first
+                    let pos2 = Math.floor(Math.random() * POPUP_POSITIONS.length);
+                    while (pos2 === pos1 && POPUP_POSITIONS.length > 1) {
+                        pos2 = Math.floor(Math.random() * POPUP_POSITIONS.length);
+                    }
+                    setSecondFactPosition(pos2);
+                    setSecondFact(fact2);
+                    // Hide second fact after 8 seconds
+                    setTimeout(() => setSecondFact(null), 8000);
+                }, 1500);
+            }
+
+            // Hide first fact after 8 seconds (more time to read)
+            setTimeout(() => setCurrentFact(null), 8000);
         };
 
-        // Show first fact after 2 seconds (faster start)
-        const initialTimeout = setTimeout(showFact, 2000);
+        // Show first pair after 2 seconds
+        const initialTimeout = setTimeout(showFactPair, 2000);
 
-        // Then show facts every 6 seconds (more frequent)
-        const interval = setInterval(showFact, 6000);
+        // Then show a new pair every 10 seconds (gap between pairs)
+        const interval = setInterval(showFactPair, 10000);
 
         return () => {
             clearTimeout(initialTimeout);
@@ -377,6 +454,62 @@ export default function JukeboxPlayer({
             setCurrentTipIndex(prev => (prev + 1) % gameTips.length);
         }, 5000);
         return () => clearInterval(tipInterval);
+    }, []);
+
+    // 🎯 Rotate banner headline on song change
+    useEffect(() => {
+        setBannerIndex(Math.floor(Math.random() * bannerHeadlines.length));
+    }, [currentSong.id]);
+
+    // ⏰ Countdown to next Tuesday 8PM Eastern
+    useEffect(() => {
+        const calcCountdown = () => {
+            // Get current time in Eastern
+            const now = new Date();
+            const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+            // Find next Tuesday
+            const dayOfWeek = eastern.getDay(); // 0=Sun, 2=Tue
+            let daysUntilTuesday = (2 - dayOfWeek + 7) % 7;
+
+            // Target: next Tuesday 8PM Eastern
+            const target = new Date(eastern);
+            target.setDate(target.getDate() + daysUntilTuesday);
+            target.setHours(20, 0, 0, 0);
+
+            // If it's Tuesday but past 8pm (or during the show window 8pm-midnight), find next week
+            if (daysUntilTuesday === 0 && eastern.getHours() >= 20) {
+                // If currently live (Tue 8pm-midnight), show "LIVE NOW"
+                if (eastern.getHours() < 24) {
+                    setNextLiveCountdown('LIVE NOW');
+                    return;
+                }
+                target.setDate(target.getDate() + 7);
+            }
+
+            const diff = target.getTime() - eastern.getTime();
+            if (diff <= 0) {
+                setNextLiveCountdown('LIVE NOW');
+                return;
+            }
+
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+            if (days > 0) {
+                setNextLiveCountdown(`${days}d ${hours}h ${minutes}m`);
+            } else if (hours > 0) {
+                setNextLiveCountdown(`${hours}h ${minutes}m ${seconds}s`);
+            } else {
+                setNextLiveCountdown(`${minutes}m ${seconds}s`);
+            }
+        };
+
+        calcCountdown();
+        const countdownInterval = setInterval(calcCountdown, 1000);
+        return () => clearInterval(countdownInterval);
     }, []);
 
     // 🔴 SCORE CHANGE DETECTION - Animate when votes come in
@@ -465,37 +598,32 @@ export default function JukeboxPlayer({
     const [idleMessageIndex, setIdleMessageIndex] = useState(0);
     const IDLE_TIMEOUT = streamMode ? BROADCAST.idleTimeoutMs : 25000;
 
-    // Rotating idle mode messages for variety
+    // Rotating idle mode messages — clean, no emoji overload
     const idleMessages = [
         {
-            headline: 'BE THE DJ!',
-            subtext: 'Add songs • Cast votes • Control the vibe',
+            headline: 'BE THE DJ',
+            subtext: 'Add songs, cast votes, control the vibe',
             cta: 'JOIN IN',
-            emojis: ['🎛️', '💿', '🔊', '📦', '🎚️', '🎧']
         },
         {
-            headline: 'SHAPE THE SOUND!',
+            headline: 'SHAPE THE SOUND',
             subtext: 'Your picks determine what plays next',
             cta: 'SCAN NOW',
-            emojis: ['📱', '💿', '🎚️', '🔊', '📡', '🎧']
         },
         {
-            headline: 'RUN THE BOOTH!',
-            subtext: 'Vote up the bangers • Skip the duds',
+            headline: 'RUN THE BOOTH',
+            subtext: 'Vote up the bangers, skip the duds',
             cta: 'GET IN',
-            emojis: ['🎛️', '🎚️', '📦', '🔊', '💿', '⚡']
         },
         {
-            headline: "DON'T JUST WATCH!",
-            subtext: 'Scan the code • Make your voice heard',
-            cta: 'VOTE!',
-            emojis: ['🖥️', '📱', '🗳️', '📡', '💿', '🔊']
+            headline: "DON'T JUST WATCH",
+            subtext: 'Scan the code and make your voice heard',
+            cta: 'VOTE',
         },
         {
-            headline: 'EARN KARMA!',
-            subtext: 'Vote more • Gain power • Unlock perks',
+            headline: 'EARN KARMA',
+            subtext: 'Vote more, gain power, unlock perks',
             cta: 'START NOW',
-            emojis: ['⚡', '💎', '🏆', '📡', '🎧', '🔊']
         },
     ];
 
@@ -506,7 +634,7 @@ export default function JukeboxPlayer({
             id: `${Date.now()}-${Math.random()}`,
             timestamp: Date.now(),
         };
-        setActivityFeed(prev => [newItem, ...prev].slice(0, 8));
+        setActivityFeed(prev => [newItem, ...prev].slice(0, 50));
         setLastActivityTime(Date.now()); // Reset idle timer
         setIdleMode(false); // Exit idle mode on activity
 
@@ -542,7 +670,7 @@ export default function JukeboxPlayer({
         }
 
         if (newItems.length > 0) {
-            setActivityFeed(prev => [...newItems, ...prev].slice(0, 12));
+            setActivityFeed(prev => [...newItems, ...prev].slice(0, 50));
             setLastActivityTime(Date.now());
             setIdleMode(false);
             // Boost hype for server-side activity too
@@ -586,15 +714,44 @@ export default function JukeboxPlayer({
         }
     }, [idleMode]);
 
-    // Auto-clear old activity items
+    // Running log — keep last 50 items, trim only at capacity (no time-expiry)
+    // This ensures live activity always shows a running log of what's happened
+
+    // Tick to keep relative timestamps fresh (re-render every 10s)
+    const [, setLogTick] = useState(0);
     useEffect(() => {
-        const displayMs = streamMode ? BROADCAST.activityDisplayMs : 8000;
-        const cleanupInterval = setInterval(() => {
-            const now = Date.now();
-            setActivityFeed(prev => prev.filter(item => now - item.timestamp < displayMs));
-        }, 2000);
-        return () => clearInterval(cleanupInterval);
-    }, [streamMode]);
+        const tickInterval = setInterval(() => setLogTick(t => t + 1), 10000);
+        return () => clearInterval(tickInterval);
+    }, []);
+
+    // 🎶 Simulated audio equalizer animation
+    useEffect(() => {
+        if (!isPlaying) return;
+        const eqInterval = setInterval(() => {
+            setEqBars(prev => prev.map((_, i) => {
+                // Create musically plausible frequency distribution
+                const bassBias = i < 4 ? 1.4 : i < 8 ? 1.0 : 0.7;
+                const target = (15 + Math.random() * 70) * bassBias;
+                return Math.min(100, target);
+            }));
+        }, 120);
+        return () => clearInterval(eqInterval);
+    }, [isPlaying]);
+
+    // 💫 Glow intensity decays over time, boosted by activity
+    useEffect(() => {
+        const glowDecay = setInterval(() => {
+            setGlowIntensity(prev => Math.max(0, prev - 0.02));
+        }, 100);
+        return () => clearInterval(glowDecay);
+    }, []);
+
+    // Boost glow when score changes
+    useEffect(() => {
+        if (scoreAnimation) {
+            setGlowIntensity(1);
+        }
+    }, [scoreAnimation]);
 
     // 📺 BROADCAST: Detect new songs added to playlist → Song Request Alert
     useEffect(() => {
@@ -958,8 +1115,38 @@ export default function JukeboxPlayer({
     const uniqueContributors = new Set(playlist.map(s => s.addedByName).filter(Boolean)).size;
     const locations = Array.from(new Set(playlist.map(s => s.addedByLocation).filter((x): x is string => Boolean(x))));
 
+    // Particle count scales with hype
+    const particleCount = Math.max(8, Math.floor(hypeLevel / 3));
+
     return (
         <div className={`jukebox-overlay ${streamMode ? 'broadcast-mode' : ''}`} ref={containerRef}>
+
+            {/* 🖼️ ALBUM ART BLURRED BACKDROP */}
+            <div className="album-backdrop" key={`backdrop-${currentSong.id}`}>
+                <img
+                    src={currentSong.albumArt}
+                    alt=""
+                    className="backdrop-img"
+                />
+            </div>
+
+            {/* ✨ AMBIENT PARTICLE SYSTEM */}
+            <div className="ambient-particles">
+                {Array.from({ length: particleCount }).map((_, i) => (
+                    <span
+                        key={i}
+                        className="particle"
+                        style={{
+                            left: `${(i * 37 + 13) % 100}%`,
+                            animationDuration: `${8 + (i % 5) * 3}s`,
+                            animationDelay: `${(i * 1.7) % 8}s`,
+                            opacity: 0.15 + (i % 3) * 0.1,
+                            width: `${2 + (i % 3)}px`,
+                            height: `${2 + (i % 3)}px`,
+                        }}
+                    />
+                ))}
+            </div>
 
 
             {/* 📺 BROADCAST: Song Request Alerts */}
@@ -1022,16 +1209,13 @@ export default function JukeboxPlayer({
                 </div>
             )}
 
-            {/* 🎪 IDLE MODE */}
+            {/* 🎪 IDLE MODE — clean, no floating emojis */}
             {idleMode && (
                 <div className="idle-mode-overlay">
                     <div className="idle-content">
-                        <div className="idle-emojis">
-                            {idleMessages[idleMessageIndex].emojis.map((emoji, i) => (
-                                <span key={i} className="idle-emoji" style={{ animationDelay: `${i * 0.15}s` }}>
-                                    {emoji}
-                                </span>
-                            ))}
+                        <div className="idle-brand">
+                            <span className="idle-brand-icon">🔥</span>
+                            <span className="idle-brand-icon">📦</span>
                         </div>
                         <h1 className="idle-headline">{idleMessages[idleMessageIndex].headline}</h1>
                         <p className="idle-subtext">{idleMessages[idleMessageIndex].subtext}</p>
@@ -1043,12 +1227,10 @@ export default function JukeboxPlayer({
                                 src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://${APP_CONFIG.domain}&bgcolor=000000&color=d3771d`}
                                 alt="Scan to vote"
                             />
-                            <span>Scan to Join!</span>
+                            <span>Scan to Join</span>
                         </div>
-                        <div className="idle-arrows">
-                            <span className="arrow-left">👉</span>
-                            <span className="arrow-text">{idleMessages[idleMessageIndex].cta}</span>
-                            <span className="arrow-right">👈</span>
+                        <div className="idle-cta-btn">
+                            <span>{idleMessages[idleMessageIndex].cta}</span>
                         </div>
                     </div>
                 </div>
@@ -1132,20 +1314,37 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* Live Activity */}
+                    {/* Live Activity — Running Log */}
                     <div className="sidebar-section">
-                        <h3 className="sidebar-title">⚡ Live Activity</h3>
-                        <div className="sidebar-activity">
+                        <h3 className="sidebar-title">🔥 Live Activity</h3>
+                        <div className="sidebar-activity running-log">
                             {activityFeed.length === 0 ? (
-                                <p className="activity-empty">No activity yet</p>
+                                <p className="activity-empty">Waiting for activity...</p>
                             ) : (
-                                activityFeed.map((item) => (
-                                    <div key={item.id} className="sidebar-toast">
-                                        <span>{item.icon}</span>
-                                        <span>{item.text}</span>
-                                    </div>
-                                ))
+                                activityFeed.slice(0, 15).map((item) => {
+                                    const ago = Math.floor((Date.now() - item.timestamp) / 1000);
+                                    const timeLabel = ago < 60 ? `${ago}s` : `${Math.floor(ago / 60)}m`;
+                                    return (
+                                        <div key={item.id} className="sidebar-toast log-entry">
+                                            <span className="log-icon">{item.icon}</span>
+                                            <span className="log-text">{item.text}</span>
+                                            <span className="log-time">{timeLabel}</span>
+                                        </div>
+                                    );
+                                })
                             )}
+                        </div>
+                    </div>
+
+                    {/* 📅 Next Live Show Countdown */}
+                    <div className="sidebar-section next-live-section">
+                        <h3 className="sidebar-title">📡 Next Live Show</h3>
+                        <div className="next-live-info">
+                            <span className="next-live-day">Tuesdays @ 8PM ET</span>
+                            <div className={`next-live-countdown ${nextLiveCountdown === 'LIVE NOW' ? 'live-now' : ''}`}>
+                                <span className="countdown-value">{nextLiveCountdown || '...'}</span>
+                                {nextLiveCountdown === 'LIVE NOW' && <span className="live-pulse-dot" />}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1155,10 +1354,10 @@ export default function JukeboxPlayer({
                     <div className="crowdsource-banner">
                         <div className="crowdsource-label">
                             <span className="live-dot" />
-                            <span>🗳️ VOTING OPEN</span>
+                            <span>VOTING OPEN</span>
                         </div>
-                        <h2 className="crowdsource-title">Building the Perfect Playlist</h2>
-                        <p className="crowdsource-subtitle">Votes decide what plays next</p>
+                        <h2 className="crowdsource-title" key={`banner-${currentSong.id}`}>{bannerHeadlines[bannerIndex].title}</h2>
+                        <p className="crowdsource-subtitle">{bannerHeadlines[bannerIndex].subtitle}</p>
                     </div>
 
                     <div className="jukebox-header">
@@ -1186,10 +1385,22 @@ export default function JukeboxPlayer({
                         <span className="tip-text" key={currentTipIndex}>{gameTips[currentTipIndex].text}</span>
                     </div>
 
-                    <div className="jukebox-video-wrapper">
+                    <div
+                        className="jukebox-video-wrapper"
+                        style={{ '--glow-intensity': glowIntensity } as React.CSSProperties}
+                    >
                         <div id="jukebox-player" className="jukebox-video" />
 
-
+                        {/* 🎵 SPINNING VINYL RECORD */}
+                        <div className="vinyl-widget">
+                            <div className={`vinyl-record ${isPlaying ? 'spinning' : ''}`}>
+                                <div className="vinyl-grooves" />
+                                <div className="vinyl-label">
+                                    <img src={currentSong.albumArt} alt="" className="vinyl-art" />
+                                </div>
+                                <div className="vinyl-hole" />
+                            </div>
+                        </div>
 
                         <div className="jukebox-qr-overlay">
                             <img
@@ -1210,6 +1421,21 @@ export default function JukeboxPlayer({
                                 <div className="popup-content">
                                     <span className="popup-emoji">{currentFact.emoji}</span>
                                     <span className="popup-text">{currentFact.text}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 🎬 SECOND POP-UP BUBBLE (VH1 dual-fact style) */}
+                        {secondFact && (
+                            <div
+                                className="popup-video-bubble popup-video-bubble-second"
+                                style={{ ...POPUP_POSITIONS[secondFactPosition], position: 'absolute' }}
+                                key={secondFact.id}
+                            >
+                                <span className="popup-category">{secondFact.category}</span>
+                                <div className="popup-content">
+                                    <span className="popup-emoji">{secondFact.emoji}</span>
+                                    <span className="popup-text">{secondFact.text}</span>
                                 </div>
                             </div>
                         )}
@@ -1265,9 +1491,9 @@ export default function JukeboxPlayer({
                         {showCTA && (
                             <div className="jukebox-cta-flash">
                                 <div className="cta-content">
-                                    <span className="cta-arrow">👉</span>
+                                    <span className="cta-arrow">🔥</span>
                                     <span className="cta-text">Vote now at <strong>{APP_CONFIG.domain}</strong></span>
-                                    <span className="cta-arrow">👈</span>
+                                    <span className="cta-arrow">📦</span>
                                 </div>
                             </div>
                         )}
@@ -1275,9 +1501,24 @@ export default function JukeboxPlayer({
 
                     </div>
 
+                    {/* 🎚️ AUDIO EQUALIZER */}
+                    {isPlaying && (
+                        <div className="audio-equalizer">
+                            {eqBars.map((h, i) => (
+                                <div
+                                    key={i}
+                                    className="eq-bar"
+                                    style={{ height: `${h}%` }}
+                                />
+                            ))}
+                        </div>
+                    )}
+
                     <div className="jukebox-progress">
-                        <div className="progress-bar">
-                            <div className="progress-fill" style={{ width: `${progress}%` }} />
+                        <div className="progress-bar glow-progress">
+                            <div className="progress-fill" style={{ width: `${progress}%` }}>
+                                <span className="progress-spark" />
+                            </div>
                         </div>
                         <div className="progress-time">
                             <span>{formatTime((progress / 100) * duration)}</span>
