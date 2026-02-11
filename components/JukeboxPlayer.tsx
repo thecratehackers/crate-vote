@@ -960,12 +960,7 @@ export default function JukeboxPlayer({
 
     return (
         <div className={`jukebox-overlay ${streamMode ? 'broadcast-mode' : ''}`} ref={containerRef}>
-            {/* 🔙 FIXED CLOSE BUTTON - Hidden in stream mode */}
-            {!streamMode && (
-                <button className="jukebox-close-fixed" onClick={onClose} aria-label="Close jukebox">
-                    ← Back
-                </button>
-            )}
+
 
             {/* 📺 BROADCAST: Song Request Alerts */}
             {streamMode && songAlerts.length > 0 && (
@@ -1292,6 +1287,11 @@ export default function JukeboxPlayer({
 
                     {/* 👻 Ghost controls — discreet corner widget for all modes */}
                     <div className="stream-controls-widget">
+                        {!streamMode && (
+                            <button className="stream-ctrl-btn stream-ctrl-back" onClick={onClose} title="Back to playlist (ESC)">
+                                ←
+                            </button>
+                        )}
                         <button className="stream-ctrl-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
                             {isMuted ? '🔇' : '🔊'}
                         </button>
@@ -1335,9 +1335,7 @@ export default function JukeboxPlayer({
                         </div>
                     )}
 
-                    {!streamMode && (
-                        <button className="jukebox-corner-close" onClick={onClose} title="Back to playlist (ESC)">✕</button>
-                    )}
+
                 </div>
 
                 {/* RIGHT SIDEBAR */}

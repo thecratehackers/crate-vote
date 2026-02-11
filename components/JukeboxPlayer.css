@@ -555,6 +555,15 @@
     background: rgba(211, 119, 29, 0.5);
 }
 
+.stream-ctrl-btn.stream-ctrl-back {
+    font-size: 0.9rem;
+    font-weight: 700;
+    width: 28px;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50% 0 0 50%;
+    padding-right: 2px;
+}
+
 .stream-ctrl-karma {
     font-size: 0.65rem;
     color: rgba(255, 255, 255, 0.5);
