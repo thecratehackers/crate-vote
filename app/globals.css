@@ -6585,6 +6585,71 @@ body::before {
   height: 12px;
 }
 
+/* "This Week's Crate:" label */
+.crate-week-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  opacity: 0.75;
+  margin-right: 2px;
+}
+
+/* ── SAVE LOGOS — Spotify + TIDAL side-by-side ── */
+.save-logos-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.save-logo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.save-logo-btn.spotify {
+  background: rgba(29, 185, 84, 0.15);
+  color: #1DB954;
+}
+
+.save-logo-btn.spotify:hover:not(:disabled) {
+  background: rgba(29, 185, 84, 0.3);
+  transform: scale(1.1);
+  box-shadow: 0 2px 10px rgba(29, 185, 84, 0.35);
+}
+
+.save-logo-btn.tidal {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.save-logo-btn.tidal:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  transform: scale(1.1);
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.15);
+}
+
+.save-logo-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.save-logo-icon {
+  width: 16px;
+  height: 16px;
+}
+
 /* Old activity ticker - DEPRECATED (kept for fallback) */
 .activity-ticker {
   display: flex;
@@ -7430,6 +7495,36 @@ body::before {
   animation: flash-gold 0.5s ease;
 }
 
+/* NEW ENTRY - Persistent glow for songs added in the last 60s */
+.song-row-stream.new-entry {
+  border-left: 3px solid #fbbf24;
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.12) 0%, transparent 50%);
+  box-shadow: inset 0 0 12px rgba(251, 191, 36, 0.08);
+}
+
+.new-entry-badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  margin-left: 2px;
+  animation: pulse-badge 2s ease-in-out infinite;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+@keyframes pulse-badge {
+
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
 @keyframes flash-green {
 
   0%,
@@ -7864,9 +7959,9 @@ body::before {
     height: 5px;
   }
 
-  /* Hide viewer count on mobile to save space */
+  /* Show viewer count on mobile — social proof drives engagement */
   .live-badge-inline .viewer-count {
-    display: none;
+    font-size: 0.55rem;
   }
 
   .header-right {
@@ -7916,27 +8011,29 @@ body::before {
     display: none;
   }
 
-  /* Adjust playlist header bar for mobile - keep title, enlarge export button */
+  /* Adjust playlist header bar for mobile - keep title + save logos compact */
   .playlist-header-bar {
     justify-content: space-between;
     padding: 10px 12px;
   }
 
   .playlist-title-text {
-    font-size: 0.85rem;
-  }
-
-  /* Bigger, more prominent export button on mobile */
-  .export-inline-btn {
-    padding: 8px 16px;
     font-size: 0.8rem;
-    border-radius: 18px;
-    gap: 6px;
   }
 
-  .export-inline-btn .spotify-icon-sm {
-    width: 16px;
-    height: 16px;
+  .crate-week-label {
+    font-size: 0.6rem;
+  }
+
+  /* Save logo buttons — slightly smaller on mobile */
+  .save-logo-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .save-logo-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .notification-center {
@@ -10888,6 +10985,13 @@ input:disabled {
   font-size: 1rem;
 }
 
+.winner-shipping-note {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.8rem;
+  margin: 4px 0 0;
+  font-style: italic;
+}
+
 .claim-prize-btn {
   display: block;
   width: 100%;
@@ -10912,6 +11016,14 @@ input:disabled {
   color: var(--text-muted);
   font-size: 0.85rem;
   margin-top: 12px;
+}
+
+.winner-note strong {
+  color: #ffd700;
+  font-family: monospace;
+  background: rgba(255, 215, 0, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
 }
 
 .djstyle-logo {
@@ -11316,6 +11428,76 @@ input:disabled {
 .king-score strong {
   color: #a855f7;
   font-size: 1.1rem;
+}
+
+/* Calendar link on king viewer overlay */
+.king-calendar-link {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 20px;
+  transition: all 0.2s;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.king-calendar-link:hover {
+  background: rgba(168, 85, 247, 0.3);
+  border-color: rgba(168, 85, 247, 0.6);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* Calendar link on winner splash */
+.winner-calendar-link {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 215, 0, 0.85);
+  text-decoration: none;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 20px;
+  transition: all 0.2s;
+}
+
+.winner-calendar-link:hover {
+  background: rgba(255, 215, 0, 0.18);
+  border-color: rgba(255, 215, 0, 0.4);
+  color: #ffd700;
+  transform: translateY(-1px);
+}
+
+/* Calendar link on welcome-back card */
+.welcome-back-calendar {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--orange-primary);
+  text-decoration: none;
+  background: rgba(211, 119, 29, 0.08);
+  border: 1px solid rgba(211, 119, 29, 0.2);
+  border-radius: 16px;
+  transition: all 0.2s;
+  opacity: 0.85;
+}
+
+.welcome-back-calendar:hover {
+  background: rgba(211, 119, 29, 0.18);
+  border-color: rgba(211, 119, 29, 0.4);
+  opacity: 1;
+  transform: translateY(-1px);
 }
 
 /* Admin tool button styling for prize drop */
@@ -12880,10 +13062,654 @@ input:disabled {
     height: 38px;
     font-size: 1rem;
   }
+
+  /* Hide "This Week's Crate:" label on ultra-small — title alone suffices */
+  .crate-week-label {
+    display: none;
+  }
+
+  /* Compact save logos */
+  .save-logo-btn {
+    width: 26px;
+    height: 26px;
+  }
+
+  .save-logo-icon {
+    width: 13px;
+    height: 13px;
+  }
 }
 
 /* Fix 9: Play button loading text fits in compact space */
 .play-preview-btn.loading {
   font-size: 0.6rem;
   white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   📺 SHOW CLOCK - ESPN-Style Segment Ticker
+   Client ticker bar, transition splash, warning toasts, admin builder
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Client Ticker Bar ── */
+.show-clock-ticker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+  border-bottom: 2px solid rgba(211, 119, 29, 0.3);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  animation: tickerSlideIn 0.4s ease;
+}
+
+@keyframes tickerSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.show-clock-ticker.ticker-amber {
+  border-bottom-color: #f59e0b;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.95), rgba(120, 80, 10, 0.3));
+}
+
+.show-clock-ticker.ticker-red {
+  border-bottom-color: #ef4444;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.95), rgba(120, 20, 20, 0.3));
+  animation: tickerRedPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tickerRedPulse {
+
+  0%,
+  100% {
+    border-bottom-color: #ef4444;
+  }
+
+  50% {
+    border-bottom-color: #fca5a5;
+  }
+}
+
+.ticker-segments {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ticker-segments::-webkit-scrollbar {
+  display: none;
+}
+
+.ticker-seg {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.ticker-seg.current {
+  background: rgba(211, 119, 29, 0.25);
+  border: 1px solid rgba(211, 119, 29, 0.5);
+  color: var(--orange-primary);
+  font-weight: 700;
+}
+
+.ticker-seg.done {
+  opacity: 0.4;
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.ticker-seg.upcoming {
+  opacity: 0.6;
+  color: var(--text-secondary);
+}
+
+.ticker-seg-icon {
+  font-size: 0.85rem;
+}
+
+.ticker-seg-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ticker-countdown {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.ticker-time {
+  font-family: 'Rubik', monospace;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.ticker-amber .ticker-time {
+  color: #f59e0b;
+}
+
+.ticker-red .ticker-time {
+  color: #ef4444;
+  animation: urgentBlink 0.6s ease-in-out infinite;
+}
+
+@keyframes urgentBlink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ── Transition Splash (full-screen "UP NEXT" overlay) ── */
+.show-clock-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  animation: splashIn 0.4s ease, splashOut 0.5s ease 3s forwards;
+  pointer-events: none;
+}
+
+@keyframes splashIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes splashOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+
+.splash-content {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.splash-label {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--orange-primary);
+}
+
+.splash-segment {
+  font-family: 'Rubik', sans-serif;
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: white;
+  text-shadow: 0 0 30px rgba(211, 119, 29, 0.5);
+}
+
+/* ── Countdown Warning Toasts ── */
+.show-clock-warning {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9998;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  animation: warningSlideIn 0.4s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@keyframes warningSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.show-clock-warning.amber {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.1));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.show-clock-warning.red {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  animation: warningSlideIn 0.4s ease, urgentBlink 0.8s ease-in-out infinite;
+}
+
+/* ── Admin: Show Clock Section ── */
+.show-clock-section {
+  grid-column: 1 / -1;
+  margin: 12px 0 4px;
+}
+
+.show-clock-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+
+.show-clock-toggle.active {
+  background: linear-gradient(135deg, rgba(211, 119, 29, 0.15), rgba(211, 119, 29, 0.08)) !important;
+  border-color: rgba(211, 119, 29, 0.4) !important;
+}
+
+.expand-arrow {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.show-clock-panel {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+
+  to {
+    opacity: 1;
+    max-height: 600px;
+  }
+}
+
+/* ── Admin: Live Controls ── */
+.show-clock-live-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.show-clock-live-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.live-badge {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #ef4444;
+  animation: urgentBlink 1s ease-in-out infinite;
+}
+
+.current-segment {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.segment-progress {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.show-clock-live-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.show-clock-live-actions .tool-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+.tool-btn.advance {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+.tool-btn.advance:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.tool-btn.extend {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.tool-btn.extend:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.tool-btn.start-show {
+  background: var(--accent-gradient);
+  border: none;
+  color: white;
+}
+
+.tool-btn.start-show:hover:not(:disabled) {
+  box-shadow: var(--shadow-glow);
+}
+
+/* ── Admin: Segment Timeline (mini progress bar) ── */
+.show-clock-timeline {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.timeline-segment {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  transition: all 0.3s ease;
+}
+
+.timeline-segment.active {
+  background: rgba(211, 119, 29, 0.25);
+  border: 1px solid rgba(211, 119, 29, 0.5);
+  color: var(--orange-primary);
+  font-weight: 700;
+}
+
+.timeline-segment.completed {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  opacity: 0.7;
+}
+
+.timeline-segment.upcoming {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.seg-icon {
+  font-size: 0.8rem;
+}
+
+.seg-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Admin: Segment Builder ── */
+.segment-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.segment-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.segment-builder-header h4 {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.segment-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.segment-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.segment-row:hover {
+  border-color: rgba(211, 119, 29, 0.3);
+}
+
+.segment-number {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 16px;
+  text-align: center;
+}
+
+.segment-icon-select {
+  width: 36px;
+  padding: 4px 2px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+.segment-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.82rem;
+  transition: border-color 0.2s;
+}
+
+.segment-name-input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+}
+
+.segment-name-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.segment-duration-select {
+  width: 72px;
+  padding: 6px 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.segment-remove-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.segment-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.add-segment-btn {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-segment-btn:hover {
+  border-color: var(--orange-primary);
+  color: var(--orange-primary);
+  background: rgba(211, 119, 29, 0.05);
+}
+
+.segment-builder-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.total-duration {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.segment-builder-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.segment-builder-actions .tool-btn {
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
+.tool-btn.save {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.tool-btn.save:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+/* ── Responsive: Show Clock ── */
+@media (max-width: 640px) {
+  .show-clock-ticker {
+    padding: 4px 8px;
+  }
+
+  .ticker-seg-name {
+    max-width: 60px;
+    font-size: 0.65rem;
+  }
+
+  .ticker-time {
+    font-size: 0.85rem;
+  }
+
+  .splash-segment {
+    font-size: 1.6rem;
+  }
+
+  .show-clock-warning {
+    font-size: 0.75rem;
+    padding: 6px 14px;
+    top: 50px;
+  }
+
+  .segment-row {
+    flex-wrap: wrap;
+  }
+
+  .segment-name-input {
+    order: 5;
+    flex-basis: calc(100% - 50px);
+    margin-top: 4px;
+  }
 }

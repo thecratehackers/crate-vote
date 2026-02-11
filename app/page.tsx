@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS } from '@/lib/config';
+import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS, BROADCAST } from '@/lib/config';
 import { PlaylistSkeleton } from '@/components/Skeleton';
 import VersusBattle from '@/components/VersusBattle';
 import VideoPreview from '@/components/VideoPreview';
@@ -10,6 +10,7 @@ import JukeboxPlayer from '@/components/JukeboxPlayer';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { SoundEffects } from '@/lib/sounds';
+import { persistGet, persistSet, persistHydrate, persistSyncToCookie } from '@/lib/persist';
 
 // Network resilience - fetch with timeout
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response> => {
@@ -405,22 +406,30 @@ export default function HomePage() {
     // Sort songs by score - BUT respect interaction lock to prevent jumping
     const sortedSongs = useMemo(() => {
         const sorted = [...songs].sort((a, b) => {
-            // Priority 1: Unvoted songs (score === 0) rise to the top
-            // This ensures fresh additions get visibility before being ranked
+            // Sort order: positive-score > unvoted (0) > negative-score
+            // New songs enter BELOW voted songs — no leapfrogging to #1
+            const aIsPositive = a.score > 0;
+            const bIsPositive = b.score > 0;
             const aIsUnvoted = a.score === 0;
             const bIsUnvoted = b.score === 0;
 
-            if (aIsUnvoted && !bIsUnvoted) return -1; // a (unvoted) goes first
-            if (!aIsUnvoted && bIsUnvoted) return 1;  // b (unvoted) goes first
+            if (aIsPositive && !bIsPositive) return -1;
+            if (!aIsPositive && bIsPositive) return 1;
 
-            // Within unvoted: newest first (most recently added at top)
-            if (aIsUnvoted && bIsUnvoted) {
-                return b.addedAt - a.addedAt; // Newest first
+            if (aIsPositive && bIsPositive) {
+                if (b.score !== a.score) return b.score - a.score;
+                return a.addedAt - b.addedAt;
             }
 
-            // Within voted songs: sort by score descending, then oldest first for ties
+            if (aIsUnvoted && !bIsUnvoted) return -1;
+            if (!aIsUnvoted && bIsUnvoted) return 1;
+
+            if (aIsUnvoted && bIsUnvoted) {
+                return b.addedAt - a.addedAt;
+            }
+
             if (b.score !== a.score) return b.score - a.score;
-            return a.addedAt - b.addedAt; // Older first for ties
+            return a.addedAt - b.addedAt;
         });
 
         // If user is actively interacting, keep the previous order to prevent jumping
@@ -532,34 +541,43 @@ export default function HomePage() {
     // 📢 AUTO SHOUT-OUTS - Rotating encouragement messages
     const [currentShoutout, setCurrentShoutout] = useState<string | null>(null);
 
-    // 📡 BROADCAST COUNTDOWN - Next Tuesday 7 PM CT
+    // 📡 BROADCAST COUNTDOWN - Next Tuesday 8 PM ET
     const [broadcastCountdown, setBroadcastCountdown] = useState<string>('');
     const [isBroadcastLive, setIsBroadcastLive] = useState(false);
 
-    // 📅 ADD TO CALENDAR helper - generates Google Calendar URL for Tuesday 7 PM CT
+    // 📅 ADD TO CALENDAR helper - generates Google Calendar URL for Tuesday 8 PM ET
     const generateCalendarUrl = useCallback(() => {
-        // Find next Tuesday 7 PM CT
+        // Find next Tuesday 8 PM ET
         const now = new Date();
-        const ctNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-        const target = new Date(ctNow);
-        target.setHours(19, 0, 0, 0);
-        let daysUntilTuesday = (2 - ctNow.getDay() + 7) % 7;
-        if (daysUntilTuesday === 0 && ctNow.getHours() >= 22) daysUntilTuesday = 7;
-        target.setDate(target.getDate() + daysUntilTuesday);
+        const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        let daysUntilTuesday = (2 - etNow.getDay() + 7) % 7;
+        if (daysUntilTuesday === 0 && etNow.getHours() >= 22) daysUntilTuesday = 7;
 
-        // Convert back to UTC for Google Calendar
-        const startUTC = new Date(target.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-        // Adjust to actual UTC by computing offset
-        const ctOffset = target.getTime() - startUTC.getTime();
-        const utcStart = new Date(target.getTime() - ctOffset);
-        const utcEnd = new Date(utcStart.getTime() + 3 * 60 * 60 * 1000); // 3 hours
+        // Build the target date in ET values
+        const targetET = new Date(etNow);
+        targetET.setDate(targetET.getDate() + daysUntilTuesday);
+        targetET.setHours(20, 0, 0, 0); // 8 PM ET
 
-        const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+        const endET = new Date(targetET);
+        endET.setMinutes(endET.getMinutes() + 90); // 9:30 PM ET
+
+        // Format as local time string (YYYYMMDDTHHMMSS) — NO 'Z' suffix.
+        // Google Calendar interprets these as local times in the ctz timezone.
+        const fmtLocal = (d: Date) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mi = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${yyyy}${mm}${dd}T${hh}${mi}${ss}`;
+        };
+
         const title = encodeURIComponent('Crate Hackers Live — Vote Night 🎧');
-        const details = encodeURIComponent('Add songs, vote, and build the playlist together!\n\nJoin at: https://crateoftheweek.com');
+        const details = encodeURIComponent('Add songs, vote, and build the playlist together!\n\nJoin at: https://cratehackathon.com');
         const recur = encodeURIComponent('RRULE:FREQ=WEEKLY;BYDAY=TU');
 
-        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(utcStart)}/${fmt(utcEnd)}&details=${details}&recur=${recur}&ctz=America/Chicago`;
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmtLocal(targetET)}/${fmtLocal(endET)}&details=${details}&recur=${recur}&ctz=America/New_York`;
     }, []);
 
     // 📬 WAITING SCREEN RSVP - Mailing list signup for idle visitors
@@ -578,29 +596,30 @@ export default function HomePage() {
     useEffect(() => {
         const calcCountdown = () => {
             const now = new Date();
-            // Convert to CT (America/Chicago)
-            const ctNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-            const ctDay = ctNow.getDay(); // 0=Sun, 2=Tue
-            const ctHour = ctNow.getHours();
+            // Convert to ET (America/New_York)
+            const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const etDay = etNow.getDay(); // 0=Sun, 2=Tue
+            const etHour = etNow.getHours();
+            const etMinute = etNow.getMinutes();
 
-            // Broadcast window: Tuesday 7 PM - 10 PM CT
-            if (ctDay === 2 && ctHour >= 19 && ctHour < 22) {
+            // Broadcast window: Tuesday 8 PM - 9:30 PM ET
+            if (etDay === 2 && (etHour === 20 || (etHour === 21 && etMinute < 30))) {
                 setIsBroadcastLive(true);
                 setBroadcastCountdown('');
                 return;
             }
             setIsBroadcastLive(false);
 
-            // Calculate next Tuesday 7 PM CT
-            // Build target date in CT
-            const target = new Date(ctNow);
-            target.setHours(19, 0, 0, 0);
-            let daysUntilTuesday = (2 - ctDay + 7) % 7;
+            // Calculate next Tuesday 8 PM ET
+            // Build target date in ET
+            const target = new Date(etNow);
+            target.setHours(20, 0, 0, 0);
+            let daysUntilTuesday = (2 - etDay + 7) % 7;
             // If it's Tuesday but past broadcast window, next week
-            if (daysUntilTuesday === 0 && ctHour >= 22) daysUntilTuesday = 7;
+            if (daysUntilTuesday === 0 && (etHour >= 22 || (etHour === 21 && etMinute >= 30))) daysUntilTuesday = 7;
             target.setDate(target.getDate() + daysUntilTuesday);
 
-            const diff = target.getTime() - ctNow.getTime();
+            const diff = target.getTime() - etNow.getTime();
             if (diff <= 0) {
                 setBroadcastCountdown('Soon!');
                 return;
@@ -653,6 +672,21 @@ export default function HomePage() {
     // Sound effects enabled
     const [soundsEnabled, setSoundsEnabled] = useState(true);
 
+    // 📺 SHOW CLOCK - ESPN-style segment ticker (client side)
+    interface ShowClockClient {
+        segments: { id: string; name: string; durationMs: number; icon: string; order: number }[];
+        activeSegmentIndex: number;
+        startedAt: number | null;
+        segmentStartedAt: number | null;
+        isRunning: boolean;
+    }
+    const [showClock, setShowClock] = useState<ShowClockClient | null>(null);
+    const [showClockRemaining, setShowClockRemaining] = useState(0); // ms remaining in current segment
+    const [showClockWarningLevel, setShowClockWarningLevel] = useState<'none' | 'amber' | 'red'>('none');
+    const [showClockTransition, setShowClockTransition] = useState<string | null>(null);
+    const showClockPrevIndex = useRef(-1);
+    const showClockWarningFired = useRef<{ amber: boolean; red: boolean }>({ amber: false, red: false });
+
 
 
     // Initialize fingerprint and load saved username
@@ -690,12 +724,15 @@ export default function HomePage() {
                 // sessionStorage not available or auth failed — not admin
             }
 
-            // Load saved username and avatar from localStorage
-            const savedName = localStorage.getItem('crate-username');
-            const savedAvatar = localStorage.getItem('crate-avatar');
-            const savedColor = localStorage.getItem('crate-color');
-            const savedSounds = localStorage.getItem('crate-sounds');
-            const savedLocation = localStorage.getItem('crate-location');
+            // 🔐 Hydrate localStorage from cookie (heals Twitch in-app browser wipes)
+            persistHydrate();
+
+            // Load saved username and avatar from persistent storage
+            const savedName = persistGet('crate-username');
+            const savedAvatar = persistGet('crate-avatar');
+            const savedColor = persistGet('crate-color');
+            const savedSounds = persistGet('crate-sounds');
+            const savedLocation = persistGet('crate-location');
 
             if (savedName) {
                 setUsername(savedName);
@@ -715,7 +752,7 @@ export default function HomePage() {
                 setUserLocation(savedLocation);
             }
             // Check if admin wants to hide the stream embed on this screen
-            const hideStream = localStorage.getItem('crate-admin-hide-stream');
+            const hideStream = persistGet('crate-admin-hide-stream');
             if (hideStream === 'true') {
                 setHideStreamLocally(true);
             }
@@ -724,14 +761,14 @@ export default function HomePage() {
             }
 
             // Check if user already signed up for mailing list
-            const rsvpDone = localStorage.getItem('crate-rsvp-done');
+            const rsvpDone = persistGet('crate-rsvp-done');
             if (rsvpDone === 'true') {
                 setWaitingRsvpAlreadyDone(true);
             }
 
             // 📊 Load last session recap for welcome-back state
             try {
-                const savedSession = localStorage.getItem('crate-last-session');
+                const savedSession = persistGet('crate-last-session');
                 if (savedSession) {
                     setLastSession(JSON.parse(savedSession));
                 }
@@ -749,11 +786,7 @@ export default function HomePage() {
                 if (geoData.success && geoData.location?.displayLocation) {
                     const locationDisplay = geoData.location.displayLocation;
                     setUserLocation(locationDisplay);
-                    try {
-                        localStorage.setItem('crate-location', locationDisplay);
-                    } catch (e) {
-                        // localStorage full or disabled
-                    }
+                    persistSet('crate-location', locationDisplay);
                 }
             } catch (err) {
                 console.warn('Could not fetch location:', err);
@@ -820,17 +853,13 @@ export default function HomePage() {
         setIsSavingUsername(true);
         await new Promise(resolve => setTimeout(resolve, 200));
         setUsername(name);
-        try {
-            localStorage.setItem('crate-username', name);
-            if (avatarInput) {
-                localStorage.setItem('crate-avatar', avatarInput);
-                setUserAvatar(avatarInput);
-            }
-            localStorage.setItem('crate-color', colorInput);
-            setUserColor(colorInput);
-        } catch (e) {
-            console.warn('Could not save to localStorage:', e);
+        persistSet('crate-username', name);
+        if (avatarInput) {
+            persistSet('crate-avatar', avatarInput);
+            setUserAvatar(avatarInput);
         }
+        persistSet('crate-color', colorInput);
+        setUserColor(colorInput);
         setIsSavingUsername(false);
         setIsSubmittingKartra(false);
         setShowUsernameModal(false);
@@ -839,10 +868,13 @@ export default function HomePage() {
 
         // Mark RSVP as done to suppress duplicate email capture on waiting screen
         setWaitingRsvpAlreadyDone(true);
-        try { localStorage.setItem('crate-rsvp-done', 'true'); } catch (_) { }
+        persistSet('crate-rsvp-done', 'true');
+
+        // Sync all state to cookie for Twitch resilience
+        persistSyncToCookie();
 
         // Show first-time coach mark after a short delay
-        const coachDone = localStorage.getItem('crate-coach-done');
+        const coachDone = persistGet('crate-coach-done');
         if (!coachDone) {
             setTimeout(() => setShowCoachMark('search'), 1500);
         }
@@ -854,24 +886,23 @@ export default function HomePage() {
         setIsSavingUsername(true);
         await new Promise(resolve => setTimeout(resolve, 200));
         setUsername(name);
-        try {
-            localStorage.setItem('crate-username', name);
-            if (avatarInput) {
-                localStorage.setItem('crate-avatar', avatarInput);
-                setUserAvatar(avatarInput);
-            }
-            localStorage.setItem('crate-color', colorInput);
-            setUserColor(colorInput);
-        } catch (e) {
-            console.warn('Could not save to localStorage:', e);
+        persistSet('crate-username', name);
+        if (avatarInput) {
+            persistSet('crate-avatar', avatarInput);
+            setUserAvatar(avatarInput);
         }
+        persistSet('crate-color', colorInput);
+        setUserColor(colorInput);
         setIsSavingUsername(false);
         setShowUsernameModal(false);
         setOnboardingStep(1);
         setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
 
+        // Sync all state to cookie for Twitch resilience
+        persistSyncToCookie();
+
         // Show first-time coach mark after a short delay
-        const coachDone = localStorage.getItem('crate-coach-done');
+        const coachDone = persistGet('crate-coach-done');
         if (!coachDone) {
             setTimeout(() => setShowCoachMark('search'), 1500);
         }
@@ -891,20 +922,19 @@ export default function HomePage() {
         setIsSavingUsername(true);
         await new Promise(resolve => setTimeout(resolve, 200));
         setUsername(name);
-        try {
-            localStorage.setItem('crate-username', name);
-            if (avatarInput) {
-                localStorage.setItem('crate-avatar', avatarInput);
-                setUserAvatar(avatarInput);
-            }
-            localStorage.setItem('crate-color', colorInput);
-            setUserColor(colorInput);
-        } catch (e) {
-            console.warn('Could not save to localStorage:', e);
+        persistSet('crate-username', name);
+        if (avatarInput) {
+            persistSet('crate-avatar', avatarInput);
+            setUserAvatar(avatarInput);
         }
+        persistSet('crate-color', colorInput);
+        setUserColor(colorInput);
         setIsSavingUsername(false);
         setShowUsernameModal(false);
         setMessage({ type: 'success', text: 'Profile updated!' });
+
+        // Sync all state to cookie for Twitch resilience
+        persistSyncToCookie();
     };
 
     // Fetch playlist data with rank tracking for dopamine effects
@@ -913,6 +943,12 @@ export default function HomePage() {
     previousRanksRef.current = previousRanks;
     const seenActivityIdsRef = useRef(seenActivityIds);
     seenActivityIdsRef.current = seenActivityIds;
+    const lastKarmaRainTimestampRef = useRef(lastKarmaRainTimestamp);
+    lastKarmaRainTimestampRef.current = lastKarmaRainTimestamp;
+    const lastPrizeDropTimestampRef = useRef(lastPrizeDropTimestamp);
+    lastPrizeDropTimestampRef.current = lastPrizeDropTimestamp;
+    const lastLeaderboardKingTimestampRef = useRef(lastLeaderboardKingTimestamp);
+    lastLeaderboardKingTimestampRef.current = lastLeaderboardKingTimestamp;
 
     const fetchPlaylist = useCallback(async (showRefreshIndicator = false) => {
         if (!visitorId) return;
@@ -936,19 +972,26 @@ export default function HomePage() {
 
             // Sort to get current ranks (matching main sorting logic)
             const sorted = [...newSongs].sort((a, b) => {
-                // Priority 1: Unvoted songs (score === 0) rise to the top
+                const aIsPositive = a.score > 0;
+                const bIsPositive = b.score > 0;
                 const aIsUnvoted = a.score === 0;
                 const bIsUnvoted = b.score === 0;
+
+                if (aIsPositive && !bIsPositive) return -1;
+                if (!aIsPositive && bIsPositive) return 1;
+
+                if (aIsPositive && bIsPositive) {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return a.addedAt - b.addedAt;
+                }
 
                 if (aIsUnvoted && !bIsUnvoted) return -1;
                 if (!aIsUnvoted && bIsUnvoted) return 1;
 
-                // Within unvoted: newest first
                 if (aIsUnvoted && bIsUnvoted) {
                     return b.addedAt - a.addedAt;
                 }
 
-                // Within voted: score descending, then oldest first
                 if (b.score !== a.score) return b.score - a.score;
                 return a.addedAt - b.addedAt;
             });
@@ -1045,7 +1088,7 @@ export default function HomePage() {
             }
 
             // 🌧️ Handle Karma Rain celebration
-            if (data.karmaRain && data.karmaRain.active && data.karmaRain.timestamp > lastKarmaRainTimestamp) {
+            if (data.karmaRain && data.karmaRain.active && data.karmaRain.timestamp > lastKarmaRainTimestampRef.current) {
                 setLastKarmaRainTimestamp(data.karmaRain.timestamp);
                 setShowKarmaRain(true);
                 setConfettiMessage(`🌧️ Karma Rain! +1 karma for everyone`);
@@ -1057,7 +1100,7 @@ export default function HomePage() {
             }
 
             // 🎰 Handle Golden Hour Prize Drop
-            if (data.prizeDrop && data.prizeDrop.active && data.prizeDrop.timestamp > lastPrizeDropTimestamp) {
+            if (data.prizeDrop && data.prizeDrop.active && data.prizeDrop.timestamp > lastPrizeDropTimestampRef.current) {
                 setLastPrizeDropTimestamp(data.prizeDrop.timestamp);
                 const isWinner = data.prizeDrop.winnerVisitorId === visitorId;
                 setPrizeDropIsWinner(isWinner);
@@ -1065,17 +1108,17 @@ export default function HomePage() {
                 setShowPrizeDrop(true);
                 if (isWinner) {
                     SoundEffects.victory();
+                    // Auto-dismiss winner view after 20s (long enough to read & click claim link)
+                    setTimeout(() => setShowPrizeDrop(false), 20000);
                 } else {
                     SoundEffects.karmaRain();
-                }
-                // Auto-dismiss for non-winners after 8s, winner can close manually
-                if (!isWinner) {
+                    // Auto-dismiss viewer announcement after 8s
                     setTimeout(() => setShowPrizeDrop(false), 8000);
                 }
             }
 
             // 👑 Handle Leaderboard King announcement
-            if (data.leaderboardKing && data.leaderboardKing.active && data.leaderboardKing.timestamp > lastLeaderboardKingTimestamp) {
+            if (data.leaderboardKing && data.leaderboardKing.active && data.leaderboardKing.timestamp > lastLeaderboardKingTimestampRef.current) {
                 setLastLeaderboardKingTimestamp(data.leaderboardKing.timestamp);
                 const isMe = data.leaderboardKing.winnerVisitorId === visitorId;
                 setLeaderboardKingIsMe(isMe);
@@ -1085,10 +1128,19 @@ export default function HomePage() {
                 if (isMe) {
                     SoundEffects.victory();
                 }
-                // Auto-dismiss for non-winners after 8s
-                if (!isMe) {
-                    setTimeout(() => setShowLeaderboardKing(false), 8000);
-                }
+                // Auto-dismiss after 5s max
+                setTimeout(() => setShowLeaderboardKing(false), 5000);
+            }
+
+            // 📺 Sync Show Clock state
+            if (data.showClock && data.showClock.isRunning) {
+                setShowClock(data.showClock);
+            } else if (data.showClock && !data.showClock.isRunning && showClock?.isRunning) {
+                // Show just ended
+                setShowClock(null);
+                setShowClockWarningLevel('none');
+            } else if (!data.showClock || !data.showClock.isRunning) {
+                setShowClock(null);
             }
 
             // ⏱️ Extract timer data from the merged response (eliminates separate /api/timer fetch)
@@ -1307,6 +1359,49 @@ export default function HomePage() {
         return () => clearInterval(interval);
     }, [timerRunning, timerEndTime]);
 
+    // 📺 SHOW CLOCK LOCAL COUNTDOWN - updates every second, fires warning sounds
+    useEffect(() => {
+        if (!showClock?.isRunning || !showClock.segmentStartedAt) return;
+
+        const tick = () => {
+            const seg = showClock.segments[showClock.activeSegmentIndex];
+            if (!seg) return;
+            const elapsed = Date.now() - showClock.segmentStartedAt!;
+            const remaining = Math.max(0, seg.durationMs - elapsed);
+            setShowClockRemaining(remaining);
+
+            // Check for segment transition
+            if (showClock.activeSegmentIndex !== showClockPrevIndex.current) {
+                showClockPrevIndex.current = showClock.activeSegmentIndex;
+                showClockWarningFired.current = { amber: false, red: false };
+                // Play transition sound and show splash
+                if (soundsEnabled) SoundEffects.segmentTransition();
+                const nextSeg = showClock.segments[showClock.activeSegmentIndex];
+                if (nextSeg) {
+                    setShowClockTransition(`${nextSeg.icon} ${nextSeg.name}`);
+                    setTimeout(() => setShowClockTransition(null), 4000);
+                }
+            }
+
+            // Countdown warnings
+            if (remaining <= BROADCAST.segmentUrgentMs && remaining > 0 && !showClockWarningFired.current.red) {
+                showClockWarningFired.current.red = true;
+                setShowClockWarningLevel('red');
+                if (soundsEnabled) SoundEffects.segmentUrgent();
+            } else if (remaining <= BROADCAST.segmentWarningMs && remaining > BROADCAST.segmentUrgentMs && !showClockWarningFired.current.amber) {
+                showClockWarningFired.current.amber = true;
+                setShowClockWarningLevel('amber');
+                if (soundsEnabled) SoundEffects.segmentWarning();
+            } else if (remaining > BROADCAST.segmentWarningMs) {
+                setShowClockWarningLevel('none');
+            }
+        };
+
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [showClock, soundsEnabled]);
+
     // 🏆 WINNER DETECTION + SESSION RECAP - When round ends
     useEffect(() => {
         // Detect transition from running to stopped (round ended)
@@ -1317,16 +1412,26 @@ export default function HomePage() {
             if (topSong && topSong.addedBy === visitorId) {
                 setWinnerSongName(topSong.name);
                 setShowWinnerSplash(true);
+                // Auto-dismiss after 15s (long enough to read & click claim link)
+                setTimeout(() => setShowWinnerSplash(false), 15000);
             }
 
             // 📊 SESSION RECAP - Compute and save personalized summary
             const mySongs = songs.filter(s => s.addedBy === visitorId);
             const sorted = [...songs].sort((a, b) => {
-                const aUnvoted = a.score === 0;
-                const bUnvoted = b.score === 0;
-                if (aUnvoted && !bUnvoted) return -1;
-                if (!aUnvoted && bUnvoted) return 1;
-                if (aUnvoted && bUnvoted) return b.addedAt - a.addedAt;
+                const aIsPositive = a.score > 0;
+                const bIsPositive = b.score > 0;
+                const aIsUnvoted = a.score === 0;
+                const bIsUnvoted = b.score === 0;
+                if (aIsPositive && !bIsPositive) return -1;
+                if (!aIsPositive && bIsPositive) return 1;
+                if (aIsPositive && bIsPositive) {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return a.addedAt - b.addedAt;
+                }
+                if (aIsUnvoted && !bIsUnvoted) return -1;
+                if (!aIsUnvoted && bIsUnvoted) return 1;
+                if (aIsUnvoted && bIsUnvoted) return b.addedAt - a.addedAt;
                 if (b.score !== a.score) return b.score - a.score;
                 return a.addedAt - b.addedAt;
             });
@@ -1358,13 +1463,11 @@ export default function HomePage() {
             // Show recap overlay after a brief delay (let winner splash show first if applicable)
             const recapDelay = topSong?.addedBy === visitorId ? 6000 : 1500;
             setTimeout(() => setShowSessionRecap(true), recapDelay);
+            // Auto-dismiss recap after 20s so it doesn't stay on screen forever
+            setTimeout(() => setShowSessionRecap(false), recapDelay + 20000);
 
-            // Persist to localStorage for welcome-back state
-            try {
-                localStorage.setItem('crate-last-session', JSON.stringify(recap));
-            } catch (e) {
-                // localStorage full or disabled
-            }
+            // Persist for welcome-back state (dual-layer: localStorage + cookie)
+            persistSet('crate-last-session', JSON.stringify(recap));
         }
         previousTimerRunning.current = timerRunning;
     }, [timerRunning, songs, visitorId, userVotes, karmaBonuses, viewerCount]);
@@ -2025,7 +2128,7 @@ export default function HomePage() {
                 // Dismiss vote coach mark on first successful vote
                 if (showCoachMark === 'vote') {
                     setShowCoachMark(null);
-                    try { localStorage.setItem('crate-coach-done', 'true'); } catch (_) { }
+                    persistSet('crate-coach-done', 'true');
                 }
             }
         } catch (error) {
@@ -2108,10 +2211,10 @@ export default function HomePage() {
 
     // Username modal is now rendered as an overlay inside the main return (see below)
 
-    // Export to Spotify - redirect to export page for OAuth flow
+    // Export playlist - redirect to export page for platform selection
     const handleExport = () => {
         setIsExporting(true);
-        setMessage({ type: 'success', text: 'Opening Spotify...' });
+        setMessage({ type: 'success', text: 'Opening export options...' });
         window.location.href = '/export';
     };
 
@@ -2363,19 +2466,27 @@ export default function HomePage() {
                                 <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
                                 <div className="prize-details">
                                     <h2>FREE HAT!</h2>
-                                    <p className="promo-code">Use code: <strong>HACKATHONWINNER</strong></p>
+                                    <p className="promo-code">Code: <strong>HACKATHONWINNER</strong></p>
+                                    <p className="winner-shipping-note">Just pay shipping · Hat is on us 🎩</p>
                                 </div>
                             </div>
-                            <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
                             <a
-                                href="https://dj.style/discount/HACKATHONWINNER?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
+                                href="https://dj.style/products/crate-hackers-vintage-cotton-twill-hat-special-offer"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="claim-prize-btn"
                             >
-                                🎁 Claim Your Free Hat
+                                🎁 Claim Your Free Hat →
                             </a>
-                            <p className="winner-note">Opens DJ.style — code applies automatically</p>
+                            <p className="winner-note">Tap above → Enter code <strong>HACKATHONWINNER</strong> at checkout → Done!</p>
+                            <a
+                                href={generateCalendarUrl()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="winner-calendar-link"
+                            >
+                                📅 Never miss a vote — Add to Calendar
+                            </a>
                         </div>
                     </div>
                 )
@@ -2403,24 +2514,24 @@ export default function HomePage() {
                                 </div>
                                 <span className="prize-drop-mega-icon">🎰</span>
                                 <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
-                                <p className="prize-drop-subtitle">You've been selected — you win a free hat!</p>
+                                <p className="prize-drop-subtitle">You&apos;ve been selected — free hat incoming! 🎩</p>
                                 <div className="winner-prize">
                                     <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
                                     <div className="prize-details">
                                         <h2>FREE HAT!</h2>
-                                        <p className="promo-code">Use code: <strong>DOMTEST</strong></p>
+                                        <p className="promo-code">Code: <strong>HACKATHONWINNER</strong></p>
+                                        <p className="winner-shipping-note">Just pay shipping · Hat is on us 🎩</p>
                                     </div>
                                 </div>
-                                <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
                                 <a
-                                    href="https://dj.style/discount/DOMTEST?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
+                                    href="https://dj.style/products/crate-hackers-vintage-cotton-twill-hat-special-offer"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="claim-prize-btn"
                                 >
-                                    🎁 Claim Your Free Hat
+                                    🎁 Claim Your Free Hat →
                                 </a>
-                                <p className="winner-note">Opens DJ.style — code applies automatically</p>
+                                <p className="winner-note">Tap above → Enter code <strong>HACKATHONWINNER</strong> at checkout → Done!</p>
                             </div>
                         ) : (
                             <div className="prize-drop-broadcast">
@@ -2467,24 +2578,24 @@ export default function HomePage() {
                                 </div>
                                 <span className="king-mega-icon">👑</span>
                                 <h1 className="king-title">LEADERBOARD KING!</h1>
-                                <p className="king-subtitle">You&apos;re #1 with <strong>{leaderboardKingScore}</strong> points!</p>
+                                <p className="king-subtitle">You&apos;re #1 with <strong>{leaderboardKingScore}</strong> points — you earned this! 🔥</p>
                                 <div className="winner-prize">
                                     <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
                                     <div className="prize-details">
                                         <h2>FREE HAT!</h2>
-                                        <p className="promo-code">Use code: <strong>DOMTEST</strong></p>
+                                        <p className="promo-code">Code: <strong>HACKATHONWINNER</strong></p>
+                                        <p className="winner-shipping-note">Just pay shipping · Hat is on us 🎩</p>
                                     </div>
                                 </div>
-                                <img src="/djstyle-logo.png" alt="DJ.style" className="djstyle-logo" />
                                 <a
-                                    href="https://dj.style/discount/DOMTEST?redirect=%2Fproducts%2Fcrate-hackers-vintage-cotton-twill-hat-special-offer"
+                                    href="https://dj.style/products/crate-hackers-vintage-cotton-twill-hat-special-offer"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="claim-prize-btn"
                                 >
-                                    🎁 Claim Your Free Hat
+                                    🎁 Claim Your Free Hat →
                                 </a>
-                                <p className="winner-note">Opens DJ.style — code applies automatically</p>
+                                <p className="winner-note">Tap above → Enter code <strong>HACKATHONWINNER</strong> at checkout → Done!</p>
                             </div>
                         ) : (
                             <div className="leaderboard-king-broadcast">
@@ -2503,6 +2614,14 @@ export default function HomePage() {
                                 <h1 className="king-title">LEADERBOARD KING!</h1>
                                 <p className="king-winner-name">🏆 {leaderboardKingName} finished #1!</p>
                                 <p className="king-score">Score: <strong>{leaderboardKingScore}</strong> points</p>
+                                <a
+                                    href={generateCalendarUrl()}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="king-calendar-link"
+                                >
+                                    📅 Come back next Tuesday — Add to Calendar
+                                </a>
                             </div>
                         )}
                     </div>
@@ -2535,7 +2654,7 @@ export default function HomePage() {
             {showCoachMark === 'vote' && sortedSongs.length > 0 && (
                 <div className="coach-mark-banner">
                     <span>🏆 Vote on songs — top 3 win prizes!</span>
-                    <button className="coach-dismiss" onClick={() => { setShowCoachMark(null); try { localStorage.setItem('crate-coach-done', 'true'); } catch (_) { } }}>Got it</button>
+                    <button className="coach-dismiss" onClick={() => { setShowCoachMark(null); persistSet('crate-coach-done', 'true'); }}>Got it</button>
                 </div>
             )}
 
@@ -2547,10 +2666,7 @@ export default function HomePage() {
                     <Link href="/" className="logo-home-link" title="Go to Home">
                         <img src="/crate-hackers-master-logo.png" alt="Crate Hackers" className="master-logo" />
                     </Link>
-                    {/* Discrete admin link */}
-                    <Link href="/admin" className="admin-link-subtle" title="Admin Panel">
-                        ⚙️
-                    </Link>
+
                     {/* Rules info popover */}
                     <div className="rules-popover-wrapper">
                         <button
@@ -2577,7 +2693,7 @@ export default function HomePage() {
                     {timerRunning && (
                         <span className="live-badge-inline">
                             <span className="live-pulse"></span>
-                            LIVE • {formatTime(timerRemaining)}
+                            🗳️ VOTE NOW • {formatTime(timerRemaining)}
                             {viewerCount > 0 && <span className="viewer-count">• 👁 {viewerCount}</span>}
                         </span>
                     )}
@@ -2638,19 +2754,19 @@ export default function HomePage() {
                 </div>
             </header>
 
-            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 7 PM CT + Calendar CTA */}
+            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 8 PM ET + Calendar CTA */}
             <div className={`broadcast-bar ${isBroadcastLive ? 'broadcast-live' : ''}`}>
                 {isBroadcastLive ? (
                     <>
                         <span className="broadcast-live-dot" />
                         <span className="broadcast-text">LIVE NOW</span>
-                        <span className="broadcast-schedule">Every Tue · 7 PM CT</span>
+                        <span className="broadcast-schedule">Every Tue · 8 PM ET</span>
                     </>
                 ) : (
                     <>
-                        <span className="broadcast-text">NEXT LIVE EVENT</span>
+                        <span className="broadcast-text">📡 NEXT LIVE EVENT</span>
                         <span className="broadcast-countdown">{broadcastCountdown}</span>
-                        <span className="broadcast-schedule">Every Tue · 7 PM CT</span>
+                        <span className="broadcast-schedule">Every Tuesday · 8 PM ET</span>
                         <a
                             href={generateCalendarUrl()}
                             target="_blank"
@@ -3074,10 +3190,53 @@ export default function HomePage() {
 
             {/* 🎧 YOUR REQUESTS - REMOVED: Now using in-playlist highlighting instead */}
 
+            {/* 📺 SHOW CLOCK TICKER BAR - ESPN-style segment progress */}
+            {showClock?.isRunning && (
+                <div className={`show-clock-ticker ${showClockWarningLevel !== 'none' ? `ticker-${showClockWarningLevel}` : ''}`}>
+                    <div className="ticker-segments">
+                        {showClock.segments.map((seg, i) => (
+                            <div key={seg.id} className={`ticker-seg ${i === showClock.activeSegmentIndex ? 'current' : i < showClock.activeSegmentIndex ? 'done' : 'upcoming'}`}>
+                                <span className="ticker-seg-icon">{seg.icon}</span>
+                                <span className="ticker-seg-name">{seg.name}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="ticker-countdown">
+                        <span className="ticker-time">
+                            {Math.floor(showClockRemaining / 60000)}:{String(Math.floor((showClockRemaining % 60000) / 1000)).padStart(2, '0')}
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {/* 📺 SHOW CLOCK TRANSITION SPLASH */}
+            {showClockTransition && (
+                <div className="show-clock-splash">
+                    <div className="splash-content">
+                        <span className="splash-label">UP NEXT</span>
+                        <span className="splash-segment">{showClockTransition}</span>
+                    </div>
+                </div>
+            )}
+
+            {/* 📺 SHOW CLOCK WARNING TOAST */}
+            {showClockWarningLevel === 'amber' && showClock?.isRunning && (
+                <div className="show-clock-warning amber">
+                    ⏳ {showClock.segments[showClock.activeSegmentIndex]?.name} — 2 minutes remaining
+                </div>
+            )}
+            {showClockWarningLevel === 'red' && showClock?.isRunning && (
+                <div className="show-clock-warning red">
+                    ⚠️ {showClock.segments[showClock.activeSegmentIndex]?.name} — 30 seconds!
+                </div>
+            )}
+
             {/* 📦 PLAYLIST HEADER - Title + Activity ticker in fixed-height banner */}
             <div className="playlist-header-bar">
                 <div className="playlist-header-left">
-                    <span className="playlist-title-text">📦 {playlistTitle}</span>
+                    <span className="playlist-title-text">
+                        <span className="crate-week-label">This Week's Crate:</span> {playlistTitle}
+                    </span>
                 </div>
 
                 {/* 🔔 ACTIVITY TICKER - Middle area, fixed height, doesn't push content */}
@@ -3099,15 +3258,32 @@ export default function HomePage() {
                     )}
                 </div>
 
-                <button
-                    className="export-inline-btn"
-                    onClick={handleExport}
-                    disabled={isExporting}
-                    title="Save this playlist to your Spotify"
-                >
-                    <img src="/spotify-logo.png" alt="" className="spotify-icon-sm" />
-                    {isExporting ? 'Opening Spotify...' : 'Save to Spotify'}
-                </button>
+                {/* 🎵 SAVE TO — Spotify + TIDAL logo buttons */}
+                <div className="save-logos-group">
+                    <button
+                        className="save-logo-btn spotify"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                        title="Save to Spotify"
+                        aria-label="Save playlist to Spotify"
+                    >
+                        <svg className="save-logo-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                        </svg>
+                    </button>
+                    <button
+                        className="save-logo-btn tidal"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                        title="Save to TIDAL"
+                        aria-label="Save playlist to TIDAL"
+                    >
+                        <svg className="save-logo-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12.012 3.992L8.008 7.996 4.004 3.992 0 7.996l4.004 4.004L8.008 8l4.004 4 4.004-4-4.004-4.004zM12.012 12l-4.004 4.004L12.012 20l4.004-4.004L12.012 12z" />
+                            <path d="M20 3.992l-4.004 4.004L20 12l4-4.004L20 3.992z" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
 
@@ -3268,6 +3444,14 @@ export default function HomePage() {
                                                 </div>
                                             )}
                                         </div>
+                                        <a
+                                            href={generateCalendarUrl()}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="welcome-back-calendar"
+                                        >
+                                            📅 Add to Calendar
+                                        </a>
                                     </div>
                                 ) : (
                                     <div className="empty-subtitle">
@@ -3342,12 +3526,12 @@ export default function HomePage() {
                                                 if (data.success) {
                                                     setWaitingRsvpStatus('success');
                                                     setWaitingRsvpAlreadyDone(true);
-                                                    try { localStorage.setItem('crate-rsvp-done', 'true'); } catch (_) { }
+                                                    persistSet('crate-rsvp-done', 'true');
                                                 } else {
                                                     if (data.error?.includes('already')) {
                                                         setWaitingRsvpStatus('success');
                                                         setWaitingRsvpAlreadyDone(true);
-                                                        try { localStorage.setItem('crate-rsvp-done', 'true'); } catch (_) { }
+                                                        persistSet('crate-rsvp-done', 'true');
                                                     } else {
                                                         setWaitingRsvpStatus('error');
                                                         setWaitingRsvpError('Something went wrong — try again');
@@ -3395,12 +3579,13 @@ export default function HomePage() {
                         const hasDownvoted = userVotes.downvotedSongIds.includes(song.id);
                         const isMyComment = song.addedBy === visitorId;
                         const movement = recentlyMoved[song.id];
+                        const isNewEntry = (Date.now() - song.addedAt) < 60000; // 60s
 
                         return (
                             <div
                                 key={song.id}
                                 data-song-id={song.id}
-                                className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''}`}
+                                className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''} ${isNewEntry ? 'new-entry' : ''}`}
                                 onMouseEnter={markInteraction}
                                 onTouchStart={markInteraction}
                             >
@@ -3411,6 +3596,7 @@ export default function HomePage() {
                                     tabIndex={0}
                                 >
                                     {index === 0 ? '👑' : `#${index + 1}`}
+                                    {isNewEntry && <span className="new-entry-badge">🆕</span>}
                                 </span>
 
                                 {/* Album Art - clean, no overlay */}
@@ -3507,6 +3693,7 @@ export default function HomePage() {
                         onVote={(songId, delta) => handleVote(songId, delta as 1 | -1)}
                         onKarmaEarned={handleJukeboxKarmaEarned}
                         visitorId={visitorId || undefined}
+                        streamMode={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stream') === 'true'}
                     />
                 )
             }
@@ -3577,7 +3764,7 @@ export default function HomePage() {
                             </div>
                         </div>
                         <div className="recap-footer">
-                            <p className="recap-next">Next event: <strong>Tuesday 7 PM CT</strong></p>
+                            <p className="recap-next">Next event: <strong>Tuesday 8 PM ET</strong></p>
                             <a
                                 href={generateCalendarUrl()}
                                 target="_blank"

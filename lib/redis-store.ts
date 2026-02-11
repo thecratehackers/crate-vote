@@ -83,6 +83,7 @@ const STREAM_CONFIG_KEY = 'hackathon:streamConfig';  // { platform, youtubeUrl?,
 const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } - when double points mode is active
 const PRIZE_DROP_KEY = 'hackathon:prizeDrop';  // { winnerVisitorId, winnerName, timestamp, prizeType } - active prize drop
 const LEADERBOARD_KING_KEY = 'hackathon:leaderboardKing';  // { winnerVisitorId, winnerName, score, timestamp } - session-end MVP
+const SHOW_CLOCK_KEY = 'hackathon:showClock';  // ShowClock state for ESPN-style segment ticker
 
 // VERSUS BATTLE KEYS - Head-to-head song battles
 const VERSUS_BATTLE_KEY = 'hackathon:versusBattle';  // Main battle state
@@ -126,6 +127,23 @@ interface TimerData {
     endTime: number | null;
     duration: number;
     running: boolean;
+}
+
+// ============ SHOW CLOCK TYPES ============
+export interface ShowSegment {
+    id: string;           // Unique ID
+    name: string;         // "Voting Round"
+    durationMs: number;   // 600000 (10 min)
+    icon: string;         // "🗳️"
+    order: number;        // 0-4
+}
+
+export interface ShowClock {
+    segments: ShowSegment[];       // Up to 5 segments
+    activeSegmentIndex: number;    // Which segment is live (-1 = not started)
+    startedAt: number | null;      // Epoch ms when show clock was executed
+    segmentStartedAt: number | null; // When current segment began
+    isRunning: boolean;
 }
 
 // Constants
@@ -193,20 +211,33 @@ export async function getSortedSongs(): Promise<(Song & { score: number })[]> {
                 score: allVotes[index].score,
             }))
             .sort((a, b) => {
-                // Priority 1: Unvoted songs (score === 0) rise to the top
-                // This ensures fresh additions get visibility before being ranked
+                // Sort order: positive-score > unvoted (0) > negative-score
+                // New songs enter BELOW voted songs so they don't leapfrog to #1
+                const aIsPositive = a.score > 0;
+                const bIsPositive = b.score > 0;
                 const aIsUnvoted = a.score === 0;
                 const bIsUnvoted = b.score === 0;
 
-                if (aIsUnvoted && !bIsUnvoted) return -1; // a (unvoted) goes first
-                if (!aIsUnvoted && bIsUnvoted) return 1;  // b (unvoted) goes first
+                // Priority 1: Positive-score songs always on top
+                if (aIsPositive && !bIsPositive) return -1;
+                if (!aIsPositive && bIsPositive) return 1;
 
-                // Within unvoted: newest first (most recently added at top)
-                if (aIsUnvoted && bIsUnvoted) {
-                    return b.addedAt - a.addedAt; // Newest first
+                // Priority 2: Among positive songs — higher score first, oldest first for ties
+                if (aIsPositive && bIsPositive) {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return a.addedAt - b.addedAt;
                 }
 
-                // Within voted songs: sort by score descending, then oldest first for ties
+                // Priority 3: Unvoted songs above negative-score songs
+                if (aIsUnvoted && !bIsUnvoted) return -1;
+                if (!aIsUnvoted && bIsUnvoted) return 1;
+
+                // Within unvoted: newest first (so recent entries are visible together)
+                if (aIsUnvoted && bIsUnvoted) {
+                    return b.addedAt - a.addedAt;
+                }
+
+                // Within negative: least negative first, oldest first for ties
                 if (b.score !== a.score) return b.score - a.score;
                 return a.addedAt - b.addedAt;
             })
@@ -258,15 +289,19 @@ export async function autoPruneSongs(): Promise<{ pruned: string[] }> {
         const fiveMinutes = 5 * 60 * 1000;
         const pruned: string[] = [];
 
+        // When at capacity, loosen the threshold to flush garbage faster
+        const songCount = Object.keys(allSongs).length;
+        const threshold = songCount >= MAX_PLAYLIST_SIZE ? -1 : AUTO_PRUNE_THRESHOLD;
+
         for (const [id, song] of Object.entries(allSongs)) {
             const score = calculateScore(song);
             const age = now - song.addedAt;
 
             // Prune if score is very negative AND song has been around for 5+ minutes
-            if (score <= AUTO_PRUNE_THRESHOLD && age >= fiveMinutes) {
+            if (score <= threshold && age >= fiveMinutes) {
                 await redis.hdel(SONGS_KEY, id);
                 pruned.push(`${song.name} by ${song.artist}`);
-                console.log(`Auto-pruned "${song.name}" (score: ${score}, age: ${Math.round(age / 60000)}min)`);
+                console.log(`Auto-pruned "${song.name}" (score: ${score}, age: ${Math.round(age / 60000)}min, threshold: ${threshold})`);
             }
         }
 
@@ -1165,6 +1200,7 @@ export async function resetSession(): Promise<void> {
         redis.del(DOUBLE_POINTS_KEY),
         redis.del(PRIZE_DROP_KEY),
         redis.del(LEADERBOARD_KING_KEY),
+        redis.del(SHOW_CLOCK_KEY),
 
         // Versus Battle
         redis.del(VERSUS_BATTLE_KEY),
@@ -2624,6 +2660,189 @@ export async function revealAllMysterySongs(): Promise<number> {
     } catch (error) {
         console.error('Failed to reveal mystery songs:', error);
         return 0;
+    }
+}
+
+// ============ SHOW CLOCK (ESPN-Style Segment Ticker) ============
+
+const DEFAULT_SHOW_CLOCK: ShowClock = {
+    segments: [],
+    activeSegmentIndex: -1,
+    startedAt: null,
+    segmentStartedAt: null,
+    isRunning: false,
+};
+
+export async function getShowClock(): Promise<ShowClock> {
+    try {
+        const cacheKey = 'show_clock';
+        const cached = getCached<ShowClock>(cacheKey);
+        if (cached !== null) return cached;
+
+        const clock = await redis.get<ShowClock>(SHOW_CLOCK_KEY);
+        const result = clock || DEFAULT_SHOW_CLOCK;
+
+        // Auto-advance if current segment has expired
+        if (result.isRunning && result.segmentStartedAt !== null && result.activeSegmentIndex >= 0) {
+            const currentSegment = result.segments[result.activeSegmentIndex];
+            if (currentSegment) {
+                const elapsed = Date.now() - result.segmentStartedAt;
+                if (elapsed >= currentSegment.durationMs) {
+                    // Segment expired — advance
+                    const advanced = await advanceShowClockSegment();
+                    setCache(cacheKey, advanced, 2000);
+                    return advanced;
+                }
+            }
+        }
+
+        setCache(cacheKey, result, 2000);
+        return result;
+    } catch (error) {
+        console.error('Failed to get show clock:', error);
+        return DEFAULT_SHOW_CLOCK;
+    }
+}
+
+export async function setShowClockSegments(segments: ShowSegment[]): Promise<ShowClock> {
+    try {
+        // Validate: max 5 segments
+        const validSegments = segments.slice(0, 5).map((seg, i) => ({
+            ...seg,
+            order: i,
+        }));
+
+        const clock: ShowClock = {
+            segments: validSegments,
+            activeSegmentIndex: -1,
+            startedAt: null,
+            segmentStartedAt: null,
+            isRunning: false,
+        };
+        await redis.set(SHOW_CLOCK_KEY, clock);
+        invalidateCache('show_clock');
+        console.log(`📺 SHOW CLOCK: Saved ${validSegments.length} segments`);
+        return clock;
+    } catch (error) {
+        console.error('Failed to save show clock segments:', error);
+        return DEFAULT_SHOW_CLOCK;
+    }
+}
+
+export async function startShowClock(): Promise<ShowClock> {
+    try {
+        const clock = await redis.get<ShowClock>(SHOW_CLOCK_KEY);
+        if (!clock || clock.segments.length === 0) {
+            console.error('📺 SHOW CLOCK: Cannot start — no segments configured');
+            return DEFAULT_SHOW_CLOCK;
+        }
+
+        const now = Date.now();
+        const started: ShowClock = {
+            ...clock,
+            activeSegmentIndex: 0,
+            startedAt: now,
+            segmentStartedAt: now,
+            isRunning: true,
+        };
+        await redis.set(SHOW_CLOCK_KEY, started);
+        invalidateCache('show_clock');
+        console.log(`📺 SHOW CLOCK: Started! First segment: "${clock.segments[0].name}"`);
+        return started;
+    } catch (error) {
+        console.error('Failed to start show clock:', error);
+        return DEFAULT_SHOW_CLOCK;
+    }
+}
+
+export async function advanceShowClockSegment(): Promise<ShowClock> {
+    try {
+        const clock = await redis.get<ShowClock>(SHOW_CLOCK_KEY);
+        if (!clock || !clock.isRunning) {
+            return clock || DEFAULT_SHOW_CLOCK;
+        }
+
+        const nextIndex = clock.activeSegmentIndex + 1;
+
+        if (nextIndex >= clock.segments.length) {
+            // Last segment — stop the show clock
+            const stopped: ShowClock = {
+                ...clock,
+                isRunning: false,
+                activeSegmentIndex: -1,
+                segmentStartedAt: null,
+            };
+            await redis.set(SHOW_CLOCK_KEY, stopped);
+            invalidateCache('show_clock');
+            console.log('📺 SHOW CLOCK: All segments complete. Show over!');
+            return stopped;
+        }
+
+        const advanced: ShowClock = {
+            ...clock,
+            activeSegmentIndex: nextIndex,
+            segmentStartedAt: Date.now(),
+        };
+        await redis.set(SHOW_CLOCK_KEY, advanced);
+        invalidateCache('show_clock');
+        console.log(`📺 SHOW CLOCK: Advanced to segment ${nextIndex}: "${clock.segments[nextIndex].name}"`);
+        return advanced;
+    } catch (error) {
+        console.error('Failed to advance show clock:', error);
+        return DEFAULT_SHOW_CLOCK;
+    }
+}
+
+export async function extendCurrentSegment(additionalMs: number): Promise<ShowClock> {
+    try {
+        const clock = await redis.get<ShowClock>(SHOW_CLOCK_KEY);
+        if (!clock || !clock.isRunning || clock.activeSegmentIndex < 0) {
+            return clock || DEFAULT_SHOW_CLOCK;
+        }
+
+        const segment = clock.segments[clock.activeSegmentIndex];
+        if (segment) {
+            segment.durationMs += additionalMs;
+            clock.segments[clock.activeSegmentIndex] = segment;
+            await redis.set(SHOW_CLOCK_KEY, clock);
+            invalidateCache('show_clock');
+            console.log(`📺 SHOW CLOCK: Extended "${segment.name}" by ${additionalMs / 1000}s`);
+        }
+        return clock;
+    } catch (error) {
+        console.error('Failed to extend segment:', error);
+        return DEFAULT_SHOW_CLOCK;
+    }
+}
+
+export async function stopShowClock(): Promise<ShowClock> {
+    try {
+        const clock = await redis.get<ShowClock>(SHOW_CLOCK_KEY);
+        if (!clock) return DEFAULT_SHOW_CLOCK;
+
+        const stopped: ShowClock = {
+            ...clock,
+            isRunning: false,
+            activeSegmentIndex: -1,
+            segmentStartedAt: null,
+        };
+        await redis.set(SHOW_CLOCK_KEY, stopped);
+        invalidateCache('show_clock');
+        console.log('📺 SHOW CLOCK: Stopped.');
+        return stopped;
+    } catch (error) {
+        console.error('Failed to stop show clock:', error);
+        return DEFAULT_SHOW_CLOCK;
+    }
+}
+
+export async function clearShowClock(): Promise<void> {
+    try {
+        await redis.del(SHOW_CLOCK_KEY);
+        invalidateCache('show_clock');
+        console.log('📺 SHOW CLOCK: Cleared.');
+    } catch (error) {
+        console.error('Failed to clear show clock:', error);
     }
 }
 

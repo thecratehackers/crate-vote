@@ -24,6 +24,7 @@ import {
     setYouTubeEmbed,
     getStreamConfig,
     setStreamConfig,
+    getShowClock,
 } from '@/lib/redis-store';
 
 // GET - Get playlist status and stats
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
         await adminHeartbeat(adminId);
     }
 
-    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity, sessionPermissions, youtubeEmbed, streamConfig] = await Promise.all([
+    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity, sessionPermissions, youtubeEmbed, streamConfig, showClock] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getStats(),
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
         getSessionPermissions(),
         getYouTubeEmbed(),
         getStreamConfig(),
+        getShowClock(),
     ]);
 
     // Format active users for frontend (check ban status and karma for each)
@@ -74,6 +76,7 @@ export async function GET(request: Request) {
         permissions: sessionPermissions,
         youtubeEmbed,
         streamConfig,
+        showClock,
     });
 }
 

@@ -21,7 +21,7 @@ const nextConfig = {
                     },
                     {
                         key: 'Content-Security-Policy',
-                        value: "frame-ancestors 'self' https://*.kartra.com https://kartra.com https://*.crateoftheweek.com *;",
+                        value: "frame-ancestors 'self' https://*.kartra.com https://kartra.com https://*.cratehackathon.com *;",
                     },
                 ],
             },

@@ -2,6 +2,7 @@
  * Sound Effects - Satisfying audio feedback for user actions
  * Uses Web Audio API for low-latency, high-quality sounds
  */
+import { persistGet, persistSet } from '@/lib/persist';
 
 // Sound frequencies and patterns for synthesized effects
 const SOUNDS = {
@@ -27,6 +28,12 @@ const SOUNDS = {
     wipe: { freq: [880, 660, 440, 330], duration: 0.25, type: 'square' as OscillatorType },
     // DOUBLE POINTS - Exciting fanfare
     doublePoints: { freq: [440, 554, 659, 880, 1047], duration: 0.2, type: 'sine' as OscillatorType },
+    // SHOW CLOCK - Segment transition (ESPN-style sting)
+    segmentTransition: { freq: [523, 659, 784, 1047], duration: 0.2, type: 'sine' as OscillatorType },
+    // SHOW CLOCK - 2-minute warning (soft chime)
+    segmentWarning: { freq: [880, 1100, 880], duration: 0.15, type: 'sine' as OscillatorType },
+    // SHOW CLOCK - 30-second urgent (escalating pulse)
+    segmentUrgent: { freq: [440, 660, 880, 1100], duration: 0.12, type: 'square' as OscillatorType },
 };
 
 let audioContext: AudioContext | null = null;
@@ -84,20 +91,16 @@ export const SoundEffects = {
     // Enable/disable sounds
     setEnabled(enabled: boolean): void {
         soundEnabled = enabled;
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('crate-sounds', enabled ? 'on' : 'off');
-        }
+        persistSet('crate-sounds', enabled ? 'on' : 'off');
     },
 
     isEnabled(): boolean {
-        if (typeof localStorage !== 'undefined') {
-            const saved = localStorage.getItem('crate-sounds');
-            if (saved !== null) return saved !== 'off';
+        const saved = persistGet('crate-sounds');
+        if (saved !== null) return saved !== 'off';
 
-            // Default: OFF on mobile to avoid unexpected audio
-            if (typeof window !== 'undefined' && window.innerWidth <= 640) {
-                return false;
-            }
+        // Default: OFF on mobile to avoid unexpected audio
+        if (typeof window !== 'undefined' && window.innerWidth <= 640) {
+            return false;
         }
         return soundEnabled;
     },
@@ -165,5 +168,45 @@ export const SoundEffects = {
     doublePoints(): void {
         const s = SOUNDS.doublePoints;
         playTone(s.freq, s.duration, s.type, 0.7);
+    },
+
+    // 📺 BROADCAST MODE SOUNDS
+    // 🎵 Song request alert - Bright ascending arpeggio
+    songRequest(): void {
+        playTone([523, 659, 784, 1047], 0.15, 'sine', 0.6);
+    },
+
+    // 🚀 Hype burst - Exciting ascending burst
+    hypeBurst(): void {
+        playTone([440, 660, 880, 1100, 1320], 0.1, 'sine', 0.5);
+    },
+
+    // 👀 New viewer joined - Gentle welcome chime
+    newViewer(): void {
+        playTone([880, 1100], 0.08, 'sine', 0.3);
+    },
+
+    // 🏆 Achievement unlock - Game-style fanfare
+    achievementUnlock(): void {
+        playTone([523, 659, 784, 1047, 1319], 0.2, 'sine', 0.6);
+    },
+
+    // 📺 SHOW CLOCK SOUNDS
+    // 🎬 Segment transition - ESPN-style broadcast sting
+    segmentTransition(): void {
+        const s = SOUNDS.segmentTransition;
+        playTone(s.freq, s.duration, s.type, 0.7);
+    },
+
+    // ⏳ 2-minute warning - Soft time-check chime
+    segmentWarning(): void {
+        const s = SOUNDS.segmentWarning;
+        playTone(s.freq, s.duration, s.type, 0.4);
+    },
+
+    // ⚠️ 30-second urgent - Escalating countdown pulse
+    segmentUrgent(): void {
+        const s = SOUNDS.segmentUrgent;
+        playTone(s.freq, s.duration, s.type, 0.6);
     },
 };

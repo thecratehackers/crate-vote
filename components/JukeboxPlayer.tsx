@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './JukeboxPlayer.css';
+import { APP_CONFIG, BROADCAST } from '@/lib/config';
+import { SoundEffects } from '@/lib/sounds';
 
 interface Song {
     id: string;
@@ -10,6 +12,8 @@ interface Song {
     albumArt: string;
     score: number;
     addedByName?: string;
+    addedByLocation?: string;
+    addedByColor?: string;
 }
 
 interface JukeboxPlayerProps {
@@ -21,6 +25,10 @@ interface JukeboxPlayerProps {
     onVote?: (songId: string, delta: number) => void;
     onKarmaEarned?: () => void;
     visitorId?: string;
+    // 📺 BROADCAST MODE
+    streamMode?: boolean;
+    viewerCount?: number;
+    currentTheme?: { name: string; emoji: string; endsAt: number };
 }
 
 declare global {
@@ -190,6 +198,9 @@ export default function JukeboxPlayer({
     onVote,
     onKarmaEarned,
     visitorId,
+    streamMode = false,
+    viewerCount = 0,
+    currentTheme,
 }: JukeboxPlayerProps) {
     const [isPlaying, setIsPlaying] = useState(true);
     const [isMuted, setIsMuted] = useState(true);
@@ -221,6 +232,33 @@ export default function JukeboxPlayer({
     const [scoreAnimation, setScoreAnimation] = useState<{ delta: number; key: number } | null>(null);
     const [rankAlert, setRankAlert] = useState<{ from: number; to: number; key: number } | null>(null);
     const [showCTA, setShowCTA] = useState(false);
+
+    // 📺 BROADCAST MODE STATE
+    interface SongAlert {
+        id: string;
+        songName: string;
+        artistName: string;
+        albumArt: string;
+        addedBy: string;
+        addedByLocation?: string;
+        timestamp: number;
+    }
+    interface Achievement {
+        id: string;
+        text: string;
+        emoji: string;
+        timestamp: number;
+    }
+    const [songAlerts, setSongAlerts] = useState<SongAlert[]>([]);
+    const [hypeLevel, setHypeLevel] = useState(0);
+    const [showLowerThird, setShowLowerThird] = useState(false);
+    const [eraCountdown, setEraCountdown] = useState('');
+    const [achievements, setAchievements] = useState<Achievement[]>([]);
+    const previousPlaylistRef = useRef<Song[]>([]);
+    const hypeRef = useRef(0);
+    const [totalVotes, setTotalVotes] = useState(0);
+    const [currentTime, setCurrentTime] = useState('');
+    const voteCountRef = useRef(0);
 
     // Dopamine-inducing gamification tips
     const gameTips = [
@@ -389,6 +427,15 @@ export default function JukeboxPlayer({
     // 🎰 VEGAS-STYLE EMOJI BURST - Full screen celebration
     const [emojiBurst, setEmojiBurst] = useState<{ emojis: string[]; key: number } | null>(null);
 
+    // 📺 Boost hype on activity (defined early so addActivity can reference it)
+    const boostHype = useCallback((amount: number) => {
+        hypeRef.current = Math.min(100, hypeRef.current + amount);
+        setHypeLevel(Math.min(100, Math.round(hypeRef.current)));
+        if (hypeRef.current >= 85) {
+            SoundEffects.hypeBurst();
+        }
+    }, []);
+
     const triggerEmojiBurst = useCallback((type: 'vote' | 'upvote' | 'downvote') => {
         const emojiSets = {
             vote: ['🔥', '⚡', '✨', '💫', '🎵'],
@@ -403,7 +450,7 @@ export default function JukeboxPlayer({
     const [idleMode, setIdleMode] = useState(false);
     const [lastActivityTime, setLastActivityTime] = useState(Date.now());
     const [idleMessageIndex, setIdleMessageIndex] = useState(0);
-    const IDLE_TIMEOUT = 25000; // 25 seconds
+    const IDLE_TIMEOUT = streamMode ? BROADCAST.idleTimeoutMs : 25000;
 
     // Rotating idle mode messages for variety
     const idleMessages = [
@@ -453,8 +500,11 @@ export default function JukeboxPlayer({
         // Trigger Vegas-style burst!
         if (item.type === 'vote') {
             triggerEmojiBurst(item.icon === '👍' ? 'upvote' : 'downvote');
+            boostHype(8); // 📺 BROADCAST: Votes boost hype
+        } else if (item.type === 'newSong') {
+            boostHype(15); // 📺 BROADCAST: New songs boost hype more
         }
-    }, [triggerEmojiBurst]);
+    }, [triggerEmojiBurst, boostHype]);
 
     // Check for idle mode every 5 seconds (desktop only - mobile users are active voters)
     useEffect(() => {
@@ -485,12 +535,127 @@ export default function JukeboxPlayer({
 
     // Auto-clear old activity items
     useEffect(() => {
+        const displayMs = streamMode ? BROADCAST.activityDisplayMs : 8000;
         const cleanupInterval = setInterval(() => {
             const now = Date.now();
-            setActivityFeed(prev => prev.filter(item => now - item.timestamp < 8000));
+            setActivityFeed(prev => prev.filter(item => now - item.timestamp < displayMs));
         }, 2000);
         return () => clearInterval(cleanupInterval);
-    }, []);
+    }, [streamMode]);
+
+    // 📺 BROADCAST: Detect new songs added to playlist → Song Request Alert
+    useEffect(() => {
+        if (!streamMode) return;
+        const prevIds = new Set(previousPlaylistRef.current.map(s => s.id));
+        const newSongs = playlist.filter(s => !prevIds.has(s.id));
+
+        newSongs.forEach((song, i) => {
+            setTimeout(() => {
+                const alert: SongAlert = {
+                    id: `alert-${song.id}-${Date.now()}`,
+                    songName: song.name,
+                    artistName: song.artist,
+                    albumArt: song.albumArt,
+                    addedBy: song.addedByName || 'Anonymous',
+                    addedByLocation: song.addedByLocation,
+                    timestamp: Date.now(),
+                };
+                setSongAlerts(prev => [alert, ...prev].slice(0, 3));
+                SoundEffects.songRequest();
+
+                // Add achievement for new song
+                setAchievements(prev => [{
+                    id: `ach-${Date.now()}-${i}`,
+                    text: `${song.addedByName || 'Someone'} added "${song.name.slice(0, 20)}"`,
+                    emoji: '🎵',
+                    timestamp: Date.now(),
+                }, ...prev].slice(0, 5));
+
+                // Auto-clear alert
+                setTimeout(() => {
+                    setSongAlerts(prev => prev.filter(a => a.id !== alert.id));
+                }, BROADCAST.alertDurationMs);
+            }, i * 1200); // Stagger multiple alerts
+        });
+
+        previousPlaylistRef.current = playlist;
+    }, [playlist, streamMode]);
+
+    // 📺 BROADCAST: Hype Meter — decaying activity gauge
+    useEffect(() => {
+        if (!streamMode) return;
+        const hypeInterval = setInterval(() => {
+            hypeRef.current = Math.max(0, hypeRef.current * BROADCAST.hypeDecayRate);
+            setHypeLevel(Math.min(100, Math.round(hypeRef.current)));
+        }, 1000);
+        return () => clearInterval(hypeInterval);
+    }, [streamMode]);
+
+
+    // 📺 BROADCAST: Clock + era countdown
+    useEffect(() => {
+        if (!streamMode) return;
+        const clockInterval = setInterval(() => {
+            const now = new Date();
+            setCurrentTime(now.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'America/Chicago',
+            }));
+            if (currentTheme?.endsAt) {
+                const remaining = Math.max(0, currentTheme.endsAt - Date.now());
+                const mins = Math.floor(remaining / 60000);
+                const secs = Math.floor((remaining % 60000) / 1000);
+                setEraCountdown(`${mins}:${secs.toString().padStart(2, '0')}`);
+            }
+        }, 1000);
+        return () => clearInterval(clockInterval);
+    }, [streamMode, currentTheme]);
+
+    // 📺 BROADCAST: Lower third on song change
+    useEffect(() => {
+        if (!streamMode) return;
+        setShowLowerThird(true);
+        const timer = setTimeout(() => setShowLowerThird(false), BROADCAST.lowerThirdDurationMs);
+        return () => clearTimeout(timer);
+    }, [currentSong.id, streamMode]);
+
+    // 📺 BROADCAST: Track total votes for ticker
+    useEffect(() => {
+        if (!streamMode) return;
+        const total = playlist.reduce((sum, s) => sum + Math.abs(s.score), 0);
+        setTotalVotes(total);
+    }, [playlist, streamMode]);
+
+    // 📺 BROADCAST: Detect #1 changes for achievements
+    useEffect(() => {
+        if (!streamMode || playlist.length === 0) return;
+        const topSong = playlist[0];
+        // Check if the #1 song changed
+        if (previousPlaylistRef.current.length > 0) {
+            const prevTop = previousPlaylistRef.current[0];
+            if (prevTop && topSong.id !== prevTop.id) {
+                setAchievements(prev => [{
+                    id: `ach-crown-${Date.now()}`,
+                    text: `"${topSong.name.slice(0, 20)}" just hit #1!`,
+                    emoji: '👑',
+                    timestamp: Date.now(),
+                }, ...prev].slice(0, 5));
+                SoundEffects.achievementUnlock();
+            }
+        }
+    }, [playlist, streamMode]);
+
+    // 📺 BROADCAST: Auto-clear old achievements
+    useEffect(() => {
+        if (!streamMode) return;
+        const cleanup = setInterval(() => {
+            const now = Date.now();
+            setAchievements(prev => prev.filter(a => now - a.timestamp < 15000));
+        }, 3000);
+        return () => clearInterval(cleanup);
+    }, [streamMode]);
 
     const playerRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -703,14 +868,71 @@ export default function JukeboxPlayer({
         };
     }, []); // No dependencies - only run on mount/unmount
 
-    return (
-        <div className="jukebox-overlay" ref={containerRef}>
-            {/* 🔙 FIXED CLOSE BUTTON - Top left for easy exit */}
-            <button className="jukebox-close-fixed" onClick={onClose} aria-label="Close jukebox">
-                ← Back
-            </button>
+    // 📺 BROADCAST: Compute hype level info
+    const getHypeInfo = () => {
+        const levels = BROADCAST.hypeLevels;
+        for (let i = levels.length - 1; i >= 0; i--) {
+            if (hypeLevel >= levels[i].threshold) return levels[i];
+        }
+        return levels[0];
+    };
+    const hypeInfo = getHypeInfo();
 
-            {/* 🎰 VEGAS-STYLE EMOJI BURST - Full screen celebration */}
+    // 📺 BROADCAST: Ticker content
+    const uniqueContributors = new Set(playlist.map(s => s.addedByName).filter(Boolean)).size;
+    const locations = Array.from(new Set(playlist.map(s => s.addedByLocation).filter((x): x is string => Boolean(x))));
+
+    return (
+        <div className={`jukebox-overlay ${streamMode ? 'broadcast-mode' : ''}`} ref={containerRef}>
+            {/* 🔙 FIXED CLOSE BUTTON - Hidden in stream mode */}
+            {!streamMode && (
+                <button className="jukebox-close-fixed" onClick={onClose} aria-label="Close jukebox">
+                    ← Back
+                </button>
+            )}
+
+            {/* 📺 BROADCAST: Song Request Alerts */}
+            {streamMode && songAlerts.length > 0 && (
+                <div className="broadcast-alerts">
+                    {songAlerts.map((alert) => (
+                        <div key={alert.id} className="song-request-alert">
+                            <img src={alert.albumArt} alt="" className="alert-album-art" />
+                            <div className="alert-info">
+                                <span className="alert-label">🎵 SONG ADDED</span>
+                                <span className="alert-song">{alert.songName}</span>
+                                <span className="alert-artist">{alert.artistName}</span>
+                                <span className="alert-by">
+                                    Added by {alert.addedBy}
+                                    {alert.addedByLocation && ` • ${alert.addedByLocation}`}
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* 📺 BROADCAST: Viewer Counter */}
+            {streamMode && viewerCount > 0 && (
+                <div className="broadcast-viewer-count">
+                    <span className="viewer-dot" />
+                    <span>👀 {viewerCount} watching</span>
+                </div>
+            )}
+
+            {/* 📺 BROADCAST: Era Clock */}
+            {streamMode && (
+                <div className="broadcast-clock">
+                    <span className="clock-time">{currentTime}</span>
+                    {currentTheme && (
+                        <div className="clock-era">
+                            <span>{currentTheme.emoji} {currentTheme.name}</span>
+                            {eraCountdown && <span className="era-countdown">{eraCountdown}</span>}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 🎰 VEGAS-STYLE EMOJI BURST */}
             {emojiBurst && (
                 <div className="emoji-burst-container" key={emojiBurst.key}>
                     {Array.from({ length: 20 }).map((_, i) => (
@@ -729,17 +951,13 @@ export default function JukeboxPlayer({
                 </div>
             )}
 
-            {/* 🎪 IDLE MODE - Full-screen promo when no activity */}
+            {/* 🎪 IDLE MODE */}
             {idleMode && (
                 <div className="idle-mode-overlay">
                     <div className="idle-content">
                         <div className="idle-emojis">
                             {idleMessages[idleMessageIndex].emojis.map((emoji, i) => (
-                                <span
-                                    key={i}
-                                    className="idle-emoji"
-                                    style={{ animationDelay: `${i * 0.15}s` }}
-                                >
+                                <span key={i} className="idle-emoji" style={{ animationDelay: `${i * 0.15}s` }}>
                                     {emoji}
                                 </span>
                             ))}
@@ -747,11 +965,11 @@ export default function JukeboxPlayer({
                         <h1 className="idle-headline">{idleMessages[idleMessageIndex].headline}</h1>
                         <p className="idle-subtext">{idleMessages[idleMessageIndex].subtext}</p>
                         <div className="idle-url-box">
-                            <span className="idle-url">crateoftheweek.com</span>
+                            <span className="idle-url">{APP_CONFIG.domain}</span>
                         </div>
                         <div className="idle-qr">
                             <img
-                                src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.crateoftheweek.com&bgcolor=000000&color=d3771d"
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://${APP_CONFIG.domain}&bgcolor=000000&color=d3771d`}
                                 alt="Scan to vote"
                             />
                             <span>Scan to Join!</span>
@@ -767,37 +985,63 @@ export default function JukeboxPlayer({
 
             {/* 📊 DASHBOARD LAYOUT - 3 Columns */}
             <div className="jukebox-dashboard">
-                {/* LEFT SIDEBAR - Contributors + Top Songs + Activity */}
+                {/* LEFT SIDEBAR */}
                 <div className="jukebox-sidebar left">
-                    {/* Top Contributors - actual users */}
+                    {/* 📺 Hype Meter */}
+                    {streamMode && (
+                        <div className="sidebar-section hype-section" style={{ borderColor: hypeInfo.color }}>
+                            <h3 className="sidebar-title">📊 Hype Level</h3>
+                            <div className="hype-meter">
+                                <div className="hype-bar">
+                                    <div
+                                        className="hype-fill"
+                                        style={{
+                                            width: `${hypeLevel}%`,
+                                            background: `linear-gradient(90deg, ${hypeInfo.color}, ${hypeInfo.color}dd)`,
+                                            boxShadow: hypeLevel > 60 ? `0 0 20px ${hypeInfo.color}80` : 'none',
+                                        }}
+                                    />
+                                </div>
+                                <div className="hype-label">
+                                    <span className="hype-emoji">{hypeInfo.emoji}</span>
+                                    <span className="hype-text" style={{ color: hypeInfo.color }}>{hypeInfo.label}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Leaderboard */}
                     <div className="sidebar-section">
-                        <h3 className="sidebar-title">👥 Active Voters</h3>
+                        <h3 className="sidebar-title">👥 {streamMode ? 'Leaderboard' : 'Active Voters'}</h3>
                         <div className="mini-leaderboard">
                             {(() => {
-                                // Get unique contributors with song counts
                                 const contributors = playlist
                                     .filter(s => s.addedByName)
                                     .reduce((acc, song) => {
                                         const name = song.addedByName!;
-                                        acc[name] = (acc[name] || 0) + 1;
+                                        if (!acc[name]) acc[name] = { count: 0, location: song.addedByLocation };
+                                        acc[name].count += 1;
                                         return acc;
-                                    }, {} as Record<string, number>);
+                                    }, {} as Record<string, { count: number; location?: string }>);
 
                                 return Object.entries(contributors)
-                                    .sort((a, b) => b[1] - a[1])
-                                    .slice(0, 4)
-                                    .map(([name, count], i) => (
-                                        <div key={name} className="lb-row">
+                                    .sort((a, b) => b[1].count - a[1].count)
+                                    .slice(0, streamMode ? 6 : 4)
+                                    .map(([name, data], i) => (
+                                        <div key={name} className={`lb-row ${i === 0 ? 'lb-row-top' : ''}`}>
                                             <span className="lb-rank">{i === 0 ? '🎧' : `#${i + 1}`}</span>
                                             <span className="lb-name">{name}</span>
-                                            <span className="lb-score">🎵{count}</span>
+                                            {streamMode && data.location && (
+                                                <span className="lb-location">{data.location}</span>
+                                            )}
+                                            <span className="lb-score">🎵{data.count}</span>
                                         </div>
                                     ));
                             })()}
                         </div>
                     </div>
 
-                    {/* Top 3 Songs */}
+                    {/* Top Songs */}
                     <div className="sidebar-section">
                         <h3 className="sidebar-title">🔥 Top Songs</h3>
                         <div className="mini-leaderboard">
@@ -817,6 +1061,7 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
+                    {/* Live Activity */}
                     <div className="sidebar-section">
                         <h3 className="sidebar-title">⚡ Live Activity</h3>
                         <div className="sidebar-activity">
@@ -836,7 +1081,6 @@ export default function JukeboxPlayer({
 
                 {/* CENTER - Main Jukebox */}
                 <div className="jukebox-container">
-                    {/* 🎯 CROWDSOURCE MISSION BANNER */}
                     <div className="crowdsource-banner">
                         <div className="crowdsource-label">
                             <span className="live-dot" />
@@ -846,7 +1090,6 @@ export default function JukeboxPlayer({
                         <p className="crowdsource-subtitle">Votes decide what plays next</p>
                     </div>
 
-                    {/* Header */}
                     <div className="jukebox-header">
                         <div className="jukebox-now-playing">
                             <span className="jukebox-label">🎵 NOW PLAYING</span>
@@ -867,34 +1110,27 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* Gamification Tips Banner */}
                     <div className="jukebox-tips-banner">
                         <span className="tip-icon">{gameTips[currentTipIndex].icon}</span>
                         <span className="tip-text" key={currentTipIndex}>{gameTips[currentTipIndex].text}</span>
                     </div>
 
-                    {/* Video Player */}
                     <div className="jukebox-video-wrapper">
                         <div id="jukebox-player" className="jukebox-video" />
 
-                        {/* QR Code Overlay for Stream Viewers */}
                         <div className="jukebox-qr-overlay">
                             <img
-                                src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://www.crateoftheweek.com&bgcolor=1a1a1a&color=d3771d"
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://${APP_CONFIG.domain}&bgcolor=1a1a1a&color=d3771d`}
                                 alt="Scan to vote"
                                 className="jukebox-qr-img"
                             />
                             <span className="jukebox-qr-label">Scan to Vote</span>
                         </div>
 
-                        {/* 🎬 POP-UP VIDEO FACT BUBBLE */}
                         {currentFact && (
                             <div
                                 className="popup-video-bubble"
-                                style={{
-                                    ...POPUP_POSITIONS[factPosition],
-                                    position: 'absolute',
-                                }}
+                                style={{ ...POPUP_POSITIONS[factPosition], position: 'absolute' }}
                                 key={currentFact.id}
                             >
                                 <span className="popup-category">{currentFact.category}</span>
@@ -905,7 +1141,23 @@ export default function JukeboxPlayer({
                             </div>
                         )}
 
-                        {/* Next Song Hint Overlay */}
+                        {/* 📺 BROADCAST: Lower Third */}
+                        {streamMode && showLowerThird && (
+                            <div className="broadcast-lower-third">
+                                <div className="lower-third-accent" />
+                                <div className="lower-third-content">
+                                    <span className="lower-third-label">NOW PLAYING</span>
+                                    <span className="lower-third-song">{currentSong.name}</span>
+                                    <span className="lower-third-artist">{currentSong.artist}</span>
+                                </div>
+                                <div className="lower-third-stats">
+                                    <span>#{playlist.findIndex(s => s.id === currentSong.id) + 1}</span>
+                                    <span>🔥 {playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score} votes</span>
+                                    {currentSong.addedByName && <span>Added by {currentSong.addedByName}</span>}
+                                </div>
+                            </div>
+                        )}
+
                         {showNextHint && nextSong && (
                             <div className="jukebox-next-hint">
                                 <span className="next-label">UP NEXT</span>
@@ -919,50 +1171,34 @@ export default function JukeboxPlayer({
                             </div>
                         )}
 
-                        {/* 🔴 SCORE ANIMATION - Floats when votes come in */}
                         {scoreAnimation && (
-                            <div
-                                className={`jukebox-score-pop ${scoreAnimation.delta > 0 ? 'positive' : 'negative'}`}
-                                key={scoreAnimation.key}
-                            >
+                            <div className={`jukebox-score-pop ${scoreAnimation.delta > 0 ? 'positive' : 'negative'}`} key={scoreAnimation.key}>
                                 {scoreAnimation.delta > 0 ? `+${scoreAnimation.delta}` : scoreAnimation.delta}
                             </div>
                         )}
 
-                        {/* 🔴 RANK CHANGE ALERT - Big splash when position changes */}
                         {rankAlert && (
                             <div className="jukebox-rank-alert" key={rankAlert.key}>
                                 {rankAlert.to < rankAlert.from ? (
-                                    <>
-                                        <span className="rank-icon">🚀</span>
-                                        <span className="rank-text">RISING to #{rankAlert.to}!</span>
-                                    </>
+                                    <><span className="rank-icon">🚀</span><span className="rank-text">RISING to #{rankAlert.to}!</span></>
                                 ) : rankAlert.to === 1 ? (
-                                    <>
-                                        <span className="rank-icon">👑</span>
-                                        <span className="rank-text">NOW #1!</span>
-                                    </>
+                                    <><span className="rank-icon">👑</span><span className="rank-text">NOW #1!</span></>
                                 ) : (
-                                    <>
-                                        <span className="rank-icon">📉</span>
-                                        <span className="rank-text">Dropped to #{rankAlert.to}</span>
-                                    </>
+                                    <><span className="rank-icon">📉</span><span className="rank-text">Dropped to #{rankAlert.to}</span></>
                                 )}
                             </div>
                         )}
 
-                        {/* 🔴 CTA FLASH - Periodic call to action */}
                         {showCTA && (
                             <div className="jukebox-cta-flash">
                                 <div className="cta-content">
                                     <span className="cta-arrow">👉</span>
-                                    <span className="cta-text">Vote now at <strong>crateoftheweek.com</strong></span>
+                                    <span className="cta-text">Vote now at <strong>{APP_CONFIG.domain}</strong></span>
                                     <span className="cta-arrow">👈</span>
                                 </div>
                             </div>
                         )}
 
-                        {/* 🔴 LIVE ACTIVITY FEED - Floating toasts */}
                         <div className="jukebox-activity-feed">
                             {activityFeed.map((item) => (
                                 <div key={item.id} className={`activity-toast activity-${item.type}`}>
@@ -973,7 +1209,6 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* Progress Bar */}
                     <div className="jukebox-progress">
                         <div className="progress-bar">
                             <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -984,7 +1219,6 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* Controls */}
                     <div className="jukebox-controls">
                         <button className="control-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
                             {isMuted ? '🔇' : '🔊'}
@@ -992,30 +1226,21 @@ export default function JukeboxPlayer({
                         <button className="control-btn play-btn" onClick={togglePlayPause}>
                             {isPlaying ? '⏸' : '▶'}
                         </button>
-                        <button
-                            className="control-btn"
-                            onClick={skipToNext}
-                            disabled={!nextSong}
-                            title={nextSong ? `Skip to: ${nextSong.name}` : 'No more songs'}
-                        >
+                        <button className="control-btn" onClick={skipToNext} disabled={!nextSong} title={nextSong ? `Skip to: ${nextSong.name}` : 'No more songs'}>
                             ⏭
                         </button>
                     </div>
 
-                    {/* Karma Indicator */}
                     {watchTime > 0 && (
                         <div className="jukebox-karma">
                             {karmaEarned ? (
                                 <span className="karma-earned">✨ +1 Karma earned!</span>
                             ) : (
-                                <span className="karma-progress">
-                                    🎧 Watch 60s for +1 karma: {watchTime}/60
-                                </span>
+                                <span className="karma-progress">🎧 Watch 60s for +1 karma: {watchTime}/60</span>
                             )}
                         </div>
                     )}
 
-                    {/* Playlist Queue - with voting! */}
                     {playlist.length > 1 && (
                         <div className="jukebox-queue">
                             <span className="queue-label">📋 Up Next ({playlist.length - currentIndex - 1} songs)</span>
@@ -1023,56 +1248,19 @@ export default function JukeboxPlayer({
                                 {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
                                     <div key={song.id} className="queue-item">
                                         <span className="queue-position">{i + 1}</span>
-                                        <img
-                                            src={song.albumArt}
-                                            alt=""
-                                            className="queue-album"
-                                            onClick={() => onNextSong(song.id)}
-                                            title="Skip to this song"
-                                        />
+                                        <img src={song.albumArt} alt="" className="queue-album" onClick={() => onNextSong(song.id)} title="Skip to this song" />
                                         <div className="queue-info" onClick={() => onNextSong(song.id)}>
                                             <span className="queue-song">
                                                 {song.name.length > 18 ? (
-                                                    <span className="queue-song-scroll">
-                                                        {song.name}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{song.name}
-                                                    </span>
+                                                    <span className="queue-song-scroll">{song.name}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{song.name}</span>
                                                 ) : song.name}
                                             </span>
                                             <span className="queue-artist">{song.artist}</span>
                                         </div>
-                                        {/* Voting buttons */}
                                         <div className="queue-voting">
-                                            <button
-                                                className="queue-vote-btn up"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onVote?.(song.id, 1);
-                                                    addActivity({
-                                                        type: 'vote',
-                                                        text: `Upvoted "${song.name.slice(0, 15)}..."`,
-                                                        icon: '👍',
-                                                    });
-                                                }}
-                                                title="Upvote"
-                                            >
-                                                👍
-                                            </button>
+                                            <button className="queue-vote-btn up" onClick={(e) => { e.stopPropagation(); onVote?.(song.id, 1); addActivity({ type: 'vote', text: `Upvoted "${song.name.slice(0, 15)}..."`, icon: '👍' }); }} title="Upvote">👍</button>
                                             <span className="queue-score">{song.score}</span>
-                                            <button
-                                                className="queue-vote-btn down"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onVote?.(song.id, -1);
-                                                    addActivity({
-                                                        type: 'vote',
-                                                        text: `Downvoted "${song.name.slice(0, 15)}..."`,
-                                                        icon: '👎',
-                                                    });
-                                                }}
-                                                title="Downvote"
-                                            >
-                                                👎
-                                            </button>
+                                            <button className="queue-vote-btn down" onClick={(e) => { e.stopPropagation(); onVote?.(song.id, -1); addActivity({ type: 'vote', text: `Downvoted "${song.name.slice(0, 15)}..."`, icon: '👎' }); }} title="Downvote">👎</button>
                                         </div>
                                     </div>
                                 ))}
@@ -1080,58 +1268,122 @@ export default function JukeboxPlayer({
                         </div>
                     )}
 
-                    {/* Small corner hint */}
-                    <button className="jukebox-corner-close" onClick={onClose} title="Back to playlist (ESC)">
-                        ✕
-                    </button>
+                    {!streamMode && (
+                        <button className="jukebox-corner-close" onClick={onClose} title="Back to playlist (ESC)">✕</button>
+                    )}
                 </div>
-                {/* END CENTER */}
 
-                {/* RIGHT SIDEBAR - Rules + How to Vote */}
+                {/* RIGHT SIDEBAR */}
                 <div className="jukebox-sidebar right">
-                    <div className="sidebar-section">
-                        <h3 className="sidebar-title">📱 How to Vote</h3>
-                        <div className="how-to-vote">
-                            <div className="vote-step">
-                                <span className="step-num">1</span>
-                                <span>Scan QR or visit</span>
+                    {streamMode ? (
+                        <>
+                            <div className="sidebar-section">
+                                <h3 className="sidebar-title">🏟️ Hype Zone</h3>
+                                <div className="hype-zone-stats">
+                                    <div className="hz-stat">
+                                        <span className="hz-icon">🗳️</span>
+                                        <span className="hz-value">{totalVotes}</span>
+                                        <span className="hz-label">votes cast</span>
+                                    </div>
+                                    <div className="hz-stat">
+                                        <span className="hz-icon">🎵</span>
+                                        <span className="hz-value">{playlist.length}</span>
+                                        <span className="hz-label">songs battling</span>
+                                    </div>
+                                    <div className="hz-stat">
+                                        <span className="hz-icon">👥</span>
+                                        <span className="hz-value">{uniqueContributors}</span>
+                                        <span className="hz-label">DJs active</span>
+                                    </div>
+                                    {playlist.length > 0 && (
+                                        <div className="hz-stat hz-top-song">
+                                            <span className="hz-icon">👑</span>
+                                            <span className="hz-value">{playlist[0].name.slice(0, 18)}</span>
+                                            <span className="hz-label">#{1} with +{playlist[0].score}</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="vote-url">crateoftheweek.com</div>
-                            <div className="vote-step">
-                                <span className="step-num">2</span>
-                                <span>Pick a name</span>
+                            <div className="sidebar-section">
+                                <h3 className="sidebar-title">🏆 Recent</h3>
+                                <div className="achievements-feed">
+                                    {achievements.length === 0 ? (
+                                        <p className="activity-empty">Waiting for action...</p>
+                                    ) : (
+                                        achievements.map((ach) => (
+                                            <div key={ach.id} className="achievement-item">
+                                                <span className="ach-emoji">{ach.emoji}</span>
+                                                <span className="ach-text">{ach.text}</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
-                            <div className="vote-step">
-                                <span className="step-num">3</span>
-                                <span>👍 Upvote favorites</span>
+                            <div className="sidebar-section cta-section">
+                                <div className="big-cta">
+                                    <img src="/crate-hackers-logo.png" alt="Crate Hackers" className="cta-logo" />
+                                    <span className="cta-label">JOIN NOW!</span>
+                                </div>
                             </div>
-                            <div className="vote-step">
-                                <span className="step-num">4</span>
-                                <span>👎 Downvote songs you don't want</span>
+                        </>
+                    ) : (
+                        <>
+                            <div className="sidebar-section">
+                                <h3 className="sidebar-title">📱 How to Vote</h3>
+                                <div className="how-to-vote">
+                                    <div className="vote-step"><span className="step-num">1</span><span>Scan QR or visit</span></div>
+                                    <div className="vote-url">{APP_CONFIG.domain}</div>
+                                    <div className="vote-step"><span className="step-num">2</span><span>Pick a name</span></div>
+                                    <div className="vote-step"><span className="step-num">3</span><span>👍 Upvote favorites</span></div>
+                                    <div className="vote-step"><span className="step-num">4</span><span>👎 Downvote songs you don&apos;t want</span></div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="sidebar-section">
-                        <h3 className="sidebar-title">📋 Rules</h3>
-                        <ul className="rules-list">
-                            <li>🎵 Add up to 5 songs</li>
-                            <li>⬆️ Top songs make the final playlist</li>
-                            <li>⬇️ Low votes = dropped</li>
-                            <li>⚡ Earn karma by voting</li>
-                            <li>🏆 Top DJs get bragging rights</li>
-                        </ul>
-                    </div>
-
-                    <div className="sidebar-section cta-section">
-                        <div className="big-cta">
-                            <img src="/crate-hackers-logo.png" alt="Crate Hackers" className="cta-logo" />
-                            <span className="cta-label">JOIN NOW!</span>
-                        </div>
-                    </div>
+                            <div className="sidebar-section">
+                                <h3 className="sidebar-title">📋 Rules</h3>
+                                <ul className="rules-list">
+                                    <li>🎵 Add up to 5 songs</li>
+                                    <li>⬆️ Top songs make the final playlist</li>
+                                    <li>⬇️ Low votes = dropped</li>
+                                    <li>⚡ Earn karma by voting</li>
+                                    <li>🏆 Top DJs get bragging rights</li>
+                                </ul>
+                            </div>
+                            <div className="sidebar-section cta-section">
+                                <div className="big-cta">
+                                    <img src="/crate-hackers-logo.png" alt="Crate Hackers" className="cta-logo" />
+                                    <span className="cta-label">JOIN NOW!</span>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
-            {/* END DASHBOARD */}
+
+            {/* 📺 BROADCAST: News Ticker */}
+            {streamMode && (
+                <div className="broadcast-ticker">
+                    <div className="ticker-track">
+                        <span className="ticker-content">
+                            🔥 {playlist.length} songs battling &nbsp;•&nbsp;
+                            🗳️ {totalVotes} votes cast &nbsp;•&nbsp;
+                            👥 {uniqueContributors} DJs active &nbsp;•&nbsp;
+                            {playlist.length > 0 && <>👑 #1: &ldquo;{playlist[0].name}&rdquo; by {playlist[0].artist} (+{playlist[0].score}) &nbsp;•&nbsp;</>}
+                            {locations.length > 0 && <>🌎 Votes from {locations.slice(0, 4).join(', ')} &nbsp;•&nbsp;</>}
+                            📱 Join at {APP_CONFIG.domain} &nbsp;•&nbsp;
+                            {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
+                        </span>
+                        <span className="ticker-content" aria-hidden="true">
+                            🔥 {playlist.length} songs battling &nbsp;•&nbsp;
+                            🗳️ {totalVotes} votes cast &nbsp;•&nbsp;
+                            👥 {uniqueContributors} DJs active &nbsp;•&nbsp;
+                            {playlist.length > 0 && <>👑 #1: &ldquo;{playlist[0].name}&rdquo; by {playlist[0].artist} (+{playlist[0].score}) &nbsp;•&nbsp;</>}
+                            {locations.length > 0 && <>🌎 Votes from {locations.slice(0, 4).join(', ')} &nbsp;•&nbsp;</>}
+                            📱 Join at {APP_CONFIG.domain} &nbsp;•&nbsp;
+                            {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
+                        </span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

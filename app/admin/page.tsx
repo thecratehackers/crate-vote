@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { APP_CONFIG } from '@/lib/config';
+import { APP_CONFIG, BROADCAST } from '@/lib/config';
+import { persistGet, persistSet, persistRemove } from '@/lib/persist';
 
 interface Song {
     id: string;
@@ -125,7 +126,7 @@ export default function AdminPage() {
     const [isSavingStream, setIsSavingStream] = useState(false);
     const [hideStreamLocally, setHideStreamLocally] = useState(() => {
         if (typeof window !== 'undefined') {
-            try { return localStorage.getItem('crate-admin-hide-stream') === 'true'; } catch { return false; }
+            return persistGet('crate-admin-hide-stream') === 'true';
         }
         return false;
     });
@@ -265,6 +266,26 @@ export default function AdminPage() {
     const [isStartingBattle, setIsStartingBattle] = useState(false);
     const [battleCountdown, setBattleCountdown] = useState(0);
     const isResolvingBattle = useRef(false);  // Prevent multiple auto-resolves
+
+    // 📺 SHOW CLOCK - ESPN-style segment ticker
+    interface ShowSegmentLocal {
+        id: string;
+        name: string;
+        durationMs: number;
+        icon: string;
+        order: number;
+    }
+    interface ShowClockLocal {
+        segments: ShowSegmentLocal[];
+        activeSegmentIndex: number;
+        startedAt: number | null;
+        segmentStartedAt: number | null;
+        isRunning: boolean;
+    }
+    const [showClock, setShowClock] = useState<ShowClockLocal | null>(null);
+    const [showClockSegments, setShowClockSegments] = useState<ShowSegmentLocal[]>([]);
+    const [isShowClockAction, setIsShowClockAction] = useState(false);
+    const [showClockExpanded, setShowClockExpanded] = useState(false);
 
 
     // Fetch timer status
@@ -1275,6 +1296,114 @@ export default function AdminPage() {
         }
     };
 
+    // ============ SHOW CLOCK HANDLERS ============
+
+    const fetchShowClock = useCallback(async () => {
+        if (!isAuthenticated) return;
+        try {
+            const res = await adminFetch('/api/admin/show-clock');
+            const data = await res.json();
+            setShowClock(data);
+            // If segments exist and we haven't loaded them into the editor yet
+            if (data.segments && data.segments.length > 0 && showClockSegments.length === 0) {
+                setShowClockSegments(data.segments);
+            }
+        } catch (error) {
+            console.error('Failed to fetch show clock:', error);
+        }
+    }, [isAuthenticated, adminPassword, adminId]);
+
+    // Poll show clock when expanded
+    useEffect(() => {
+        if (!isAuthenticated || !showClockExpanded) return;
+        fetchShowClock();
+        const interval = setInterval(fetchShowClock, 3000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated, showClockExpanded, fetchShowClock]);
+
+    const handleAddSegment = () => {
+        if (showClockSegments.length >= BROADCAST.showClockMaxSegments) return;
+        const newSeg: ShowSegmentLocal = {
+            id: 'seg-' + Date.now(),
+            name: '',
+            durationMs: 10 * 60 * 1000, // 10 min default
+            icon: BROADCAST.segmentIcons[showClockSegments.length % BROADCAST.segmentIcons.length],
+            order: showClockSegments.length,
+        };
+        setShowClockSegments([...showClockSegments, newSeg]);
+    };
+
+    const handleRemoveSegment = (index: number) => {
+        setShowClockSegments(showClockSegments.filter((_, i) => i !== index));
+    };
+
+    const handleUpdateSegment = (index: number, field: string, value: string | number) => {
+        const updated = [...showClockSegments];
+        (updated[index] as any)[field] = value;
+        setShowClockSegments(updated);
+    };
+
+    const handleSaveShowClock = async () => {
+        if (showClockSegments.length === 0) {
+            setMessage({ type: 'error', text: 'Add at least one segment.' });
+            return;
+        }
+        if (showClockSegments.some(s => !s.name.trim())) {
+            setMessage({ type: 'error', text: 'All segments need a name.' });
+            return;
+        }
+        setIsShowClockAction(true);
+        try {
+            const res = await adminFetch('/api/admin/show-clock', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'saveSegments', segments: showClockSegments }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setShowClock(data.showClock);
+                setMessage({ type: 'success', text: `📺 Saved ${showClockSegments.length} segments!` });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to save segments' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to save show clock' });
+        } finally {
+            setIsShowClockAction(false);
+        }
+    };
+
+    const handleShowClockAction = async (action: string, body: Record<string, unknown> = {}) => {
+        setIsShowClockAction(true);
+        try {
+            const res = await adminFetch('/api/admin/show-clock', {
+                method: 'POST',
+                body: JSON.stringify({ action, ...body }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setShowClock(data.showClock);
+                const msgs: Record<string, string> = {
+                    start: '📺 Show clock started!',
+                    advance: '⏭️ Advanced to next segment!',
+                    extend: '⏱️ Extended by 2 minutes!',
+                    stop: '⏹️ Show clock stopped.',
+                    clear: '🗑️ Show clock cleared.',
+                };
+                setMessage({ type: 'success', text: msgs[action] || 'Done!' });
+                if (action === 'clear') {
+                    setShowClockSegments([]);
+                    setShowClock(null);
+                }
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Show clock action failed' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Show clock action failed' });
+        } finally {
+            setIsShowClockAction(false);
+        }
+    };
+
 
     // LOGIN SCREEN
     if (!isAuthenticated) {
@@ -1772,6 +1901,146 @@ export default function AdminPage() {
                             </div>
                         </div>
 
+                        {/* 📺 SHOW CLOCK - ESPN-Style Segment Ticker */}
+                        <div className="show-clock-section">
+                            <button
+                                className={`tool-btn show-clock-toggle ${showClock?.isRunning ? 'active' : ''}`}
+                                onClick={() => { setShowClockExpanded(!showClockExpanded); if (!showClockExpanded) fetchShowClock(); }}
+                            >
+                                <span className="tool-icon">📺</span>
+                                <span className="tool-name">
+                                    {showClock?.isRunning ? `LIVE — ${showClock.segments[showClock.activeSegmentIndex]?.icon} ${showClock.segments[showClock.activeSegmentIndex]?.name}` : 'Show Clock'}
+                                </span>
+                                <span className="expand-arrow">{showClockExpanded ? '▲' : '▼'}</span>
+                            </button>
+
+                            {showClockExpanded && (
+                                <div className="show-clock-panel">
+                                    {/* Live Controls — shown when running */}
+                                    {showClock?.isRunning && (
+                                        <div className="show-clock-live-controls">
+                                            <div className="show-clock-live-status">
+                                                <span className="live-badge">🔴 LIVE</span>
+                                                <span className="current-segment">
+                                                    {showClock.segments[showClock.activeSegmentIndex]?.icon}{' '}
+                                                    {showClock.segments[showClock.activeSegmentIndex]?.name}
+                                                </span>
+                                                <span className="segment-progress">
+                                                    Segment {showClock.activeSegmentIndex + 1}/{showClock.segments.length}
+                                                </span>
+                                            </div>
+                                            <div className="show-clock-live-actions">
+                                                <button className="tool-btn advance" onClick={() => handleShowClockAction('advance')} disabled={isShowClockAction}>
+                                                    <span className="tool-icon">⏭️</span>
+                                                    <span className="tool-name">Next</span>
+                                                </button>
+                                                <button className="tool-btn extend" onClick={() => handleShowClockAction('extend', { additionalMs: 120000 })} disabled={isShowClockAction}>
+                                                    <span className="tool-icon">⏱️</span>
+                                                    <span className="tool-name">+2 min</span>
+                                                </button>
+                                                <button className="tool-btn danger" onClick={() => handleShowClockAction('stop')} disabled={isShowClockAction}>
+                                                    <span className="tool-icon">⏹️</span>
+                                                    <span className="tool-name">Stop Show</span>
+                                                </button>
+                                            </div>
+                                            {/* Mini segment timeline */}
+                                            <div className="show-clock-timeline">
+                                                {showClock.segments.map((seg, i) => (
+                                                    <div key={seg.id} className={`timeline-segment ${i === showClock.activeSegmentIndex ? 'active' : i < showClock.activeSegmentIndex ? 'completed' : 'upcoming'}`}>
+                                                        <span className="seg-icon">{seg.icon}</span>
+                                                        <span className="seg-name">{seg.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Segment Builder — shown when NOT running */}
+                                    {!showClock?.isRunning && (
+                                        <div className="segment-builder">
+                                            <div className="segment-builder-header">
+                                                <h4>Build Your Rundown</h4>
+                                                <span className="segment-count">{showClockSegments.length}/{BROADCAST.showClockMaxSegments}</span>
+                                            </div>
+
+                                            {showClockSegments.map((seg, i) => (
+                                                <div key={seg.id} className="segment-row">
+                                                    <span className="segment-number">{i + 1}</span>
+                                                    {/* Icon selector */}
+                                                    <select
+                                                        className="segment-icon-select"
+                                                        value={seg.icon}
+                                                        onChange={(e) => handleUpdateSegment(i, 'icon', e.target.value)}
+                                                    >
+                                                        {BROADCAST.segmentIcons.map(icon => (
+                                                            <option key={icon} value={icon}>{icon}</option>
+                                                        ))}
+                                                    </select>
+                                                    {/* Name input */}
+                                                    <input
+                                                        type="text"
+                                                        className="segment-name-input"
+                                                        placeholder={['Intro', 'Voting Round', 'Q&A', 'Top 10 Reveal', 'Finale'][i] || 'Segment name'}
+                                                        value={seg.name}
+                                                        onChange={(e) => handleUpdateSegment(i, 'name', e.target.value)}
+                                                        maxLength={50}
+                                                    />
+                                                    {/* Duration picker */}
+                                                    <select
+                                                        className="segment-duration-select"
+                                                        value={seg.durationMs}
+                                                        onChange={(e) => handleUpdateSegment(i, 'durationMs', Number(e.target.value))}
+                                                    >
+                                                        <option value={60000}>1 min</option>
+                                                        <option value={300000}>5 min</option>
+                                                        <option value={600000}>10 min</option>
+                                                        <option value={900000}>15 min</option>
+                                                        <option value={1200000}>20 min</option>
+                                                        <option value={1500000}>25 min</option>
+                                                        <option value={1800000}>30 min</option>
+                                                    </select>
+                                                    {/* Remove */}
+                                                    <button className="segment-remove-btn" onClick={() => handleRemoveSegment(i)}>✕</button>
+                                                </div>
+                                            ))}
+
+                                            {showClockSegments.length < BROADCAST.showClockMaxSegments && (
+                                                <button className="add-segment-btn" onClick={handleAddSegment}>
+                                                    + Add Segment
+                                                </button>
+                                            )}
+
+                                            {showClockSegments.length > 0 && (
+                                                <div className="segment-builder-footer">
+                                                    <span className="total-duration">
+                                                        Total: {Math.round(showClockSegments.reduce((a, s) => a + s.durationMs, 0) / 60000)} min
+                                                    </span>
+                                                    <div className="segment-builder-actions">
+                                                        <button className="tool-btn save" onClick={handleSaveShowClock} disabled={isShowClockAction}>
+                                                            <span className="tool-icon">💾</span>
+                                                            <span className="tool-name">{isShowClockAction ? 'Saving...' : 'Save'}</span>
+                                                        </button>
+                                                        <button
+                                                            className="tool-btn start-show"
+                                                            onClick={() => handleShowClockAction('start')}
+                                                            disabled={isShowClockAction || !showClock?.segments?.length}
+                                                        >
+                                                            <span className="tool-icon">▶️</span>
+                                                            <span className="tool-name">{isShowClockAction ? 'Starting...' : 'Execute Show'}</span>
+                                                        </button>
+                                                        <button className="tool-btn danger-subtle" onClick={() => handleShowClockAction('clear')} disabled={isShowClockAction}>
+                                                            <span className="tool-icon">🗑️</span>
+                                                            <span className="tool-name">Clear</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Quick Tools */}
                         <div className="tools-grid">
                             <button
@@ -1902,13 +2171,11 @@ export default function AdminPage() {
                                         onClick={() => {
                                             const newVal = !hideStreamLocally;
                                             setHideStreamLocally(newVal);
-                                            try {
-                                                if (newVal) {
-                                                    localStorage.setItem('crate-admin-hide-stream', 'true');
-                                                } else {
-                                                    localStorage.removeItem('crate-admin-hide-stream');
-                                                }
-                                            } catch (e) { /* localStorage unavailable */ }
+                                            if (newVal) {
+                                                persistSet('crate-admin-hide-stream', 'true');
+                                            } else {
+                                                persistRemove('crate-admin-hide-stream');
+                                            }
                                         }}
                                     >
                                         <span className="tool-icon">{hideStreamLocally ? '👁️‍🗨️' : '🙈'}</span>

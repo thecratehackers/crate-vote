@@ -50,7 +50,7 @@ export const authOptions: NextAuthOptions = {
             clientId: process.env.SPOTIFY_CLIENT_ID!,
             clientSecret: process.env.SPOTIFY_CLIENT_SECRET!,
             authorization: {
-                params: { scope: scopes },
+                params: { scope: scopes, show_dialog: true },
             },
         }),
     ],
