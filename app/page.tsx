@@ -1177,8 +1177,11 @@ export default function HomePage() {
                         return newSet;
                     });
 
-                    // Add to toast queue (newest first)
+                    // Add to toast queue (newest first) — ephemeral, for ticker
                     setToastQueue(prev => [...newActivities, ...prev].slice(0, 5));
+
+                    // Add to persistent activity list — for sidebar (stays until replaced)
+                    setLiveActivity(prev => [...newActivities, ...prev].slice(0, 15));
                 }
             }
         } catch (error: any) {
@@ -3696,7 +3699,7 @@ export default function HomePage() {
                         visitorId={visitorId || undefined}
                         streamMode={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stream') === 'true'}
 
-                        liveActivity={toastQueue}
+                        liveActivity={liveActivity}
                     />
                 )
             }
