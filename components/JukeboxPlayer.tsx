@@ -680,6 +680,17 @@ export default function JukeboxPlayer({
         ? playlist[currentIndex + 1]
         : null;
 
+    // 🔧 REFS to avoid stale closures in YouTube player callbacks
+    // The YT player is initialized once, so its event handlers would capture
+    // the initial render's values. Refs ensure they always read the latest.
+    const nextSongRef = useRef(nextSong);
+    nextSongRef.current = nextSong;
+    const onNextSongRef = useRef(onNextSong);
+    onNextSongRef.current = onNextSong;
+    const playlistRef = useRef(playlist);
+    playlistRef.current = playlist;
+    // onCloseRef is already defined elsewhere for back-button support
+
     // Load YouTube IFrame API
     useEffect(() => {
         if (window.YT && window.YT.Player) {
@@ -746,11 +757,12 @@ export default function JukeboxPlayer({
         if (bombCount >= bombThreshold && bombThreshold > 0) {
             setShowBombedOverlay(true);
             SoundEffects.bombed();
-            // Auto-skip after showing bombed animation
+            // Auto-skip after showing bombed animation (use refs to avoid stale closure)
             setTimeout(() => {
                 setShowBombedOverlay(false);
-                if (nextSong) {
-                    onNextSong(nextSong.id);
+                const latestNext = nextSongRef.current;
+                if (latestNext) {
+                    onNextSongRef.current(latestNext.id);
                 }
             }, 3000);
         }
@@ -841,17 +853,28 @@ export default function JukeboxPlayer({
     };
 
     const handleVideoEnd = () => {
-        // Show next song hint
-        if (nextSong) {
+        // Read latest values from refs (avoids stale closure from YT player init)
+        const latestNextSong = nextSongRef.current;
+        const latestOnNextSong = onNextSongRef.current;
+        const latestPlaylist = playlistRef.current;
+
+        if (latestNextSong) {
+            // Show next song hint, then advance
             setShowNextHint(true);
-            // Auto-advance after 2 seconds
             setTimeout(() => {
                 setShowNextHint(false);
-                onNextSong(nextSong.id);
+                latestOnNextSong(latestNextSong.id);
+            }, 2000);
+        } else if (latestPlaylist.length > 0) {
+            // End of playlist — loop back to the first song
+            setShowNextHint(true);
+            setTimeout(() => {
+                setShowNextHint(false);
+                latestOnNextSong(latestPlaylist[0].id);
             }, 2000);
         } else {
-            // No more songs - close jukebox
-            onClose();
+            // Playlist is truly empty — close jukebox
+            onCloseRef.current();
         }
     };
 
