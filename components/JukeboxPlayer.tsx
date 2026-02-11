@@ -1384,10 +1384,24 @@ export default function JukeboxPlayer({
                                     )}
                                 </div>
                             </div>
-                            <div className="sidebar-section cta-section">
-                                <div className="big-cta">
-                                    <img src="/crate-hackers-logo.png" alt="Crate Hackers" className="cta-logo" />
-                                    <span className="cta-label">JOIN NOW!</span>
+                            <div className="sidebar-section">
+                                <h3 className="sidebar-title">🗂️ Up Next</h3>
+                                <div className="sidebar-upnext">
+                                    {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
+                                        <div key={song.id} className="upnext-item" onClick={() => onNextSong(song.id)} title={`Skip to: ${song.name}`}>
+                                            <span className="upnext-pos">{i + 1}</span>
+                                            <img src={song.albumArt} alt="" className="upnext-art" />
+                                            <div className="upnext-info">
+                                                <span className="upnext-name">{song.name.length > 20 ? song.name.slice(0, 20) + '…' : song.name}</span>
+                                                <span className="upnext-artist">{song.artist}</span>
+                                            </div>
+                                            <span className="upnext-score">+{song.score}</span>
+                                            <button className="upnext-skip" onClick={(e) => { e.stopPropagation(); onNextSong(song.id); }} title="Play this song">▶</button>
+                                        </div>
+                                    ))}
+                                    {playlist.length <= currentIndex + 1 && (
+                                        <p className="activity-empty">No more songs in queue</p>
+                                    )}
                                 </div>
                             </div>
                         </>
@@ -1413,10 +1427,24 @@ export default function JukeboxPlayer({
                                     <li>🏆 Top DJs get bragging rights</li>
                                 </ul>
                             </div>
-                            <div className="sidebar-section cta-section">
-                                <div className="big-cta">
-                                    <img src="/crate-hackers-logo.png" alt="Crate Hackers" className="cta-logo" />
-                                    <span className="cta-label">JOIN NOW!</span>
+                            <div className="sidebar-section">
+                                <h3 className="sidebar-title">🗂️ Up Next</h3>
+                                <div className="sidebar-upnext">
+                                    {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
+                                        <div key={song.id} className="upnext-item" onClick={() => onNextSong(song.id)} title={`Skip to: ${song.name}`}>
+                                            <span className="upnext-pos">{i + 1}</span>
+                                            <img src={song.albumArt} alt="" className="upnext-art" />
+                                            <div className="upnext-info">
+                                                <span className="upnext-name">{song.name.length > 20 ? song.name.slice(0, 20) + '…' : song.name}</span>
+                                                <span className="upnext-artist">{song.artist}</span>
+                                            </div>
+                                            <span className="upnext-score">+{song.score}</span>
+                                            <button className="upnext-skip" onClick={(e) => { e.stopPropagation(); onNextSong(song.id); }} title="Play this song">▶</button>
+                                        </div>
+                                    ))}
+                                    {playlist.length <= currentIndex + 1 && (
+                                        <p className="activity-empty">No more songs in queue</p>
+                                    )}
                                 </div>
                             </div>
                         </>
