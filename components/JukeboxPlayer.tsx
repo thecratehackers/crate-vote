@@ -1308,32 +1308,6 @@ export default function JukeboxPlayer({
                         )}
                     </div>
 
-                    {playlist.length > 1 && (
-                        <div className="jukebox-queue">
-                            <span className="queue-label">🗂️ Up Next ({playlist.length - currentIndex - 1} songs)</span>
-                            <div className="queue-items">
-                                {playlist.slice(currentIndex + 1, currentIndex + 11).map((song, i) => (
-                                    <div key={song.id} className="queue-item">
-                                        <span className="queue-position">{i + 1}</span>
-                                        <img src={song.albumArt} alt="" className="queue-album" onClick={() => onNextSong(song.id)} title="Skip to this song" />
-                                        <div className="queue-info" onClick={() => onNextSong(song.id)}>
-                                            <span className="queue-song">
-                                                {song.name.length > 18 ? (
-                                                    <span className="queue-song-scroll">{song.name}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{song.name}</span>
-                                                ) : song.name}
-                                            </span>
-                                            <span className="queue-artist">{song.artist}</span>
-                                        </div>
-                                        <div className="queue-voting">
-                                            <button className="queue-vote-btn up" onClick={(e) => { e.stopPropagation(); onVote?.(song.id, 1); addActivity({ type: 'vote', text: `Upvoted "${song.name.slice(0, 15)}..."`, icon: '👍' }); }} title="Upvote">👍</button>
-                                            <span className="queue-score">{song.score}</span>
-                                            <button className="queue-vote-btn down" onClick={(e) => { e.stopPropagation(); onVote?.(song.id, -1); addActivity({ type: 'vote', text: `Downvoted "${song.name.slice(0, 15)}..."`, icon: '👎' }); }} title="Downvote">👎</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
 
                 </div>
