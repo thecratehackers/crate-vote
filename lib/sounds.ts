@@ -34,6 +34,10 @@ const SOUNDS = {
     segmentWarning: { freq: [880, 1100, 880], duration: 0.15, type: 'sine' as OscillatorType },
     // SHOW CLOCK - 30-second urgent (escalating pulse)
     segmentUrgent: { freq: [440, 660, 880, 1100], duration: 0.12, type: 'square' as OscillatorType },
+    // 💣 BOMB - Dramatic descending explosion
+    bomb: { freq: [880, 440, 220, 110], duration: 0.2, type: 'sawtooth' as OscillatorType },
+    // 💣 BOMBED (song skipped) - Deep rumble explosion
+    bombed: { freq: [110, 80, 55, 40], duration: 0.35, type: 'square' as OscillatorType },
 };
 
 let audioContext: AudioContext | null = null;
@@ -208,5 +212,18 @@ export const SoundEffects = {
     segmentUrgent(): void {
         const s = SOUNDS.segmentUrgent;
         playTone(s.freq, s.duration, s.type, 0.6);
+    },
+
+    // 💣 BOMB FEATURE SOUNDS
+    // 💣 Bomb placed - dramatic descending hit
+    bomb(): void {
+        const s = SOUNDS.bomb;
+        playTone(s.freq, s.duration, s.type, 0.6);
+    },
+
+    // 💥 Song bombed off - deep rumble explosion
+    bombed(): void {
+        const s = SOUNDS.bombed;
+        playTone(s.freq, s.duration, s.type, 0.8);
     },
 };

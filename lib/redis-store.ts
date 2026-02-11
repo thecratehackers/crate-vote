@@ -85,6 +85,14 @@ const PRIZE_DROP_KEY = 'hackathon:prizeDrop';  // { winnerVisitorId, winnerName,
 const LEADERBOARD_KING_KEY = 'hackathon:leaderboardKing';  // { winnerVisitorId, winnerName, score, timestamp } - session-end MVP
 const SHOW_CLOCK_KEY = 'hackathon:showClock';  // ShowClock state for ESPN-style segment ticker
 
+// 💣 BOMB FEATURE KEYS - Skip currently playing jukebox song via crowd consensus
+const NOW_PLAYING_KEY = 'hackathon:nowPlaying';  // { songId, songName, artistName, albumArt, startedAt } - current jukebox song
+// Bomb votes per song: hackathon:bomb:{songId} → Redis Set of visitorIds
+function getSongBombKey(songId: string): string {
+    return `hackathon:bomb:${songId}`;
+}
+const BOMB_THRESHOLD = 5;  // Number of unique bombs required to skip a song
+
 // VERSUS BATTLE KEYS - Head-to-head song battles
 const VERSUS_BATTLE_KEY = 'hackathon:versusBattle';  // Main battle state
 const VERSUS_VOTES_A_KEY = 'hackathon:versusVotesA';  // Set of visitorIds who voted for Song A
@@ -2920,4 +2928,122 @@ export async function checkAddSongLimit(visitorId: string): Promise<RateLimitRes
  */
 export async function checkSearchLimit(visitorId: string): Promise<RateLimitResult> {
     return checkRateLimit(`search:${visitorId}`, 10, 60);
+}
+
+// ============ 💣 BOMB FEATURE - Skip currently playing jukebox song ============
+
+export interface NowPlaying {
+    songId: string;
+    songName: string;
+    artistName: string;
+    albumArt: string;
+    startedAt: number;
+}
+
+/**
+ * Set the currently playing song in jukebox mode (called by host)
+ */
+export async function setNowPlaying(data: NowPlaying): Promise<void> {
+    try {
+        // Clear bomb votes from previous song
+        const prev = await redis.get<NowPlaying>(NOW_PLAYING_KEY);
+        if (prev && prev.songId !== data.songId) {
+            await redis.del(getSongBombKey(prev.songId));
+        }
+        await redis.set(NOW_PLAYING_KEY, data);
+    } catch (error) {
+        console.error('Failed to set now playing:', error);
+    }
+}
+
+/**
+ * Get the currently playing song
+ */
+export async function getNowPlaying(): Promise<NowPlaying | null> {
+    try {
+        return await redis.get<NowPlaying>(NOW_PLAYING_KEY);
+    } catch (error) {
+        console.error('Failed to get now playing:', error);
+        return null;
+    }
+}
+
+/**
+ * Clear the now playing state (when jukebox closes)
+ */
+export async function clearNowPlaying(): Promise<void> {
+    try {
+        const prev = await redis.get<NowPlaying>(NOW_PLAYING_KEY);
+        if (prev) {
+            await redis.del(getSongBombKey(prev.songId));
+        }
+        await redis.del(NOW_PLAYING_KEY);
+    } catch (error) {
+        console.error('Failed to clear now playing:', error);
+    }
+}
+
+/**
+ * Bomb the currently playing song
+ * Returns: { success, bombCount, threshold, bombed (true if threshold reached) }
+ */
+export async function bombSong(songId: string, visitorId: string): Promise<{
+    success: boolean;
+    error?: string;
+    bombCount: number;
+    threshold: number;
+    bombed: boolean;
+}> {
+    try {
+        // Verify this is actually the currently playing song
+        const nowPlaying = await redis.get<NowPlaying>(NOW_PLAYING_KEY);
+        if (!nowPlaying || nowPlaying.songId !== songId) {
+            return { success: false, error: 'This song is no longer playing.', bombCount: 0, threshold: BOMB_THRESHOLD, bombed: false };
+        }
+
+        const bombKey = getSongBombKey(songId);
+
+        // Check if already bombed by this user
+        const alreadyBombed = await redis.sismember(bombKey, visitorId);
+        if (alreadyBombed) {
+            const currentCount = await redis.scard(bombKey);
+            return { success: false, error: 'You already bombed this song!', bombCount: currentCount, threshold: BOMB_THRESHOLD, bombed: false };
+        }
+
+        // Add bomb
+        await redis.sadd(bombKey, visitorId);
+        const bombCount = await redis.scard(bombKey);
+
+        // Check if threshold reached
+        const bombed = bombCount >= BOMB_THRESHOLD;
+
+        if (bombed) {
+            // Song is bombed! Clear it from now playing
+            await redis.del(NOW_PLAYING_KEY);
+            await redis.del(bombKey);
+            console.log(`💣 BOMBED! "${nowPlaying.songName}" by ${nowPlaying.artistName} was bombed off (${bombCount} bombs)`);
+        }
+
+        return { success: true, bombCount, threshold: BOMB_THRESHOLD, bombed };
+    } catch (error) {
+        console.error('Failed to bomb song:', error);
+        return { success: false, error: 'Could not register bomb. Try again.', bombCount: 0, threshold: BOMB_THRESHOLD, bombed: false };
+    }
+}
+
+/**
+ * Get the current bomb count for the now-playing song
+ */
+export async function getNowPlayingBombCount(): Promise<{ bombCount: number; threshold: number }> {
+    try {
+        const nowPlaying = await redis.get<NowPlaying>(NOW_PLAYING_KEY);
+        if (!nowPlaying) {
+            return { bombCount: 0, threshold: BOMB_THRESHOLD };
+        }
+        const bombCount = await redis.scard(getSongBombKey(nowPlaying.songId));
+        return { bombCount, threshold: BOMB_THRESHOLD };
+    } catch (error) {
+        console.error('Failed to get bomb count:', error);
+        return { bombCount: 0, threshold: BOMB_THRESHOLD };
+    }
 }
