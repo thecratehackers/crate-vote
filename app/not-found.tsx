@@ -10,7 +10,7 @@ export default function NotFound() {
                     This page doesn't exist.
                 </p>
                 <Link href="/" className="home-link">
-                    <span className="link-icon">🎵</span>
+                    <span className="link-icon">💿</span>
                     <span>Back to Playlist</span>
                 </Link>
             </div>

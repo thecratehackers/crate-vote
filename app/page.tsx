@@ -455,7 +455,7 @@ export default function HomePage() {
     }, [songs, isUserInteracting]);
 
     // Pre-selected avatar emojis - music/DJ themed, clean and minimal
-    const AVATAR_OPTIONS = ['🎧', '🎤', '🎵', '💿', '🎹', '🎸', '🎺', '🔊', '🎙️', '📻'];
+    const AVATAR_OPTIONS = ['🎧', '🎛️', '🎚️', '💿', '💽', '🔊', '📡', '📱', '🤖', '🖥️'];
 
     // Username and avatar state - profile entry
     const [username, setUsername] = useState<string | null>(null);
@@ -1010,7 +1010,7 @@ export default function HomePage() {
 
                     // 🎊 CONFETTI: If YOUR song hits top 3
                     if (rank <= 3 && prevRank > 3 && song.addedBy === visitorId) {
-                        setConfettiMessage(`🎉 Your song "${song.name}" hit #${rank}!`);
+                        setConfettiMessage(`📦 Your song "${song.name}" hit #${rank}!`);
                         setShowConfetti(true);
                         setTimeout(() => setShowConfetti(false), 3000);
                     }
@@ -1277,7 +1277,7 @@ export default function HomePage() {
             // Top song shoutout
             if (sortedSongs.length > 0) {
                 const topSong = sortedSongs[0];
-                shoutouts.push(`🔥 "${topSong.name}" by ${topSong.addedByName} is dominating at #1!`);
+                shoutouts.push(`🔊 "${topSong.name}" by ${topSong.addedByName} is dominating at #1!`);
             }
 
             // Hot competition
@@ -1292,7 +1292,7 @@ export default function HomePage() {
             if (sortedSongs.length >= 5) {
                 const fourthSong = sortedSongs[3];
                 if (fourthSong.score > 0) {
-                    shoutouts.push(`🚀 "${fourthSong.name}" is pushing for the top 3!`);
+                    shoutouts.push(`📡 "${fourthSong.name}" is pushing for the top 3!`);
                 }
             }
 
@@ -1334,7 +1334,7 @@ export default function HomePage() {
                 const data = await res.json();
                 if (data.success) {
                     setMessage({ type: 'success', text: '+1 Karma for being active!' });
-                    setConfettiMessage('🎉 +1 Karma for being active!');
+                    setConfettiMessage('📦 +1 Karma for being active!');
                     setShowConfetti(true);
                     setTimeout(() => setShowConfetti(false), 4000);
                     // Refresh stats
@@ -1578,7 +1578,7 @@ export default function HomePage() {
 
             const data = await res.json();
             if (res.ok) {
-                setMessage({ type: 'success', text: '💥 Song removed' });
+                setMessage({ type: 'success', text: '🚨 Song removed' });
                 setDeleteWindow(prev => ({ ...prev, canDelete: false }));
                 fetchPlaylist();
             } else {
@@ -1814,7 +1814,7 @@ export default function HomePage() {
             if (data.success) {
                 setUserPrediction(songId);
                 setShowPredictionModal(false);
-                setMessage({ type: 'success', text: '🎯 Prediction locked in!' });
+                setMessage({ type: 'success', text: '🎚️ Prediction locked in!' });
             } else {
                 setMessage({ type: 'error', text: data.error || 'Couldn\'t save your prediction — try again' });
             }
@@ -1882,7 +1882,7 @@ export default function HomePage() {
                     videoId: data.videoId,
                     song: song,
                 });
-                setMessage({ type: 'success', text: '🎵 Now playing music videos' });
+                setMessage({ type: 'success', text: '💿 Now playing music videos' });
             } else {
                 // No video found - show brief message
                 setMessage({ type: 'error', text: 'No video found for this song' });
@@ -1922,7 +1922,7 @@ export default function HomePage() {
                     handleJukeboxNextSong(sortedSongs[currentIndex + 1].id);
                 } else {
                     setJukeboxState(null);
-                    setMessage({ type: 'success', text: '🎉 Playlist complete! Thanks for listening.' });
+                    setMessage({ type: 'success', text: '💿 Playlist complete! Thanks for listening.' });
                 }
             }
         } catch (error) {
@@ -2280,7 +2280,7 @@ export default function HomePage() {
                         {/* ── STEP 2: Email + Phone (Kartra capture) ── */}
                         {onboardingStep === 2 && (
                             <>
-                                <div className="step3-emoji">🚀</div>
+                                <div className="step3-emoji">📡</div>
                                 <h2 className="join-title">Get Notified When We Go Live</h2>
                                 <p className="join-subtitle">
                                     One email before each live event. That's it.
@@ -2392,7 +2392,7 @@ export default function HomePage() {
                                     animationDuration: `${1.5 + Math.random() * 1}s`,
                                 }}
                             >
-                                {['💧', '✨', '💫', '⭐', '🌟'][i % 5]}
+                                {['💿', '⚡', '📡', '🎧', '🔊'][i % 5]}
                             </span>
                         ))}
                     </div>
@@ -2440,13 +2440,13 @@ export default function HomePage() {
                                         animationDelay: `${Math.random() * 2}s`,
                                     }}
                                 >
-                                    {['✨', '💫', '⭐', '🌟', '💎'][i % 5]}
+                                    {['⚡', '📡', '🎧', '🔊', '💽'][i % 5]}
                                 </span>
                             ))}
                         </div>
                         <span className="mega-icon">🌧️</span>
                         <h1 className="mega-title">KARMA RAIN!</h1>
-                        <p className="mega-subtitle">+1 Karma for everyone! 🎉</p>
+                        <p className="mega-subtitle">+1 Karma for everyone! ⚡</p>
                     </div>
                 )
             }
@@ -2468,7 +2468,7 @@ export default function HomePage() {
                     <div className="winner-announcement" onClick={(e) => e.target === e.currentTarget && setShowWinnerSplash(false)}>
                         <div className="winner-modal">
                             <button className="winner-close" onClick={() => setShowWinnerSplash(false)}>✕</button>
-                            <div className="winner-confetti">🎉</div>
+                            <div className="winner-confetti">🏆</div>
                             <h1 className="winner-title">YOU WON! 🏆</h1>
                             <p className="winner-song">"{winnerSongName}" finished #1!</p>
                             <div className="winner-prize">
@@ -2494,7 +2494,7 @@ export default function HomePage() {
                                 rel="noopener noreferrer"
                                 className="winner-calendar-link"
                             >
-                                📅 Never miss a vote — Add to Calendar
+                                📡 Never miss a vote — Add to Calendar
                             </a>
                         </div>
                     </div>
@@ -2517,7 +2517,7 @@ export default function HomePage() {
                                             top: `${Math.random() * 100}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['🎰', '💰', '✨', '🎉', '💎'][i % 5]}
+                                            {['🎧', '📦', '⚡', '📡', '💽'][i % 5]}
                                         </span>
                                     ))}
                                 </div>
@@ -2551,14 +2551,14 @@ export default function HomePage() {
                                             top: `${Math.random() * 100}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['🎰', '💰', '✨', '🎉', '💎'][i % 5]}
+                                            {['🎧', '📦', '⚡', '📡', '💽'][i % 5]}
                                         </span>
                                     ))}
                                 </div>
                                 <span className="prize-drop-mega-icon">🎰</span>
                                 <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
-                                <p className="prize-drop-winner-name">🎉 {prizeDropWinnerName} just won a free hat!</p>
-                                <p className="prize-drop-hint">Stay active — you could be next! 🎯</p>
+                                <p className="prize-drop-winner-name">📦 {prizeDropWinnerName} just won a free hat!</p>
+                                <p className="prize-drop-hint">Stay active — you could be next! 🎚️</p>
                             </div>
                         )}
                     </div>
@@ -2581,13 +2581,13 @@ export default function HomePage() {
                                             top: `${10 + Math.random() * 80}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['👑', '⭐', '✨', '🏆'][i % 4]}
+                                            {['👑', '⚡', '📡', '🏆'][i % 4]}
                                         </span>
                                     ))}
                                 </div>
                                 <span className="king-mega-icon">👑</span>
                                 <h1 className="king-title">LEADERBOARD KING!</h1>
-                                <p className="king-subtitle">You&apos;re #1 with <strong>{leaderboardKingScore}</strong> points — you earned this! 🔥</p>
+                                <p className="king-subtitle">You&apos;re #1 with <strong>{leaderboardKingScore}</strong> points — you earned this! 🔊</p>
                                 <div className="winner-prize">
                                     <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
                                     <div className="prize-details">
@@ -2615,7 +2615,7 @@ export default function HomePage() {
                                             top: `${10 + Math.random() * 80}%`,
                                             animationDelay: `${Math.random() * 2}s`,
                                         }}>
-                                            {['👑', '⭐', '✨', '🏆'][i % 4]}
+                                            {['👑', '⚡', '📡', '🏆'][i % 4]}
                                         </span>
                                     ))}
                                 </div>
@@ -2629,7 +2629,7 @@ export default function HomePage() {
                                     rel="noopener noreferrer"
                                     className="king-calendar-link"
                                 >
-                                    📅 Come back next Tuesday — Add to Calendar
+                                    📡 Come back next Tuesday — Add to Calendar
                                 </a>
                             </div>
                         )}
@@ -2731,7 +2731,7 @@ export default function HomePage() {
                             {/* Karma - only show if > 0 */}
                             {karmaBonuses.karma > 0 && (
                                 <span className="stat-counter karma" data-tooltip="Karma: each point = +1 song slot & +1 vote" tabIndex={0}>
-                                    ✨ {karmaBonuses.karma}
+                                    ⚡ {karmaBonuses.karma}
                                 </span>
                             )}
                             {/* 👑 GOD MODE - User's song is #1 (unlimited votes, extra purge deletes) */}
@@ -2744,7 +2744,7 @@ export default function HomePage() {
                     )}
 
                     <span className="stat-pill capacity" data-tooltip={`Playlist: ${playlistStats.current} of ${playlistStats.max} songs`} tabIndex={0}>
-                        🎵 {playlistStats.current}/{playlistStats.max}
+                        💿 {playlistStats.current}/{playlistStats.max}
                     </span>
                     {username && (
                         <button
@@ -2783,7 +2783,7 @@ export default function HomePage() {
                             className="calendar-cta-btn"
                             title="Add recurring reminder to Google Calendar"
                         >
-                            📅 Add to Calendar
+                            📡 Add to Calendar
                         </a>
                     </>
                 )}
@@ -2805,13 +2805,13 @@ export default function HomePage() {
                                 className="feature-btn prediction"
                                 onClick={() => setShowPredictionModal(true)}
                             >
-                                🎯 Predict the Winner
+                                🎚️ Predict the Winner
                             </button>
                         )}
 
                         {userPrediction && (
                             <span className="prediction-badge">
-                                🎯 Prediction locked
+                                🎚️ Prediction locked
                             </span>
                         )}
 
@@ -3176,7 +3176,7 @@ export default function HomePage() {
                     <div className="modal-overlay" onClick={() => setShowPredictionModal(false)}>
                         <div className="prediction-modal" onClick={(e) => e.stopPropagation()}>
                             <button className="modal-close-x" onClick={() => setShowPredictionModal(false)} aria-label="Close prediction modal">✕</button>
-                            <h3>🎯 Predict the Winner</h3>
+                            <h3>🎚️ Predict the Winner</h3>
                             <p>Pick the song you think will finish #1.<br />Get it right = <strong>+3 karma!</strong></p>
                             <div className="prediction-list">
                                 {sortedSongs.slice(0, 10).map((song, idx) => (
@@ -3265,7 +3265,7 @@ export default function HomePage() {
                         </span>
                     ) : (
                         <span className="ticker-placeholder">
-                            {timerRunning ? currentShoutout || '🎵 Vote for your favorites!' : 'Waiting for the next event...'}
+                            {timerRunning ? currentShoutout || '💿 Vote for your favorites!' : 'Waiting for the next event...'}
                         </span>
                     )}
                 </div>
@@ -3337,7 +3337,7 @@ export default function HomePage() {
                         />
                         {showCoachMark === 'search' && (
                             <div className="coach-mark-tooltip">
-                                🎵 Search for a song to add it to the playlist
+                                💿 Search for a song to add it to the playlist
                             </div>
                         )}
                         {isSearching && <span className="search-spinner">...</span>}
@@ -3383,7 +3383,7 @@ export default function HomePage() {
                             type="text"
                             className="search-input-stream search-input-disabled"
                             placeholder={
-                                !(timerRunning && timerRemaining > 0) ? '🎵 Song adding opens when we go live' :
+                                !(timerRunning && timerRemaining > 0) ? '💿 Song adding opens when we go live' :
                                     isLocked ? '🔒 Song adding is paused' :
                                         !permissions.canAddSongs ? '🔒 Song adding is off right now' :
                                             !username ? '👤 Set your name to add songs' :
@@ -3425,7 +3425,7 @@ export default function HomePage() {
                                         <div className="welcome-back-stats">
                                             {lastSession.topSongName && lastSession.topSongRank && (
                                                 <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">{lastSession.topSongRank <= 3 ? '🏆' : '🎵'}</span>
+                                                    <span className="wb-stat-icon">{lastSession.topSongRank <= 3 ? '🏆' : '💿'}</span>
                                                     <span className="wb-stat-text">
                                                         <strong>&ldquo;{lastSession.topSongName}&rdquo;</strong> finished <strong>#{lastSession.topSongRank}</strong>
                                                     </span>
@@ -3439,19 +3439,19 @@ export default function HomePage() {
                                             )}
                                             {lastSession.totalSongsAdded > 0 && (
                                                 <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">🎶</span>
+                                                    <span className="wb-stat-icon">💿</span>
                                                     <span className="wb-stat-text">{lastSession.totalSongsAdded} songs added</span>
                                                 </div>
                                             )}
                                             {lastSession.karmaEarned > 0 && (
                                                 <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">⭐</span>
+                                                    <span className="wb-stat-icon">⚡</span>
                                                     <span className="wb-stat-text">+{lastSession.karmaEarned} karma earned</span>
                                                 </div>
                                             )}
                                             {lastSession.playlistSize > 0 && (
                                                 <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">📋</span>
+                                                    <span className="wb-stat-icon">🗂️</span>
                                                     <span className="wb-stat-text">{lastSession.playlistSize} songs in playlist · {lastSession.participantCount || '?'} participants</span>
                                                 </div>
                                             )}
@@ -3462,7 +3462,7 @@ export default function HomePage() {
                                             rel="noopener noreferrer"
                                             className="welcome-back-calendar"
                                         >
-                                            📅 Add to Calendar
+                                            📡 Add to Calendar
                                         </a>
                                     </div>
                                 ) : (
@@ -3480,7 +3480,7 @@ export default function HomePage() {
                                             rel="noopener noreferrer"
                                             className="countdown-calendar-link"
                                         >
-                                            📅 Add to Calendar
+                                            📡 Add to Calendar
                                         </a>
                                     </div>
                                 )}
@@ -3502,7 +3502,7 @@ export default function HomePage() {
                                             rel="noopener noreferrer"
                                             className="countdown-calendar-link"
                                         >
-                                            📅 Add to Calendar
+                                            📡 Add to Calendar
                                         </a>
                                     </div>
                                 )}
@@ -3737,7 +3737,7 @@ export default function HomePage() {
                         <div className="recap-stats">
                             {sessionRecap.topSongName && sessionRecap.topSongRank && (
                                 <div className="recap-stat highlight">
-                                    <span className="recap-stat-icon">{sessionRecap.topSongRank === 1 ? '👑' : sessionRecap.topSongRank <= 3 ? '🏆' : '🎵'}</span>
+                                    <span className="recap-stat-icon">{sessionRecap.topSongRank === 1 ? '👑' : sessionRecap.topSongRank <= 3 ? '🏆' : '💿'}</span>
                                     <div className="recap-stat-content">
                                         <span className="recap-stat-label">Your Best Song</span>
                                         <span className="recap-stat-value">&ldquo;{sessionRecap.topSongName}&rdquo; — #{sessionRecap.topSongRank}</span>
@@ -3746,7 +3746,7 @@ export default function HomePage() {
                             )}
                             {sessionRecap.totalSongsAdded > 0 && (
                                 <div className="recap-stat">
-                                    <span className="recap-stat-icon">🎶</span>
+                                    <span className="recap-stat-icon">🗂️</span>
                                     <div className="recap-stat-content">
                                         <span className="recap-stat-label">Songs Added</span>
                                         <span className="recap-stat-value">{sessionRecap.totalSongsAdded}</span>
@@ -3762,7 +3762,7 @@ export default function HomePage() {
                             </div>
                             {sessionRecap.karmaEarned > 0 && (
                                 <div className="recap-stat">
-                                    <span className="recap-stat-icon">⭐</span>
+                                    <span className="recap-stat-icon">⚡</span>
                                     <div className="recap-stat-content">
                                         <span className="recap-stat-label">Karma Earned</span>
                                         <span className="recap-stat-value">+{sessionRecap.karmaEarned}</span>
@@ -3785,7 +3785,7 @@ export default function HomePage() {
                                 rel="noopener noreferrer"
                                 className="recap-calendar-btn"
                             >
-                                📅 Add to Calendar
+                                📡 Add to Calendar
                             </a>
                             <button className="recap-dismiss-btn" onClick={() => setShowSessionRecap(false)}>
                                 Done

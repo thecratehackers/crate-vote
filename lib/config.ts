@@ -36,13 +36,13 @@ export const BROADCAST = {
     segmentWarningMs: 120000,         // 2-minute warning
     segmentUrgentMs: 30000,           // 30-second warning
     reminderDismissMs: 5000,          // Auto-dismiss reminder banners
-    segmentIcons: ['🗳️', '❓', '🏆', '🎧', '🎤', '💀', '🌧️', '⚡'],
+    segmentIcons: ['🗳️', '❓', '🏆', '🎧', '🎛️', '💀', '🌧️', '⚡'],
     hypeLevels: [
-        { threshold: 0, label: 'CHILL', emoji: '😴', color: '#6b7280' },
-        { threshold: 20, label: 'WARMING UP', emoji: '🔥', color: '#f59e0b' },
-        { threshold: 40, label: 'ON FIRE', emoji: '⚡', color: '#3b82f6' },
-        { threshold: 65, label: 'HYPE', emoji: '🚀', color: '#8b5cf6' },
-        { threshold: 85, label: 'INSANE', emoji: '💥', color: '#ef4444' },
+        { threshold: 0, label: 'CHILL', emoji: '🔈', color: '#6b7280' },
+        { threshold: 20, label: 'WARMING UP', emoji: '🔉', color: '#f59e0b' },
+        { threshold: 40, label: 'ON FIRE', emoji: '🔊', color: '#3b82f6' },
+        { threshold: 65, label: 'HYPE', emoji: '📡', color: '#8b5cf6' },
+        { threshold: 85, label: 'INSANE', emoji: '🚨', color: '#ef4444' },
     ],
 } as const;
 
@@ -108,12 +108,12 @@ export const BLOCKED_WORDS = new Set([
 // ============ GAME TIPS ============
 export const GAME_TIPS = [
     '🏆 Top 3 songs earn +5 karma!',
-    '✨ Each karma = +1 song, +1 upvote, +1 downvote',
+    '📦 Each karma = +1 song, +1 upvote, +1 downvote',
     '💀 THE PURGE lets you delete any song for 30 seconds',
     '👑 Push your song to #1 for the crown',
     '🎧 Save playlists to Crate Hackers, Spotify, or TIDAL',
-    '⬆️ Upvote songs you love, downvote ones you don\'t',
-    '⏳ Stay 5 minutes to earn +1 karma',
+    '🎚️ Upvote songs you love, downvote ones you don\'t',
+    '⏯️ Stay 5 minutes to earn +1 karma',
 ] as const;
 
 // Type helpers
