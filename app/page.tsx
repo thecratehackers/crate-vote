@@ -2805,27 +2805,15 @@ export default function HomePage() {
                                 className="feature-btn prediction"
                                 onClick={() => setShowPredictionModal(true)}
                             >
-                                🎚️ Predict the Winner
+                                📊 Predict the Winner
                             </button>
                         )}
 
                         {userPrediction && (
                             <span className="prediction-badge">
-                                🎚️ Prediction locked
+                                📊 Prediction locked
                             </span>
                         )}
-
-                        <button
-                            className={`feature-btn sound-toggle ${soundsEnabled ? '' : 'muted'}`}
-                            onClick={() => {
-                                const newState = !soundsEnabled;
-                                setSoundsEnabled(newState);
-                                SoundEffects.setEnabled(newState);
-                            }}
-                            title={soundsEnabled ? 'Mute sounds' : 'Turn on sounds'}
-                        >
-                            {soundsEnabled ? '🔊' : '🔇'}
-                        </button>
                     </div>
                 )
             }
@@ -3176,7 +3164,7 @@ export default function HomePage() {
                     <div className="modal-overlay" onClick={() => setShowPredictionModal(false)}>
                         <div className="prediction-modal" onClick={(e) => e.stopPropagation()}>
                             <button className="modal-close-x" onClick={() => setShowPredictionModal(false)} aria-label="Close prediction modal">✕</button>
-                            <h3>🎚️ Predict the Winner</h3>
+                            <h3>📊 Predict the Winner</h3>
                             <p>Pick the song you think will finish #1.<br />Get it right = <strong>+3 karma!</strong></p>
                             <div className="prediction-list">
                                 {sortedSongs.slice(0, 10).map((song, idx) => (
