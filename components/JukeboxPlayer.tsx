@@ -389,6 +389,11 @@ export default function JukeboxPlayer({
     const [showNextHint, setShowNextHint] = useState(false);
     const [currentTipIndex, setCurrentTipIndex] = useState(0);
     const [bannerIndex, setBannerIndex] = useState(0);
+
+    // 🔄 Advance banner headline on every song transition
+    useEffect(() => {
+        setBannerIndex(prev => (prev + 1) % 12);
+    }, [currentSong.id]);
     const [nextLiveCountdown, setNextLiveCountdown] = useState('');
     const [eqBars, setEqBars] = useState<number[]>(Array(16).fill(20));
     const [glowIntensity, setGlowIntensity] = useState(0);
@@ -496,8 +501,22 @@ export default function JukeboxPlayer({
     // 🎨 AMBIENT GLOW CSS VARS — for Tesla-style card glow
     const [ambientGlowVars, setAmbientGlowVars] = useState<Record<string, string>>({});
 
-    // 🎯 Dynamic banner headlines — rotates per song, explains the vibe
-    const bannerHeadlines = [
+    // 🎯 Dynamic banner headlines — subtitles riff on the current crate theme
+    const crateTheme = playlistTitle || '';
+    const bannerHeadlines = crateTheme ? [
+        { title: 'You\'re Building This Playlist Live', subtitle: `This week's crate: "${crateTheme}" — what songs belong here?` },
+        { title: 'The Crowd Is the DJ Tonight', subtitle: `Think "${crateTheme}" — what track fits this vibe?` },
+        { title: 'Welcome to the Crate Hackers Jukebox', subtitle: `We\'re curating "${crateTheme}" — add your picks and vote!` },
+        { title: 'This Playlist Builds Itself', subtitle: `"${crateTheme}" — what song comes to mind? Add it now.` },
+        { title: 'Every Vote Counts Right Now', subtitle: `Which track defines "${crateTheme}"? Push it to #1!` },
+        { title: 'What Plays Next Is Up to You', subtitle: `Got a song that screams "${crateTheme}"? Add it!` },
+        { title: 'The Playlist That Never Sleeps', subtitle: `Songs are battling for the top of "${crateTheme}" — cast your vote` },
+        { title: 'Live Music Democracy in Action', subtitle: `"${crateTheme}" — the audience decides what makes the cut` },
+        { title: 'New Here? Jump In!', subtitle: `We\'re building "${crateTheme}" live — scan the QR to contribute` },
+        { title: 'Your Votes Are Moving the Needle', subtitle: `What belongs in "${crateTheme}"? Your vote decides.` },
+        { title: 'Don\'t Just Listen — Participate', subtitle: `"${crateTheme}" needs YOUR song picks. What are we missing?` },
+        { title: 'Can Your Song Reach #1?', subtitle: `Add your pick for "${crateTheme}" and rally the votes!` },
+    ] : [
         { title: 'You\'re Building This Playlist Live', subtitle: 'Every vote shapes what plays next — this is YOUR soundtrack' },
         { title: 'The Crowd Is the DJ Tonight', subtitle: 'Add songs, vote them up, and watch them climb the ranks' },
         { title: 'Welcome to the Crate Hackers Jukebox', subtitle: 'A live, crowd-powered playlist — scan the QR to jump in' },
