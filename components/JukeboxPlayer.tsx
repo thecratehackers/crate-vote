@@ -1867,15 +1867,6 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* 🎙️ AI COMMENTARY TICKER — Scrolling bar under header */}
-                    {djCommentary && (
-                        <div className="commentary-ticker-bar">
-                            <span className="commentary-ticker-label">📻 ON AIR</span>
-                            <div className="commentary-ticker-track">
-                                <span className="commentary-ticker-text" key={djCommentary.slice(0, 20)}>{djCommentary}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{djCommentary}</span>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="jukebox-tips-banner">
                         <span className="tip-icon">{gameTips[currentTipIndex].icon}</span>

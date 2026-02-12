@@ -13761,3 +13761,356 @@ input:disabled {
     margin-top: 4px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   🎙️ AI DJ WIDGET — Floating bottom-left personality-driven commentary
+   Features DJ avatar with speech bubble, live commentary, and show promo
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.ai-dj-widget {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 200;
+  width: 340px;
+  background: linear-gradient(145deg, rgba(20, 15, 10, 0.92), rgba(12, 10, 8, 0.96));
+  border: 1px solid rgba(211, 119, 29, 0.3);
+  border-radius: 16px;
+  padding: 14px;
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(211, 119, 29, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  animation: djWidgetSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ai-dj-widget:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(211, 119, 29, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+@keyframes djWidgetSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Top Section: Avatar + Speech ── */
+.ai-dj-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* ── DJ Avatar ── */
+.ai-dj-avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ai-dj-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 15%;
+  border: 2px solid rgba(211, 119, 29, 0.6);
+  box-shadow:
+    0 0 12px rgba(211, 119, 29, 0.3),
+    0 0 24px rgba(211, 119, 29, 0.1);
+  animation: djAvatarGlow 3s ease-in-out infinite;
+}
+
+@keyframes djAvatarGlow {
+
+  0%,
+  100% {
+    box-shadow:
+      0 0 12px rgba(211, 119, 29, 0.3),
+      0 0 24px rgba(211, 119, 29, 0.1);
+    border-color: rgba(211, 119, 29, 0.6);
+  }
+
+  50% {
+    box-shadow:
+      0 0 18px rgba(211, 119, 29, 0.5),
+      0 0 36px rgba(211, 119, 29, 0.2);
+    border-color: rgba(251, 191, 36, 0.8);
+  }
+}
+
+.ai-dj-live-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 2px solid rgba(12, 10, 8, 0.95);
+  animation: liveDotPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes liveDotPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+/* ── Speech Bubble ── */
+.ai-dj-speech {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-dj-name-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ai-dj-on-air {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  animation: onAirPulse 2s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+@keyframes onAirPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.ai-dj-name {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary, #f1f5f9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-dj-commentary {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  border-top-left-radius: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+  animation: commentaryFadeIn 0.6s ease-out;
+}
+
+.ai-dj-commentary::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  clip-path: polygon(0 100%, 100% 100%, 0 0);
+}
+
+@keyframes commentaryFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-dj-text {
+  font-family: 'Inter', 'Rubik', sans-serif;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary, #cbd5e1);
+  margin: 0;
+  font-style: italic;
+}
+
+/* ── Show Promo Section ── */
+.ai-dj-promo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: linear-gradient(90deg, rgba(211, 119, 29, 0.08), rgba(211, 119, 29, 0.03));
+  border: 1px solid rgba(211, 119, 29, 0.15);
+  border-radius: 10px;
+  animation: promoSlideUp 0.4s ease 0.3s both;
+}
+
+@keyframes promoSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-dj-promo-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ai-dj-promo-label {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--orange-primary, #d3771d);
+  text-transform: uppercase;
+}
+
+.ai-dj-promo-countdown {
+  font-family: 'Rubik', monospace;
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--text-primary, #f1f5f9);
+  letter-spacing: 0.5px;
+}
+
+.ai-dj-promo-schedule {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.65rem;
+  color: var(--text-muted, #64748b);
+  font-weight: 500;
+}
+
+.ai-dj-calendar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(211, 119, 29, 0.12);
+  border: 1px solid rgba(211, 119, 29, 0.2);
+  text-decoration: none;
+  font-size: 1.1rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ai-dj-calendar-btn:hover {
+  background: rgba(211, 119, 29, 0.25);
+  border-color: rgba(211, 119, 29, 0.4);
+  transform: scale(1.08);
+  box-shadow: 0 0 12px rgba(211, 119, 29, 0.2);
+}
+
+/* ── Live Now State ── */
+.ai-dj-promo-live {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.03));
+  border-color: rgba(239, 68, 68, 0.2);
+  gap: 8px;
+}
+
+.ai-dj-promo-live .ai-dj-promo-label {
+  color: #ef4444;
+  font-size: 0.85rem;
+  letter-spacing: 2px;
+}
+
+.ai-dj-live-pulse {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: liveDotPulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ── Mobile Responsive ── */
+@media (max-width: 768px) {
+  .ai-dj-widget {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-width: 360px;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .ai-dj-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ai-dj-text {
+    font-size: 0.72rem;
+  }
+
+  .ai-dj-promo-countdown {
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .ai-dj-widget {
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    padding: 8px;
+  }
+
+  .ai-dj-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .ai-dj-name {
+    font-size: 0.7rem;
+  }
+
+  .ai-dj-text {
+    font-size: 0.68rem;
+  }
+}

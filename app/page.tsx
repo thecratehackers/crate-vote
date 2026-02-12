@@ -593,6 +593,9 @@ export default function HomePage() {
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [isStale, setIsStale] = useState(false);
 
+    // 🎙️ AI DJ COMMENTARY — Live color commentary for the homepage
+    const [djCommentary, setDjCommentary] = useState<string>('');
+
     useEffect(() => {
         const calcCountdown = () => {
             const now = new Date();
@@ -1687,11 +1690,11 @@ export default function HomePage() {
                 // Show "no results" feedback if search returned nothing
                 if (tracks.length === 0 && searchQuery.trim().length > 2) {
                     setNoSearchResults(true);
-                    setMessage({ type: 'error', text: `No songs found for "${searchQuery}"` });
+                    toast.error(`No songs found for "${searchQuery}"`);
                 }
             } catch (error) {
                 console.error('Search failed:', error);
-                setMessage({ type: 'error', text: 'Search failed — try again' });
+                toast.error('Search failed — try again');
             } finally {
                 setIsSearching(false);
             }
@@ -1703,7 +1706,7 @@ export default function HomePage() {
     // Add song with loading feedback
     const handleAddSong = async (track: SearchResult) => {
         if (!visitorId || (!username && !isAdminOnFrontPage)) {
-            setMessage({ type: 'error', text: 'Set your name first' });
+            toast.error('👤 Set your name first');
             return;
         }
 
@@ -1725,11 +1728,11 @@ export default function HomePage() {
             const data = await res.json();
 
             if (!res.ok) {
-                setMessage({ type: 'error', text: data.error || 'Couldn\'t add that song — try again' });
+                toast.error(data.error || 'Couldn\'t add that song — try again');
                 return;
             }
 
-            setMessage({ type: 'success', text: `✓ "${track.name}" added to playlist` });
+            toast.success(`✓ "${track.name}" added to playlist`);
             setSearchQuery('');
             setShowResults(false);
             setNoSearchResults(false);
@@ -1745,7 +1748,7 @@ export default function HomePage() {
                 SoundEffects.addSong();
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Couldn\'t connect — try adding again' });
+            toast.error('Couldn\'t connect — try adding again');
         } finally {
             setIsAddingSong(null);
         }
@@ -2190,6 +2193,42 @@ export default function HomePage() {
             return () => clearTimeout(timeout);
         }
     }, [message]);
+
+    // 🎙️ AI DJ COMMENTARY — Fetch live commentary every 90 seconds
+    useEffect(() => {
+        if (songs.length === 0) return;
+
+        const fetchCommentary = () => {
+            const topSong = songs.length > 0 ? songs[0] : null;
+            const currentSong = songs[0]; // Top song as "current" for homepage context
+            fetch('/api/dj-commentary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currentSong: currentSong?.name || 'N/A',
+                    currentArtist: currentSong?.artist || 'N/A',
+                    currentSongScore: currentSong?.score ?? 0,
+                    topSong: topSong?.name || 'N/A',
+                    topArtist: topSong?.artist || 'N/A',
+                    topScore: topSong?.score || 0,
+                    totalSongs: songs.length,
+                    totalVotes: songs.reduce((s, t) => s + Math.abs(t.score), 0),
+                    contributors: new Set(songs.map(s => s.addedByName).filter(Boolean)).size,
+                    recentActivity: liveActivity.slice(0, 3).map(a => `${a.userName} ${a.type === 'add' ? 'added' : a.type === 'upvote' ? 'upvoted' : 'downvoted'} ${a.songName || ''}`).join('. ') || 'Votes are coming in',
+                    playlistTitle: playlistTitle || '',
+                }),
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.commentary) setDjCommentary(data.commentary);
+                })
+                .catch(() => { /* keep previous */ });
+        };
+
+        fetchCommentary();
+        const interval = setInterval(fetchCommentary, 90000);
+        return () => clearInterval(interval);
+    }, [songs.length > 0 ? songs[0]?.id : null]);
 
     // Check if song is already in playlist — O(1) via memoized Set (was O(n) per call)
     const playlistIdSet = useMemo(() => new Set(songs.map(s => s.id)), [songs]);
@@ -3800,6 +3839,58 @@ export default function HomePage() {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* 🎙️ AI DJ WIDGET — Floating bottom-left with avatar + commentary + show promo */}
+            {(djCommentary || broadcastCountdown) && !jukeboxState && (
+                <div className="ai-dj-widget" id="ai-dj-widget">
+                    <div className="ai-dj-top">
+                        <div className="ai-dj-avatar-wrapper">
+                            <img src="/dj-host.png" alt="DJ" className="ai-dj-avatar" />
+                            <span className="ai-dj-live-dot" />
+                        </div>
+                        <div className="ai-dj-speech">
+                            <div className="ai-dj-name-tag">
+                                <span className="ai-dj-on-air">📻 ON AIR</span>
+                                <span className="ai-dj-name">DJ Crate Hacker</span>
+                            </div>
+                            {djCommentary ? (
+                                <div className="ai-dj-commentary" key={djCommentary.slice(0, 20)}>
+                                    <p className="ai-dj-text">{djCommentary}</p>
+                                </div>
+                            ) : (
+                                <div className="ai-dj-commentary">
+                                    <p className="ai-dj-text">The crowd is shaping tonight&apos;s playlist — every vote moves the needle!</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    {!isBroadcastLive && broadcastCountdown && (
+                        <div className="ai-dj-promo">
+                            <div className="ai-dj-promo-info">
+                                <span className="ai-dj-promo-label">NEXT LIVE SHOW</span>
+                                <span className="ai-dj-promo-countdown">{broadcastCountdown}</span>
+                                <span className="ai-dj-promo-schedule">Every Tuesday · 8 PM ET</span>
+                            </div>
+                            <a
+                                href={generateCalendarUrl()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ai-dj-calendar-btn"
+                                title="Add recurring reminder to Google Calendar"
+                            >
+                                📅
+                            </a>
+                        </div>
+                    )}
+                    {isBroadcastLive && (
+                        <div className="ai-dj-promo ai-dj-promo-live">
+                            <span className="ai-dj-live-pulse" />
+                            <span className="ai-dj-promo-label">LIVE NOW</span>
+                            <span className="ai-dj-promo-schedule">Tuesday Night Session</span>
+                        </div>
+                    )}
                 </div>
             )}
 
