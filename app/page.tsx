@@ -3700,6 +3700,7 @@ export default function HomePage() {
                         streamMode={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stream') === 'true'}
 
                         liveActivity={liveActivity}
+                        playlistTitle={playlistTitle}
                     />
                 )
             }

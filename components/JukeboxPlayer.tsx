@@ -47,6 +47,8 @@ interface JukeboxPlayerProps {
     currentTheme?: { name: string; emoji: string; endsAt: number };
     // 📢 LIVE ACTIVITY from server
     liveActivity?: ServerActivity[];
+    // 📦 Current week's crate/playlist title
+    playlistTitle?: string;
 }
 
 declare global {
@@ -375,6 +377,7 @@ export default function JukeboxPlayer({
     viewerCount = 0,
     currentTheme,
     liveActivity = [],
+    playlistTitle,
 }: JukeboxPlayerProps) {
     const [isPlaying, setIsPlaying] = useState(true);
     const [isMuted, setIsMuted] = useState(true);
@@ -449,15 +452,49 @@ export default function JukeboxPlayer({
     const [currentTime, setCurrentTime] = useState('');
     const voteCountRef = useRef(0);
 
+    // 🎨 TESLA-STYLE AMBIENT COLORS — extracted from album art
+    const [ambientColors, setAmbientColors] = useState<{ primary: string; secondary: string; accent: string }>({
+        primary: 'rgba(20, 15, 10, 0.6)',
+        secondary: 'rgba(15, 10, 20, 0.4)',
+        accent: 'rgba(10, 15, 20, 0.3)',
+    });
+    const ambientCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
     // Dopamine-inducing gamification tips
     const gameTips = [
         { icon: '🔥', text: 'Vote for your favorites to push them to #1!' },
-        { icon: '📦', text: 'Watch 60 secs to earn +1 karma!' },
-        { icon: '🔥', text: 'Top 3 songs earn extra karma!' },
+        { icon: '📦', text: 'Scan the QR to download songs & grab the Spotify playlist!' },
+        { icon: '🔥', text: 'You\'re shaping the future of dance music!' },
         { icon: '📦', text: 'Your karma unlocks bonus votes!' },
-        { icon: '🔥', text: 'Add your own songs to the queue!' },
-        { icon: '📦', text: 'Stay active for surprise karma bonuses!' },
+        { icon: '🎧', text: 'You\'re collaborating with DJs right now!' },
+        { icon: '📦', text: 'Watch 60 secs to earn +1 karma!' },
     ];
+
+    // 📰 DJ INTELLIGENCE HEADLINES — Live from Future DJ newsletter RSS + fallback intel
+    const fallbackHeadlines = [
+        '📊 Wedding season peak: June–Oct bookings are up — build your crate now',
+        '🎵 Trend: Latin crossover tracks dominating open format sets nationally',
+        '🎙️ Pro tip: Always carry backup gear — 48% of DJ emergencies are cable failures',
+        '📈 Club insight: Friday peaks at 12:30am, Saturdays peak at 1:15am',
+        '🎶 Genre watch: Afrobeats +340% in US club play over 3 years',
+        '💍 Wedding intel: First dance requests trending toward R&B classics',
+        '🌍 Global: Amapiano continues crossover momentum into mainstream US clubs',
+        '🏛️ Venue tip: Always do a sound check during the quietest part of setup',
+        '📱 Tech: 73% of attendees Shazam at least 1 song per event',
+        '🏆 Industry: Crate digging is back — DJs who curate playlists earn 2x more bookings',
+    ];
+    const [djIntelHeadlines, setDjIntelHeadlines] = useState<string[]>(fallbackHeadlines);
+    const [djIntelIndex, setDjIntelIndex] = useState(0);
+
+    // 🎤 ON THIS DAY IN MUSIC — daily rotating music history
+    const [onThisDayFacts, setOnThisDayFacts] = useState<string[]>([]);
+    const [onThisDayIndex, setOnThisDayIndex] = useState(0);
+
+    // 🎙️ AI DJ COMMENTARY — ESPN-style live color commentary
+    const [djCommentary, setDjCommentary] = useState<string>('');
+
+    // 🎨 AMBIENT GLOW CSS VARS — for Tesla-style card glow
+    const [ambientGlowVars, setAmbientGlowVars] = useState<Record<string, string>>({});
 
     // 🎯 Dynamic banner headlines — rotates per song, explains the vibe
     const bannerHeadlines = [
@@ -572,12 +609,157 @@ export default function JukeboxPlayer({
         fetchAllFacts();
     }, [currentSong.id, currentSong.name, currentSong.artist]);
 
+    // 📰 Fetch live DJ news headlines from RSS feed on mount
+    useEffect(() => {
+        fetch('/api/dj-news')
+            .then(res => res.json())
+            .then(data => {
+                if (data.headlines && data.headlines.length > 0) {
+                    // Prefix real headlines with 📰 and merge with fallback intel
+                    const rssItems = data.headlines.map((h: string) => `📰 ${h}`);
+                    setDjIntelHeadlines([...rssItems, ...fallbackHeadlines]);
+                }
+            })
+            .catch(() => { /* keep fallback headlines */ });
+    }, []);
+
+    // 🎤 Fetch "On This Day in Music" facts on mount
+    useEffect(() => {
+        fetch('/api/on-this-day')
+            .then(res => res.json())
+            .then(data => {
+                if (data.facts && data.facts.length > 0) {
+                    setOnThisDayFacts(data.facts);
+                }
+            })
+            .catch(() => { /* keep empty */ });
+    }, []);
+
+    // 🎤 Rotate On This Day facts every 15 seconds
+    useEffect(() => {
+        if (onThisDayFacts.length <= 1) return;
+        const interval = setInterval(() => {
+            setOnThisDayIndex(prev => (prev + 1) % onThisDayFacts.length);
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [onThisDayFacts.length]);
+
+    // 🎙️ Fetch AI DJ Commentary every 90 seconds
+    useEffect(() => {
+        const fetchCommentary = () => {
+            const topSong = playlist.length > 0 ? playlist[0] : null;
+            fetch('/api/dj-commentary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currentSong: currentSong.name,
+                    currentArtist: currentSong.artist,
+                    topSong: topSong?.name || 'N/A',
+                    topArtist: topSong?.artist || 'N/A',
+                    topScore: topSong?.score || 0,
+                    totalSongs: playlist.length,
+                    totalVotes: playlist.reduce((s, t) => s + Math.abs(t.score), 0),
+                    contributors: new Set(playlist.map(s => s.addedByName).filter(Boolean)).size,
+                    recentActivity: activityFeed.slice(0, 3).map(a => a.text).join('. ') || 'Votes are coming in',
+                }),
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.commentary) setDjCommentary(data.commentary);
+                })
+                .catch(() => { /* keep previous */ });
+        };
+        fetchCommentary();
+        const interval = setInterval(fetchCommentary, 90000);
+        return () => clearInterval(interval);
+    }, [currentSong.id]);
+
     // 🎛️ DJ INTEL: Generate tips when song changes
     useEffect(() => {
         const tips = generateDJTips(currentSong);
         setDjTips(tips);
         setCurrentDJTipIndex(0);
     }, [currentSong.id]);
+
+    // 🎨 TESLA-STYLE: Extract dominant colors from album art
+    useEffect(() => {
+        if (!currentSong.albumArt) return;
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const canvas = ambientCanvasRef.current || document.createElement('canvas');
+                ambientCanvasRef.current = canvas;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) return;
+
+                // Sample at small size for performance
+                canvas.width = 32;
+                canvas.height = 32;
+                ctx.drawImage(img, 0, 0, 32, 32);
+                const data = ctx.getImageData(0, 0, 32, 32).data;
+
+                // Sample colors from different regions
+                const regions = [
+                    { x: 8, y: 8 },   // top-left quadrant center
+                    { x: 24, y: 8 },   // top-right
+                    { x: 16, y: 24 },  // bottom-center
+                ];
+
+                const colors = regions.map(({ x, y }) => {
+                    // Average a 5x5 area around each sample point
+                    let r = 0, g = 0, b = 0, count = 0;
+                    for (let dy = -2; dy <= 2; dy++) {
+                        for (let dx = -2; dx <= 2; dx++) {
+                            const px = Math.max(0, Math.min(31, x + dx));
+                            const py = Math.max(0, Math.min(31, y + dy));
+                            const idx = (py * 32 + px) * 4;
+                            r += data[idx];
+                            g += data[idx + 1];
+                            b += data[idx + 2];
+                            count++;
+                        }
+                    }
+                    return {
+                        r: Math.round(r / count),
+                        g: Math.round(g / count),
+                        b: Math.round(b / count),
+                    };
+                });
+
+                // Apply with subtle opacity for background wash
+                setAmbientColors({
+                    primary: `rgba(${colors[0].r}, ${colors[0].g}, ${colors[0].b}, 0.12)`,
+                    secondary: `rgba(${colors[1].r}, ${colors[1].g}, ${colors[1].b}, 0.08)`,
+                    accent: `rgba(${colors[2].r}, ${colors[2].g}, ${colors[2].b}, 0.06)`,
+                });
+
+                // 🎨 TESLA GLOW — Higher opacity CSS vars for sidebar card glows
+                setAmbientGlowVars({
+                    '--glow-primary': `rgba(${colors[0].r}, ${colors[0].g}, ${colors[0].b}, 0.35)`,
+                    '--glow-secondary': `rgba(${colors[1].r}, ${colors[1].g}, ${colors[1].b}, 0.25)`,
+                    '--glow-accent': `rgba(${colors[2].r}, ${colors[2].g}, ${colors[2].b}, 0.20)`,
+                    '--glow-border': `rgba(${colors[0].r}, ${colors[0].g}, ${colors[0].b}, 0.30)`,
+                    '--glow-r': `${colors[0].r}`,
+                    '--glow-g': `${colors[0].g}`,
+                    '--glow-b': `${colors[0].b}`,
+                });
+            } catch {
+                // CORS or canvas errors — keep defaults silently
+            }
+        };
+        img.onerror = () => { /* keep defaults */ };
+        img.src = currentSong.albumArt;
+    }, [currentSong.id, currentSong.albumArt]);
+
+    // 📰 DJ INTEL: Rotate headlines every 20s for Bloomberg ticker
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setDjIntelIndex(prev => (prev + 1) % djIntelHeadlines.length);
+        }, 20000);
+        return () => clearInterval(interval);
+    }, [djIntelHeadlines.length]);
 
     // 🎛️ DJ INTEL: Rotate tips every 8 seconds
     useEffect(() => {
@@ -1101,12 +1283,11 @@ export default function JukeboxPlayer({
         return () => clearTimeout(timer);
     }, [currentSong.id, streamMode]);
 
-    // 📺 BROADCAST: Track total votes for ticker
+    // 📺 Track total votes for ticker (always-on Bloomberg-style)
     useEffect(() => {
-        if (!streamMode) return;
         const total = playlist.reduce((sum, s) => sum + Math.abs(s.score), 0);
         setTotalVotes(total);
-    }, [playlist, streamMode]);
+    }, [playlist]);
 
     // 📺 BROADCAST: Detect #1 changes for achievements
     useEffect(() => {
@@ -1403,6 +1584,15 @@ export default function JukeboxPlayer({
                 />
             </div>
 
+            {/* 🎨 TESLA-STYLE AMBIENT COLOR GLOW — extracted from album art */}
+            <div className="ambient-color-wash" style={{
+                background: `
+                    radial-gradient(ellipse at 0% 20%, ${ambientColors.primary} 0%, transparent 50%),
+                    radial-gradient(ellipse at 100% 80%, ${ambientColors.secondary} 0%, transparent 50%),
+                    radial-gradient(ellipse at 50% 100%, ${ambientColors.accent} 0%, transparent 40%)
+                `,
+            }} />
+
             {/* ✨ AMBIENT PARTICLE SYSTEM */}
             <div className="ambient-particles">
                 {Array.from({ length: particleCount }).map((_, i) => (
@@ -1507,7 +1697,7 @@ export default function JukeboxPlayer({
             )}
 
             {/* 📊 DASHBOARD LAYOUT - 3 Columns */}
-            <div className="jukebox-dashboard">
+            <div className="jukebox-dashboard" style={ambientGlowVars as React.CSSProperties}>
                 {/* LEFT SIDEBAR */}
                 <div className="jukebox-sidebar left">
                     {/* 📺 Hype Meter */}
@@ -1801,10 +1991,16 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* 🌊 WAVEFORM VISUALIZATION — Ambient reactive visual */}
-                    <div className="waveform-container">
-                        <canvas ref={waveformRef} className="waveform-canvas" />
-                    </div>
+                    {/* 🌊 WAVEFORM — moved to right sidebar to spread out visualizers */}
+
+                    {/* 🎙️ LIVE COMMENTARY — Center column inline */}
+                    {djCommentary && (
+                        <div className="commentary-inline">
+                            <img src={currentSong.albumArt} alt="" className="commentary-inline-art" />
+                            <span className="commentary-inline-text" key={djCommentary.slice(0, 20)}>{djCommentary}</span>
+                            <span className="commentary-inline-votes">🔥 {playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score}</span>
+                        </div>
+                    )}
 
                     {/* 🗂️ UP NEXT — Compact strip filling the gap */}
                     <div className="upnext-strip">
@@ -1852,35 +2048,141 @@ export default function JukeboxPlayer({
 
                 </div>
 
-                {/* RIGHT SIDEBAR — Background only, content moved to center column */}
-                <div className="jukebox-sidebar right" />
-            </div>
+                {/* RIGHT SIDEBAR — DJ Dashboard Widgets */}
+                <div className="jukebox-sidebar right">
+                    {/* 📦 THIS WEEK'S CRATE */}
+                    <div className="sidebar-section crate-theme-section">
+                        <h3 className="sidebar-title">📦 This Week's Crate</h3>
+                        <div className="crate-theme-display">
+                            <span className="crate-theme-name">{playlistTitle || 'Crate Hackers Playlist'}</span>
+                            <span className="crate-theme-sub">You're building this playlist live</span>
+                        </div>
+                    </div>
 
-            {/* 📺 BROADCAST: News Ticker */}
-            {streamMode && (
-                <div className="broadcast-ticker">
-                    <div className="ticker-track">
-                        <span className="ticker-content">
-                            🔥 {playlist.length} songs battling &nbsp;•&nbsp;
-                            🗳️ {totalVotes} votes cast &nbsp;•&nbsp;
-                            👥 {uniqueContributors} DJs active &nbsp;•&nbsp;
-                            {playlist.length > 0 && <>👑 #1: &ldquo;{playlist[0].name}&rdquo; by {playlist[0].artist} (+{playlist[0].score}) &nbsp;•&nbsp;</>}
-                            {locations.length > 0 && <>🌎 Votes from {locations.slice(0, 4).join(', ')} &nbsp;•&nbsp;</>}
-                            📱 Join at {APP_CONFIG.domain} &nbsp;•&nbsp;
-                            {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
-                        </span>
-                        <span className="ticker-content" aria-hidden="true">
-                            🔥 {playlist.length} songs battling &nbsp;•&nbsp;
-                            🗳️ {totalVotes} votes cast &nbsp;•&nbsp;
-                            👥 {uniqueContributors} DJs active &nbsp;•&nbsp;
-                            {playlist.length > 0 && <>👑 #1: &ldquo;{playlist[0].name}&rdquo; by {playlist[0].artist} (+{playlist[0].score}) &nbsp;•&nbsp;</>}
-                            {locations.length > 0 && <>🌎 Votes from {locations.slice(0, 4).join(', ')} &nbsp;•&nbsp;</>}
-                            📱 Join at {APP_CONFIG.domain} &nbsp;•&nbsp;
-                            {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
-                        </span>
+                    {/* 📱 QR CODE WIDGET — Scan for songs & Spotify */}
+                    <div className="sidebar-section qr-widget-section">
+                        <h3 className="sidebar-title">📱 Scan & Save</h3>
+                        <div className="qr-widget-content">
+                            <img
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://${APP_CONFIG.domain}&bgcolor=141414&color=d3771d`}
+                                alt="Scan to join"
+                                className="qr-widget-img"
+                            />
+                            <div className="qr-widget-info">
+                                <span className="qr-widget-hint">Download songs & grab the Spotify playlist</span>
+                            </div>
+                        </div>
+                        <div className="qr-widget-url-row">
+                            <span className="qr-widget-url">{APP_CONFIG.domain}</span>
+                        </div>
+                    </div>
+
+                    {/* 🎙️ AI DJ COMMENTARY — ESPN-style live commentary */}
+                    {djCommentary && (
+                        <div className="sidebar-section commentary-section">
+                            <h3 className="sidebar-title">🎙️ Live Commentary</h3>
+                            <p className="commentary-text" key={djCommentary.slice(0, 20)}>{djCommentary}</p>
+                        </div>
+                    )}
+
+                    {/* 🎤 ON THIS DAY IN MUSIC */}
+                    {onThisDayFacts.length > 0 && (
+                        <div className="sidebar-section on-this-day-section">
+                            <h3 className="sidebar-title">📅 On This Day</h3>
+                            <div className="otd-fact" key={onThisDayIndex}>
+                                <span className="otd-text">{onThisDayFacts[onThisDayIndex]}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 🌊 WAVEFORM VISUALIZATION — Spread out from equalizer */}
+                    <div className="sidebar-section waveform-sidebar-section">
+                        <div className="waveform-container sidebar-waveform">
+                            <canvas ref={waveformRef} className="waveform-canvas" />
+                        </div>
+                    </div>
+
+                    {/* 🏛️ CRATE COACH — DJ tips widget */}
+                    <div className="sidebar-section coach-widget-section">
+                        <h3 className="sidebar-title">🏛️ Crate Coach</h3>
+                        {djTips.length > 0 ? (
+                            <div className="coach-widget-tip">
+                                <span className="coach-tip-text" key={currentDJTipIndex}>{djTips[currentDJTipIndex]}</span>
+                            </div>
+                        ) : (
+                            <div className="coach-widget-tip">
+                                <span className="coach-tip-text">Loading intel for this track...</span>
+                            </div>
+                        )}
+                        {currentSong.bpm && (
+                            <div className="coach-stats-mini">
+                                {currentSong.bpm && <span className="coach-stat">⏱ {currentSong.bpm} BPM</span>}
+                                {currentSong.camelotKey && <span className="coach-stat">🔑 {currentSong.camelotKey}</span>}
+                                {currentSong.energy != null && <span className="coach-stat">⚡ {Math.round(currentSong.energy * 100)}%</span>}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 📰 FUTURE DJ — Live newsletter headlines */}
+                    <div className="sidebar-section dj-news-section">
+                        <h3 className="sidebar-title">📰 Future DJ</h3>
+                        <div className="dj-news-headline" key={djIntelIndex}>
+                            <span className="dj-news-text">{djIntelHeadlines[djIntelIndex]}</span>
+                        </div>
+                        <div className="dj-news-headline dj-news-secondary" key={`next-${djIntelIndex}`}>
+                            <span className="dj-news-text">{djIntelHeadlines[(djIntelIndex + 1) % djIntelHeadlines.length]}</span>
+                        </div>
+                        <span className="dj-news-credit">via The Crate Hackers Newsletter</span>
                     </div>
                 </div>
-            )}
+            </div>
+
+            {/* 📺 BLOOMBERG-STYLE TICKER — Always visible data feed */}
+            <div className="broadcast-ticker">
+                <div className="ticker-label">CRATE LIVE</div>
+                <div className="ticker-track">
+                    <span className="ticker-content">
+                        🔥 {playlist.length} songs battling &nbsp;•&nbsp;
+                        🗳️ {totalVotes} votes cast &nbsp;•&nbsp;
+                        👥 {uniqueContributors} DJs contributing &nbsp;•&nbsp;
+                        {playlist.length > 0 && <>👑 #1: &ldquo;{playlist[0].name}&rdquo; by {playlist[0].artist} (+{playlist[0].score}) &nbsp;•&nbsp;</>}
+                        📦 This Week: {playlistTitle || 'Crate Hackers Playlist'} &nbsp;•&nbsp;
+                        🎧 You&apos;re shaping the future of dance music &nbsp;•&nbsp;
+                        📱 Scan QR to download songs &amp; Spotify playlist &nbsp;•&nbsp;
+                        {currentSong.bpm && <>⏱ {currentSong.bpm} BPM &nbsp;•&nbsp;</>}
+                        {currentSong.camelotKey && <>🔑 Key: {currentSong.camelotKey} &nbsp;•&nbsp;</>}
+                        {locations.length > 0 && <>🌎 Votes from {locations.slice(0, 4).join(', ')} &nbsp;•&nbsp;</>}
+                        📡 Join at {APP_CONFIG.domain} &nbsp;•&nbsp;
+                        {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
+                        📰 {djIntelHeadlines[djIntelIndex]} &nbsp;•&nbsp;
+                        {onThisDayFacts.length > 0 && <>📅 {onThisDayFacts[onThisDayIndex]} &nbsp;•&nbsp;</>}
+                        {djCommentary && <>🎙️ {djCommentary} &nbsp;•&nbsp;</>}
+                        {playlist.length >= 2 && <>📈 #{2}: &ldquo;{playlist[1].name}&rdquo; (+{playlist[1].score}) &nbsp;•&nbsp;</>}
+                        {playlist.length >= 3 && <>📉 #{3}: &ldquo;{playlist[2].name}&rdquo; (+{playlist[2].score}) &nbsp;•&nbsp;</>}
+                        🤝 Collaborating with DJs in real time &nbsp;•&nbsp;
+                    </span>
+                    <span className="ticker-content" aria-hidden="true">
+                        🔥 {playlist.length} songs battling &nbsp;•&nbsp;
+                        🗳️ {totalVotes} votes cast &nbsp;•&nbsp;
+                        👥 {uniqueContributors} DJs contributing &nbsp;•&nbsp;
+                        {playlist.length > 0 && <>👑 #1: &ldquo;{playlist[0].name}&rdquo; by {playlist[0].artist} (+{playlist[0].score}) &nbsp;•&nbsp;</>}
+                        📦 This Week: {playlistTitle || 'Crate Hackers Playlist'} &nbsp;•&nbsp;
+                        🎧 You&apos;re shaping the future of dance music &nbsp;•&nbsp;
+                        📱 Scan QR to download songs &amp; Spotify playlist &nbsp;•&nbsp;
+                        {currentSong.bpm && <>⏱ {currentSong.bpm} BPM &nbsp;•&nbsp;</>}
+                        {currentSong.camelotKey && <>🔑 Key: {currentSong.camelotKey} &nbsp;•&nbsp;</>}
+                        {locations.length > 0 && <>🌎 Votes from {locations.slice(0, 4).join(', ')} &nbsp;•&nbsp;</>}
+                        📡 Join at {APP_CONFIG.domain} &nbsp;•&nbsp;
+                        {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
+                        📰 {djIntelHeadlines[djIntelIndex]} &nbsp;•&nbsp;
+                        {onThisDayFacts.length > 0 && <>📅 {onThisDayFacts[onThisDayIndex]} &nbsp;•&nbsp;</>}
+                        {djCommentary && <>🎙️ {djCommentary} &nbsp;•&nbsp;</>}
+                        {playlist.length >= 2 && <>📈 #{2}: &ldquo;{playlist[1].name}&rdquo; (+{playlist[1].score}) &nbsp;•&nbsp;</>}
+                        {playlist.length >= 3 && <>📉 #{3}: &ldquo;{playlist[2].name}&rdquo; (+{playlist[2].score}) &nbsp;•&nbsp;</>}
+                        🤝 Collaborating with DJs in real time &nbsp;•&nbsp;
+                    </span>
+                </div>
+            </div>
         </div>
     );
 }
