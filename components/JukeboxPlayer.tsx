@@ -393,6 +393,9 @@ export default function JukeboxPlayer({
     const [djTips, setDjTips] = useState<string[]>([]);
     const [currentDJTipIndex, setCurrentDJTipIndex] = useState(0);
 
+    // 🌊 WAVEFORM VISUALIZATION
+    const waveformRef = useRef<HTMLCanvasElement>(null);
+
 
     // 🎬 POP-UP VIDEO FACTS (dual-bubble VH1 style)
     const [popUpFacts, setPopUpFacts] = useState<PopUpFact[]>([]);
@@ -583,6 +586,80 @@ export default function JukeboxPlayer({
         }, 8000);
         return () => clearInterval(interval);
     }, [djTips]);
+
+    // 🌊 WAVEFORM: Animated canvas visualization
+    useEffect(() => {
+        const canvas = waveformRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        let animId: number;
+        let phase = 0;
+        // Randomized amplitude targets for organic movement
+        const ampTargets = [0.6, 0.8, 0.5, 0.9, 0.7];
+        const ampCurrent = [...ampTargets];
+
+        const draw = () => {
+            const { width, height } = canvas.getBoundingClientRect();
+            canvas.width = width * 2; // Retina
+            canvas.height = height * 2;
+            ctx.scale(2, 2);
+            ctx.clearRect(0, 0, width, height);
+
+            const mid = height / 2;
+            const playing = isPlaying;
+
+            // Draw 3 layered waves
+            const waves = [
+                { freq: 0.02, amp: playing ? 0.35 : 0.05, speed: 0.04, color: 'rgba(211, 119, 29, 0.6)' },
+                { freq: 0.015, amp: playing ? 0.25 : 0.03, speed: -0.03, color: 'rgba(251, 191, 36, 0.4)' },
+                { freq: 0.03, amp: playing ? 0.18 : 0.02, speed: 0.05, color: 'rgba(224, 159, 36, 0.3)' },
+            ];
+
+            waves.forEach((wave, wi) => {
+                ctx.beginPath();
+                ctx.moveTo(0, mid);
+
+                // Modulate amplitude with organic drift
+                const ampIdx = wi % ampTargets.length;
+                ampCurrent[ampIdx] += (ampTargets[ampIdx] - ampCurrent[ampIdx]) * 0.02;
+                const modAmp = wave.amp * ampCurrent[ampIdx] * mid;
+
+                for (let x = 0; x <= width; x++) {
+                    const noise = Math.sin(x * 0.1 + phase * 2) * 0.15;
+                    const y = mid + Math.sin(x * wave.freq + phase * wave.speed * 60 + wi) * modAmp * (1 + noise);
+                    ctx.lineTo(x, y);
+                }
+
+                ctx.strokeStyle = wave.color;
+                ctx.lineWidth = playing ? 2 : 1;
+                ctx.stroke();
+
+                // Fill below wave with gradient
+                ctx.lineTo(width, height);
+                ctx.lineTo(0, height);
+                ctx.closePath();
+                const gradient = ctx.createLinearGradient(0, mid, 0, height);
+                gradient.addColorStop(0, wave.color.replace(/[\d.]+\)$/, '0.1)'));
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            });
+
+            // Randomize amplitude targets periodically
+            if (Math.random() < 0.02 && playing) {
+                const idx = Math.floor(Math.random() * ampTargets.length);
+                ampTargets[idx] = 0.4 + Math.random() * 0.6;
+            }
+
+            phase += playing ? 0.016 : 0.004;
+            animId = requestAnimationFrame(draw);
+        };
+
+        draw();
+        return () => cancelAnimationFrame(animId);
+    }, [isPlaying]);
 
     // 🎬 SHOW FACTS PERIODICALLY — Dual-bubble VH1 style
     useEffect(() => {
@@ -1740,6 +1817,11 @@ export default function JukeboxPlayer({
                                 <span className="dj-tip-text" key={currentDJTipIndex}>{djTips[currentDJTipIndex]}</span>
                             </div>
                         )}
+                    </div>
+
+                    {/* 🌊 WAVEFORM VISUALIZATION — Ambient reactive visual */}
+                    <div className="waveform-container">
+                        <canvas ref={waveformRef} className="waveform-canvas" />
                     </div>
 
                     {/* 👻 Ghost controls — discreet corner widget for all modes */}
