@@ -248,7 +248,7 @@
 }
 
 .jukebox-label {
-    font-size: 1.05rem;
+    font-size: 1.3rem;
     font-weight: 700;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -267,13 +267,13 @@
 }
 
 .jukebox-song-name {
-    font-size: 1.5rem;
+    font-size: 2rem;
     font-weight: 700;
     color: white;
 }
 
 .jukebox-artist-name {
-    font-size: 1.15rem;
+    font-size: 1.5rem;
     color: rgba(255, 255, 255, 0.6);
 }
 
@@ -291,7 +291,7 @@
 }
 
 .jukebox-vote-badge .vote-icon {
-    font-size: 1.1rem;
+    font-size: 1.4rem;
     animation: fireFlicker 1.5s ease-in-out infinite;
 }
 
@@ -311,7 +311,7 @@
 
 .jukebox-vote-badge .vote-count {
     font-family: 'Rubik', sans-serif;
-    font-size: 1.6rem;
+    font-size: 2rem;
     font-weight: 700;
     color: #fbbf24;
 }
@@ -325,7 +325,7 @@
 }
 
 .jukebox-vote-badge .vote-label {
-    font-size: 0.95rem;
+    font-size: 1.1rem;
     color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -338,7 +338,7 @@
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.05);
     color: white;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -364,7 +364,7 @@
 }
 
 .jukebox-tips-banner .tip-icon {
-    font-size: 1.3rem;
+    font-size: 1.6rem;
     animation: tipBounce 2s ease-in-out infinite;
 }
 
@@ -381,7 +381,7 @@
 }
 
 .jukebox-tips-banner .tip-text {
-    font-size: 1.2rem;
+    font-size: 1.4rem;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.9);
     letter-spacing: 0.3px;
@@ -682,7 +682,7 @@
 .progress-time {
     display: flex;
     justify-content: space-between;
-    font-size: 1rem;
+    font-size: 1.15rem;
     color: rgba(255, 255, 255, 0.5);
     margin-top: 6px;
 }
@@ -1363,7 +1363,7 @@
 
 /* Sidebars */
 .jukebox-sidebar {
-    width: 280px;
+    width: 320px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -1405,7 +1405,7 @@
 }
 
 .sidebar-title {
-    font-size: 1.15rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--orange-primary, #d3771d);
     margin: 0 0 12px;
@@ -1430,13 +1430,13 @@
 }
 
 .lb-rank {
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     min-width: 24px;
 }
 
 .lb-name {
     flex: 1;
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     color: rgba(255, 255, 255, 0.9);
     white-space: nowrap;
     overflow: hidden;
@@ -1466,7 +1466,7 @@
 }
 
 .lb-score {
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     font-weight: 600;
     color: #fbbf24;
 }
@@ -1476,12 +1476,12 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 200px;
+    max-height: 160px;
     overflow-y: auto;
 }
 
 .activity-empty {
-    font-size: 0.95rem;
+    font-size: 1.15rem;
     color: rgba(255, 255, 255, 0.4);
     text-align: center;
     padding: 20px 0;
@@ -1494,7 +1494,7 @@
     padding: 6px 10px;
     background: rgba(255, 255, 255, 0.03);
     border-radius: 6px;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
     color: rgba(255, 255, 255, 0.8);
     animation: sidebarToastIn 0.3s ease;
 }
@@ -1513,7 +1513,7 @@
 
 /* Running Log - Persistent activity feed */
 .sidebar-activity.running-log {
-    max-height: 220px;
+    max-height: 160px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(211, 119, 29, 0.3) transparent;
@@ -1542,13 +1542,13 @@
 }
 
 .log-icon {
-    font-size: 1.05rem;
+    font-size: 1.3rem;
     flex-shrink: 0;
 }
 
 .log-text {
     flex: 1;
-    font-size: 1rem;
+    font-size: 1.2rem;
     color: rgba(255, 255, 255, 0.8);
     white-space: nowrap;
     overflow: hidden;
@@ -1556,7 +1556,7 @@
 }
 
 .log-time {
-    font-size: 0.85rem;
+    font-size: 1rem;
     color: rgba(255, 255, 255, 0.35);
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
@@ -1577,7 +1577,7 @@
 }
 
 .next-live-day {
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.8);
     letter-spacing: 0.5px;
@@ -1601,7 +1601,7 @@
 }
 
 .countdown-value {
-    font-size: 1.5rem;
+    font-size: 2rem;
     font-weight: 800;
     color: #fbbf24;
     font-variant-numeric: tabular-nums;
@@ -1668,7 +1668,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     color: rgba(255, 255, 255, 0.8);
 }
 
@@ -1680,13 +1680,13 @@
     justify-content: center;
     background: linear-gradient(135deg, #d3771d, #b45309);
     border-radius: 50%;
-    font-size: 0.85rem;
+    font-size: 1rem;
     font-weight: 700;
     color: white;
 }
 
 .vote-url {
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #fbbf24;
     text-align: center;
@@ -2606,19 +2606,19 @@
 }
 
 .hz-icon {
-    font-size: 1.4rem;
+    font-size: 1.7rem;
     flex-shrink: 0;
 }
 
 .hz-value {
-    font-size: 1.4rem;
+    font-size: 1.7rem;
     font-weight: 700;
     color: white;
     font-variant-numeric: tabular-nums;
 }
 
 .hz-label {
-    font-size: 1rem;
+    font-size: 1.2rem;
     color: rgba(255, 255, 255, 0.5);
 }
 
@@ -2632,7 +2632,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 140px;
+    max-width: 160px;
 }
 
 /* --- Right Sidebar: Achievements Feed --- */
@@ -2640,7 +2640,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 200px;
+    max-height: 160px;
     overflow-y: auto;
 }
 
@@ -2655,12 +2655,12 @@
 }
 
 .ach-emoji {
-    font-size: 1.15rem;
+    font-size: 1.4rem;
     flex-shrink: 0;
 }
 
 .ach-text {
-    font-size: 1.05rem;
+    font-size: 1.2rem;
     color: rgba(255, 255, 255, 0.75);
     line-height: 1.3;
 }
@@ -2713,7 +2713,7 @@
 
 .dj-intel-title {
     font-family: 'Rubik', sans-serif;
-    font-size: 1rem;
+    font-size: 1.2rem;
     font-weight: 700;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -2743,12 +2743,12 @@
 }
 
 .dj-stat-icon {
-    font-size: 1.15rem;
+    font-size: 1.4rem;
 }
 
 .dj-stat-value {
     font-family: 'Rubik', sans-serif;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     font-weight: 700;
     color: white;
     line-height: 1.2;
@@ -2756,7 +2756,7 @@
 
 .dj-stat-label {
     font-family: 'Rubik', sans-serif;
-    font-size: 0.85rem;
+    font-size: 1rem;
     font-weight: 600;
     letter-spacing: 1.5px;
     text-transform: uppercase;
@@ -2773,7 +2773,7 @@
 }
 
 .dj-tip-text {
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     font-weight: 500;
     color: rgba(255, 255, 255, 0.75);
     text-align: center;
@@ -2815,7 +2815,7 @@
 
 .upnext-strip-label {
     display: block;
-    font-size: 1rem;
+    font-size: 1.2rem;
     font-weight: 700;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -2848,7 +2848,7 @@
 }
 
 .upnext-strip-pos {
-    font-size: 1rem;
+    font-size: 1.2rem;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.35);
     width: 16px;
@@ -2857,8 +2857,8 @@
 }
 
 .upnext-strip-art {
-    width: 44px;
-    height: 44px;
+    width: 52px;
+    height: 52px;
     border-radius: 6px;
     object-fit: cover;
     flex-shrink: 0;
@@ -2873,7 +2873,7 @@
 }
 
 .upnext-strip-name {
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.9);
     white-space: nowrap;
@@ -2882,7 +2882,7 @@
 }
 
 .upnext-strip-artist {
-    font-size: 0.95rem;
+    font-size: 1.1rem;
     color: rgba(255, 255, 255, 0.45);
     white-space: nowrap;
     overflow: hidden;
@@ -2890,7 +2890,7 @@
 }
 
 .upnext-strip-score {
-    font-size: 1.05rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #fbbf24;
     flex-shrink: 0;

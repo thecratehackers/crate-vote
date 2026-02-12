@@ -1461,7 +1461,7 @@ export default function JukeboxPlayer({
 
                                 return Object.entries(contributors)
                                     .sort((a, b) => b[1].count - a[1].count)
-                                    .slice(0, streamMode ? 4 : 3)
+                                    .slice(0, streamMode ? 3 : 2)
                                     .map(([name, data], i) => (
                                         <div key={name} className={`lb-row ${i === 0 ? 'lb-row-top' : ''}`}>
                                             <span className="lb-rank">{i === 0 ? '🎧' : `#${i + 1}`}</span>
@@ -1503,7 +1503,7 @@ export default function JukeboxPlayer({
                             {activityFeed.length === 0 ? (
                                 <p className="activity-empty">Waiting for activity...</p>
                             ) : (
-                                activityFeed.slice(0, 8).map((item) => {
+                                activityFeed.slice(0, 5).map((item) => {
                                     const ago = Math.floor((Date.now() - item.timestamp) / 1000);
                                     const timeLabel = ago < 60 ? `${ago}s` : `${Math.floor(ago / 60)}m`;
                                     return (
