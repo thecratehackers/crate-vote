@@ -2695,9 +2695,8 @@
 
 .waveform-container {
     margin: 4px 16px;
-    flex: 1;
-    min-height: 40px;
-    max-height: 120px;
+    flex: 0 0 auto;
+    height: 60px;
     border-radius: 10px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.2);
@@ -2842,6 +2841,7 @@
     border-radius: 10px;
     overflow: hidden;
     flex: 1;
+    min-height: 160px;
     display: flex;
     flex-direction: column;
 }
