@@ -1785,40 +1785,6 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* 🎛️ CRATE COACH — DJ craft advice + song analytics */}
-                    <div className="dj-intel-card">
-                        <div className="dj-intel-header">
-                            <span className="dj-intel-title">🎛️ CRATE COACH</span>
-                        </div>
-                        <div className="dj-intel-stats">
-                            <div className="dj-stat-badge">
-                                <span className="dj-stat-icon">🥁</span>
-                                <span className="dj-stat-value">{currentSong.bpm ?? '—'}</span>
-                                <span className="dj-stat-label">BPM</span>
-                            </div>
-                            <div className="dj-stat-badge">
-                                <span className="dj-stat-icon">🎵</span>
-                                <span className="dj-stat-value">{currentSong.camelotKey ?? '—'}</span>
-                                <span className="dj-stat-label">KEY</span>
-                            </div>
-                            <div className="dj-stat-badge">
-                                <span className="dj-stat-icon">⚡</span>
-                                <span className="dj-stat-value">{currentSong.energy != null ? (currentSong.energy * 100).toFixed(0) : '—'}</span>
-                                <span className="dj-stat-label">ENERGY</span>
-                            </div>
-                            <div className="dj-stat-badge">
-                                <span className="dj-stat-icon">💃</span>
-                                <span className="dj-stat-value">{currentSong.danceability != null ? (currentSong.danceability * 100).toFixed(0) : '—'}</span>
-                                <span className="dj-stat-label">DANCE</span>
-                            </div>
-                        </div>
-                        {djTips.length > 0 && (
-                            <div className="dj-intel-tip">
-                                <span className="dj-tip-text" key={currentDJTipIndex}>{djTips[currentDJTipIndex]}</span>
-                            </div>
-                        )}
-                    </div>
-
                     {/* 🌊 WAVEFORM VISUALIZATION — Ambient reactive visual */}
                     <div className="waveform-container">
                         <canvas ref={waveformRef} className="waveform-canvas" />
