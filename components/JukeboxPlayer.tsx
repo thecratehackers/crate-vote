@@ -1855,6 +1855,7 @@ export default function JukeboxPlayer({
                 <div className="jukebox-container">
                     <div className="crowdsource-banner">
                         <div className="crowdsource-label">
+                            <img src="/crate-hackers-logo.svg" alt="" className="banner-brand-logo" />
                             <span className="live-dot" />
                             <span>VOTING OPEN</span>
                         </div>
@@ -2011,9 +2012,9 @@ export default function JukeboxPlayer({
                         {showCTA && (
                             <div className="jukebox-cta-flash">
                                 <div className="cta-content">
-                                    <span className="cta-arrow">🔥</span>
+                                    <img src="/crate-hackers-logo.svg" alt="" className="cta-brand-logo" />
                                     <span className="cta-text">Vote now at <strong>{APP_CONFIG.domain}</strong></span>
-                                    <span className="cta-arrow">📦</span>
+                                    <img src="/crate-hackers-logo.svg" alt="" className="cta-brand-logo" />
                                 </div>
                             </div>
                         )}
@@ -2117,11 +2118,19 @@ export default function JukeboxPlayer({
                                 className="qr-widget-img"
                             />
                             <div className="qr-widget-info">
-                                <span className="qr-widget-hint">Download songs & grab the Spotify playlist</span>
+                                <span className="qr-widget-hint">Download songs & save the playlist</span>
+                                <div className="qr-platform-logos">
+                                    <img src="/spotify-logo.png" alt="Spotify" className="platform-logo" title="Save to Spotify" />
+                                    <img src="/tidal-logo.svg" alt="TIDAL" className="platform-logo tidal-logo" title="Save to TIDAL" />
+                                </div>
                             </div>
                         </div>
                         <div className="qr-widget-url-row">
                             <span className="qr-widget-url">{APP_CONFIG.domain}</span>
+                        </div>
+                        <div className="powered-by-strip">
+                            <span className="powered-by-text">powered by</span>
+                            <img src="/crate-hackers-logo.svg" alt="Crate Hackers" className="powered-by-logo" />
                         </div>
                     </div>
 
