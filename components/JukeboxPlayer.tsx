@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './JukeboxPlayer.css';
 import { APP_CONFIG, BROADCAST } from '@/lib/config';
 import { SoundEffects } from '@/lib/sounds';
+import { sfx } from '@/lib/sfx';
 
 interface Song {
     id: string;
@@ -673,6 +674,7 @@ export default function JukeboxPlayer({
             const pos1 = Math.floor(Math.random() * POPUP_POSITIONS.length);
             setFactPosition(pos1);
             setCurrentFact(fact1);
+            sfx.pop(); // 💡 VH1-style pop!
 
             // Second fact — staggered by 1.5s for dynamic VH1 feel
             if (popUpFacts.length > 1) {
@@ -686,6 +688,7 @@ export default function JukeboxPlayer({
                     }
                     setSecondFactPosition(pos2);
                     setSecondFact(fact2);
+                    sfx.pop(); // 💡 Second pop!
                     // Hide second fact after 8 seconds
                     setTimeout(() => setSecondFact(null), 8000);
                 }, 1500);
@@ -897,11 +900,13 @@ export default function JukeboxPlayer({
         setLastActivityTime(Date.now()); // Reset idle timer
         setIdleMode(false); // Exit idle mode on activity
 
-        // Trigger Vegas-style burst!
+        // Trigger Vegas-style burst + SFX!
         if (item.type === 'vote') {
             triggerEmojiBurst(item.icon === '👍' ? 'upvote' : 'downvote');
+            if (item.icon === '👍') sfx.voteUp(); else sfx.voteDown();
             boostHype(8); // 📺 BROADCAST: Votes boost hype
         } else if (item.type === 'newSong') {
+            sfx.newSong(); // 🎰 Slot machine jingle
             boostHype(15); // 📺 BROADCAST: New songs boost hype more
         }
     }, [triggerEmojiBurst, boostHype]);
@@ -932,10 +937,15 @@ export default function JukeboxPlayer({
             setActivityFeed(prev => [...newItems, ...prev].slice(0, 50));
             setLastActivityTime(Date.now());
             setIdleMode(false);
-            // Boost hype for server-side activity too
+            // Boost hype for server-side activity too + SFX
             newItems.forEach(item => {
-                if (item.type === 'vote') boostHype(5);
-                else if (item.type === 'newSong') boostHype(12);
+                if (item.type === 'vote') {
+                    boostHype(5);
+                    sfx.notify(); // 🔔 Remote vote ping
+                } else if (item.type === 'newSong') {
+                    boostHype(12);
+                    sfx.slotPull(); // 🎰 Someone added a song!
+                }
             });
         }
 
@@ -957,6 +967,7 @@ export default function JukeboxPlayer({
                 // Pick a random message each time idle mode activates
                 setIdleMessageIndex(Math.floor(Math.random() * idleMessages.length));
                 setIdleMode(true);
+                sfx.whoosh(); // 🌊 Cinematic transition
             }
         }, 5000);
         return () => clearInterval(idleCheck);
@@ -1261,6 +1272,7 @@ export default function JukeboxPlayer({
         if (latestNextSong) {
             // Show next song hint, then advance
             setShowNextHint(true);
+            sfx.whoosh(); // 🌊 Song transition
             setTimeout(() => {
                 setShowNextHint(false);
                 latestOnNextSong(latestNextSong.id);
@@ -1282,6 +1294,7 @@ export default function JukeboxPlayer({
     useEffect(() => {
         if (watchTime >= 60 && !karmaEarned && visitorId) {
             setKarmaEarned(true);
+            sfx.coin(); // 💰 Mario coin!
             onKarmaEarned?.();
         }
     }, [watchTime, karmaEarned, visitorId, onKarmaEarned]);
@@ -1307,6 +1320,7 @@ export default function JukeboxPlayer({
 
     const skipToNext = () => {
         if (nextSong) {
+            sfx.skip(); // 🎵 Vinyl scratch
             onNextSong(nextSong.id);
         }
     };
