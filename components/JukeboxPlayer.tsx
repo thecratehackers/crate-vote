@@ -1461,7 +1461,7 @@ export default function JukeboxPlayer({
 
                                 return Object.entries(contributors)
                                     .sort((a, b) => b[1].count - a[1].count)
-                                    .slice(0, streamMode ? 6 : 4)
+                                    .slice(0, streamMode ? 4 : 3)
                                     .map(([name, data], i) => (
                                         <div key={name} className={`lb-row ${i === 0 ? 'lb-row-top' : ''}`}>
                                             <span className="lb-rank">{i === 0 ? '🎧' : `#${i + 1}`}</span>
@@ -1480,7 +1480,7 @@ export default function JukeboxPlayer({
                     <div className="sidebar-section">
                         <h3 className="sidebar-title">🔊 Top Songs</h3>
                         <div className="mini-leaderboard">
-                            {playlist.slice(0, 3).map((song, i) => (
+                            {playlist.slice(0, 2).map((song, i) => (
                                 <div key={song.id} className="lb-row">
                                     <span className="lb-rank">{i === 0 ? '👑' : `#${i + 1}`}</span>
                                     <span className="lb-name">
@@ -1503,7 +1503,7 @@ export default function JukeboxPlayer({
                             {activityFeed.length === 0 ? (
                                 <p className="activity-empty">Waiting for activity...</p>
                             ) : (
-                                activityFeed.slice(0, 15).map((item) => {
+                                activityFeed.slice(0, 8).map((item) => {
                                     const ago = Math.floor((Date.now() - item.timestamp) / 1000);
                                     const timeLabel = ago < 60 ? `${ago}s` : `${Math.floor(ago / 60)}m`;
                                     return (
