@@ -2077,14 +2077,6 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* 🎙️ AI DJ COMMENTARY — ESPN-style live commentary */}
-                    {djCommentary && (
-                        <div className="sidebar-section commentary-section">
-                            <h3 className="sidebar-title">🎙️ Live Commentary</h3>
-                            <p className="commentary-text" key={djCommentary.slice(0, 20)}>{djCommentary}</p>
-                        </div>
-                    )}
-
                     {/* 🎤 ON THIS DAY IN MUSIC */}
                     {onThisDayFacts.length > 0 && (
                         <div className="sidebar-section on-this-day-section">
