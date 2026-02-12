@@ -1817,20 +1817,36 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* 📅 Next Live Show Countdown */}
-                    <div className="sidebar-section next-live-section">
-                        <h3 className="sidebar-title">📡 Next Live Show</h3>
-                        <div className="next-live-info">
-                            <div className="next-live-host">
-                                <img src="/dj-host.png" alt="Your Host" className="host-photo" />
+                    {/* 🎙️ AI DJ COMMENTATOR — Radio DJ personality with thought bubble */}
+                    <div className="sidebar-section dj-commentator-section">
+                        <div className="dj-commentator-avatar-area">
+                            <div className="dj-commentator-avatar-ring">
+                                <img src="/dj-host.png" alt="DJ" className="dj-commentator-avatar" />
+                                <span className="dj-commentator-mic">🎙️</span>
                             </div>
-                            <div className="next-live-details">
-                                <span className="next-live-day">Tuesdays @ 8PM ET</span>
-                                <div className={`next-live-countdown ${nextLiveCountdown === 'LIVE NOW' ? 'live-now' : ''}`}>
-                                    <span className="countdown-value">{nextLiveCountdown || '...'}</span>
-                                    {nextLiveCountdown === 'LIVE NOW' && <span className="live-pulse-dot" />}
-                                </div>
+                            <div className="dj-commentator-badge">
+                                <span className="dj-badge-dot" />
+                                <span className="dj-badge-text">ON AIR</span>
                             </div>
+                        </div>
+                        <div className="dj-thought-bubble">
+                            <div className="thought-dots">
+                                <span className="thought-dot dot-1" />
+                                <span className="thought-dot dot-2" />
+                                <span className="thought-dot dot-3" />
+                            </div>
+                            <div className="thought-cloud" key={djCommentary ? djCommentary.slice(0, 20) : 'default'}>
+                                <p className="thought-text">
+                                    {djCommentary || "The crowd is shaping tonight's playlist — every vote moves the needle! 🔥"}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="dj-show-strip">
+                            <span className="dj-show-label">📡 NEXT SHOW</span>
+                            <span className={`dj-show-countdown ${nextLiveCountdown === 'LIVE NOW' ? 'live-now' : ''}`}>
+                                {nextLiveCountdown || '...'}
+                                {nextLiveCountdown === 'LIVE NOW' && <span className="live-pulse-dot" />}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -1846,17 +1862,20 @@ export default function JukeboxPlayer({
                         <p className="crowdsource-subtitle">{bannerHeadlines[bannerIndex].subtitle}</p>
                     </div>
 
-                    <div className="jukebox-header">
-                        <img src={currentSong.albumArt} alt="" className="jukebox-header-art" />
+                    <div className="jukebox-header championship-header">
+                        <div className="header-art-container">
+                            <img src={currentSong.albumArt} alt="" className="jukebox-header-art" />
+                            <div className="art-vinyl-ring" />
+                        </div>
                         <div className="jukebox-header-center">
                             <span className="jukebox-label">💿 NOW PLAYING</span>
-                            <span className="jukebox-song-name">{currentSong.name}</span>
+                            <span className="jukebox-song-name shimmer-text">{currentSong.name}</span>
                             <span className="jukebox-artist-name">{currentSong.artist}</span>
                         </div>
-                        <div className="jukebox-vote-badge" title="Current vote score">
+                        <div className="jukebox-vote-badge championship-badge" title="Current vote score">
                             <div className="vote-row">
                                 <span className="vote-icon">🔥</span>
-                                <span className={`vote-count ${(playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) > 0 ? 'positive' : (playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) < 0 ? 'negative' : ''}`}>
+                                <span className={`vote-count ${(playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) > 0 ? 'positive' : (playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) < 0 ? 'negative' : ''}`} key={`score-${playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score}`}>
                                     {(() => {
                                         const liveScore = playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score;
                                         return liveScore > 0 ? `+${liveScore}` : liveScore;
@@ -1864,13 +1883,26 @@ export default function JukeboxPlayer({
                                 </span>
                             </div>
                             <span className="vote-label">votes</span>
+                            {(() => {
+                                const rank = playlist.findIndex(s => s.id === currentSong.id) + 1;
+                                if (rank <= 0) return null;
+                                return (
+                                    <div className={`trending-indicator ${rank === 1 ? 'trending-top' : rank <= 3 ? 'trending-rising' : ''}`}>
+                                        {rank === 1 ? '👑 #1' : rank <= 3 ? `↑ #${rank}` : `#${rank}`}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
 
-
-                    <div className="jukebox-tips-banner">
-                        <span className="tip-icon">{gameTips[currentTipIndex].icon}</span>
-                        <span className="tip-text" key={currentTipIndex}>{gameTips[currentTipIndex].text}</span>
+                    {/* 🎚️ CROWD ENERGY METER — Visual pulse of voting activity */}
+                    <div className="crowd-energy-bar">
+                        <span className="energy-label">⚡ CROWD ENERGY</span>
+                        <div className="energy-meter">
+                            <div className="energy-fill" style={{ width: `${Math.min(100, (totalVotes / Math.max(1, playlist.length)) * 10)}%` }} />
+                            <div className="energy-pulse-dot" />
+                        </div>
+                        <span className="energy-level">{hypeInfo.emoji} {hypeInfo.label}</span>
                     </div>
 
                     <div
@@ -2170,7 +2202,7 @@ export default function JukeboxPlayer({
                         {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
                         📰 {djIntelHeadlines[djIntelIndex]} &nbsp;•&nbsp;
                         {onThisDayFacts.length > 0 && <>📅 {onThisDayFacts[onThisDayIndex]} &nbsp;•&nbsp;</>}
-                        {djCommentary && <>🎙️ {djCommentary} &nbsp;•&nbsp;</>}
+
                         {playlist.length >= 2 && <>📈 #{2}: &ldquo;{playlist[1].name}&rdquo; (+{playlist[1].score}) &nbsp;•&nbsp;</>}
                         {playlist.length >= 3 && <>📉 #{3}: &ldquo;{playlist[2].name}&rdquo; (+{playlist[2].score}) &nbsp;•&nbsp;</>}
                         🤝 Collaborating with DJs in real time &nbsp;•&nbsp;
@@ -2190,7 +2222,6 @@ export default function JukeboxPlayer({
                         {hypeInfo.emoji} Hype: {hypeInfo.label} &nbsp;•&nbsp;
                         📰 {djIntelHeadlines[djIntelIndex]} &nbsp;•&nbsp;
                         {onThisDayFacts.length > 0 && <>📅 {onThisDayFacts[onThisDayIndex]} &nbsp;•&nbsp;</>}
-                        {djCommentary && <>🎙️ {djCommentary} &nbsp;•&nbsp;</>}
                         {playlist.length >= 2 && <>📈 #{2}: &ldquo;{playlist[1].name}&rdquo; (+{playlist[1].score}) &nbsp;•&nbsp;</>}
                         {playlist.length >= 3 && <>📉 #{3}: &ldquo;{playlist[2].name}&rdquo; (+{playlist[2].score}) &nbsp;•&nbsp;</>}
                         🤝 Collaborating with DJs in real time &nbsp;•&nbsp;
