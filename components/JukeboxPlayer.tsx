@@ -1596,10 +1596,15 @@ export default function JukeboxPlayer({
                     <div className="sidebar-section next-live-section">
                         <h3 className="sidebar-title">📡 Next Live Show</h3>
                         <div className="next-live-info">
-                            <span className="next-live-day">Tuesdays @ 8PM ET</span>
-                            <div className={`next-live-countdown ${nextLiveCountdown === 'LIVE NOW' ? 'live-now' : ''}`}>
-                                <span className="countdown-value">{nextLiveCountdown || '...'}</span>
-                                {nextLiveCountdown === 'LIVE NOW' && <span className="live-pulse-dot" />}
+                            <div className="next-live-host">
+                                <img src="/dj-host.png" alt="Your Host" className="host-photo" />
+                            </div>
+                            <div className="next-live-details">
+                                <span className="next-live-day">Tuesdays @ 8PM ET</span>
+                                <div className={`next-live-countdown ${nextLiveCountdown === 'LIVE NOW' ? 'live-now' : ''}`}>
+                                    <span className="countdown-value">{nextLiveCountdown || '...'}</span>
+                                    {nextLiveCountdown === 'LIVE NOW' && <span className="live-pulse-dot" />}
+                                </div>
                             </div>
                         </div>
                     </div>

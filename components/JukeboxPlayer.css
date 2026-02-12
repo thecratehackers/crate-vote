@@ -1571,10 +1571,28 @@
 
 .next-live-info {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 8px;
-    text-align: center;
+    gap: 12px;
+}
+
+.next-live-host {
+    flex-shrink: 0;
+}
+
+.host-photo {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(211, 119, 29, 0.5);
+    box-shadow: 0 0 12px rgba(211, 119, 29, 0.2);
+}
+
+.next-live-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .next-live-day {
