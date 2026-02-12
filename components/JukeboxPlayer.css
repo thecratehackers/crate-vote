@@ -1352,7 +1352,7 @@
 .jukebox-dashboard {
     display: flex;
     width: 100%;
-    max-width: 1400px;
+    max-width: 1600px;
     height: 100%;
     max-height: 95vh;
     gap: 16px;
@@ -1376,6 +1376,7 @@
 
 .jukebox-sidebar.right {
     order: 3;
+    width: 80px;
 }
 
 .jukebox-container {

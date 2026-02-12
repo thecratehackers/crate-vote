@@ -1785,13 +1785,6 @@ export default function JukeboxPlayer({
                         </div>
                     </div>
 
-                    {/* 🎛️ DJ TIP — rotating craft advice */}
-                    {djTips.length > 0 && (
-                        <div className="dj-intel-tip standalone-tip">
-                            <span className="dj-tip-text" key={currentDJTipIndex}>{djTips[currentDJTipIndex]}</span>
-                        </div>
-                    )}
-
                     {/* 🌊 WAVEFORM VISUALIZATION — Ambient reactive visual */}
                     <div className="waveform-container">
                         <canvas ref={waveformRef} className="waveform-canvas" />
