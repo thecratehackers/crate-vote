@@ -1826,12 +1826,11 @@ export default function JukeboxPlayer({
                     </div>
 
                     <div className="jukebox-header">
-                        <div className="jukebox-now-playing">
+                        <img src={currentSong.albumArt} alt="" className="jukebox-header-art" />
+                        <div className="jukebox-header-center">
                             <span className="jukebox-label">💿 NOW PLAYING</span>
-                            <div className="jukebox-song-info">
-                                <span className="jukebox-song-name">{currentSong.name}</span>
-                                <span className="jukebox-artist-name">{currentSong.artist}</span>
-                            </div>
+                            <span className="jukebox-song-name">{currentSong.name}</span>
+                            <span className="jukebox-artist-name">{currentSong.artist}</span>
                         </div>
                         <div className="jukebox-vote-badge" title="Current vote score">
                             <span className="vote-icon">🔥</span>
@@ -1844,6 +1843,16 @@ export default function JukeboxPlayer({
                             <span className="vote-label">votes</span>
                         </div>
                     </div>
+
+                    {/* 🎙️ AI COMMENTARY TICKER — Scrolling bar under header */}
+                    {djCommentary && (
+                        <div className="commentary-ticker-bar">
+                            <span className="commentary-ticker-label">📻 ON AIR</span>
+                            <div className="commentary-ticker-track">
+                                <span className="commentary-ticker-text" key={djCommentary.slice(0, 20)}>{djCommentary}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{djCommentary}</span>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="jukebox-tips-banner">
                         <span className="tip-icon">{gameTips[currentTipIndex].icon}</span>
@@ -1993,14 +2002,7 @@ export default function JukeboxPlayer({
 
                     {/* 🌊 WAVEFORM — moved to right sidebar to spread out visualizers */}
 
-                    {/* 🎙️ LIVE COMMENTARY — Center column inline */}
-                    {djCommentary && (
-                        <div className="commentary-inline">
-                            <img src={currentSong.albumArt} alt="" className="commentary-inline-art" />
-                            <span className="commentary-inline-text" key={djCommentary.slice(0, 20)}>{djCommentary}</span>
-                            <span className="commentary-inline-votes">🔥 {playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score}</span>
-                        </div>
-                    )}
+
 
                     {/* 🗂️ UP NEXT — Compact strip filling the gap */}
                     <div className="upnext-strip">
@@ -2123,6 +2125,12 @@ export default function JukeboxPlayer({
                         </div>
                         <div className="dj-news-headline dj-news-secondary" key={`next-${djIntelIndex}`}>
                             <span className="dj-news-text">{djIntelHeadlines[(djIntelIndex + 1) % djIntelHeadlines.length]}</span>
+                        </div>
+                        <div className="dj-news-headline dj-news-secondary" key={`third-${djIntelIndex}`}>
+                            <span className="dj-news-text">{djIntelHeadlines[(djIntelIndex + 2) % djIntelHeadlines.length]}</span>
+                        </div>
+                        <div className="dj-news-headline dj-news-secondary" key={`fourth-${djIntelIndex}`}>
+                            <span className="dj-news-text">{djIntelHeadlines[(djIntelIndex + 3) % djIntelHeadlines.length]}</span>
                         </div>
                         <span className="dj-news-credit">via The Crate Hackers Newsletter</span>
                     </div>

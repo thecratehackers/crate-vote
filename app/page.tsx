@@ -1907,6 +1907,20 @@ export default function HomePage() {
             return;
         }
 
+        // 🚫 Skip downvoted songs — never play tracks the crowd voted down
+        if (nextSong.score < 0) {
+            const currentIndex = sortedSongs.findIndex(s => s.id === nextSongId);
+            // Find next eligible (non-downvoted) song
+            const nextEligible = sortedSongs.slice(currentIndex + 1).find(s => s.score >= 0);
+            if (nextEligible) {
+                handleJukeboxNextSong(nextEligible.id);
+            } else {
+                setJukeboxState(null);
+                setMessage({ type: 'success', text: '💿 Playlist complete! Thanks for listening.' });
+            }
+            return;
+        }
+
         setIsLoadingVideo(nextSongId);
         try {
             const response = await fetch(`/api/youtube-search?song=${encodeURIComponent(nextSong.name)}&artist=${encodeURIComponent(nextSong.artist)}`);
@@ -1919,10 +1933,11 @@ export default function HomePage() {
                     song: nextSong,
                 });
             } else {
-                // Skip songs without videos
+                // Skip songs without videos — find next eligible
                 const currentIndex = sortedSongs.findIndex(s => s.id === nextSongId);
-                if (currentIndex < sortedSongs.length - 1) {
-                    handleJukeboxNextSong(sortedSongs[currentIndex + 1].id);
+                const nextEligible = sortedSongs.slice(currentIndex + 1).find(s => s.score >= 0);
+                if (nextEligible) {
+                    handleJukeboxNextSong(nextEligible.id);
                 } else {
                     setJukeboxState(null);
                     setMessage({ type: 'success', text: '💿 Playlist complete! Thanks for listening.' });
@@ -3691,7 +3706,7 @@ export default function HomePage() {
                     <JukeboxPlayer
                         currentSong={jukeboxState.song}
                         videoId={jukeboxState.videoId}
-                        playlist={sortedSongs}
+                        playlist={sortedSongs.filter(s => s.score >= 0)}
                         onClose={() => setJukeboxState(null)}
                         onNextSong={handleJukeboxNextSong}
                         onVote={(songId, delta) => handleVote(songId, delta as 1 | -1)}
