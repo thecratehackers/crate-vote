@@ -673,6 +673,7 @@ export default function JukeboxPlayer({
                 body: JSON.stringify({
                     currentSong: currentSong.name,
                     currentArtist: currentSong.artist,
+                    currentSongScore: playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score,
                     topSong: topSong?.name || 'N/A',
                     topArtist: topSong?.artist || 'N/A',
                     topScore: topSong?.score || 0,
@@ -680,6 +681,7 @@ export default function JukeboxPlayer({
                     totalVotes: playlist.reduce((s, t) => s + Math.abs(t.score), 0),
                     contributors: new Set(playlist.map(s => s.addedByName).filter(Boolean)).size,
                     recentActivity: activityFeed.slice(0, 3).map(a => a.text).join('. ') || 'Votes are coming in',
+                    playlistTitle: playlistTitle || '',
                 }),
             })
                 .then(res => res.json())

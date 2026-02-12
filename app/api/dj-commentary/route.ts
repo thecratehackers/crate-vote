@@ -16,23 +16,26 @@ const CACHE_TTL_MS = 90 * 1000; // 90 seconds — keeps it fresh but doesn't bur
 function generateFallbackCommentary(data: {
     currentSong: string;
     currentArtist: string;
+    currentSongScore: number;
     topSong: string;
     topArtist: string;
     topScore: number;
     totalSongs: number;
     totalVotes: number;
     contributors: number;
-    genres: string[];
+    playlistTitle: string;
 }): string {
+    const theme = data.playlistTitle ? ` for "${data.playlistTitle}"` : '';
+    const scoreLabel = data.currentSongScore > 0 ? `+${data.currentSongScore}` : `${data.currentSongScore}`;
     const lines = [
-        `We've got "${data.currentSong}" by ${data.currentArtist} spinning right now — and ${data.totalVotes} votes are shaping this playlist in real time.`,
-        `${data.contributors} DJs are battling it out with ${data.totalSongs} songs in the crate. The crowd is LOCKED IN tonight.`,
+        `"${data.currentSong}" by ${data.currentArtist} is on the floor at ${scoreLabel} votes — and ${data.totalVotes} total votes are shaping this crate${theme}.`,
+        `${data.contributors} DJs are battling it out with ${data.totalSongs} songs in the crate${theme}. The crowd is LOCKED IN tonight.`,
         `"${data.topSong}" by ${data.topArtist} is sitting at #1 with +${data.topScore} votes — but challengers are coming up fast.`,
-        `The energy in this playlist is building — ${data.totalVotes} votes cast so far. This is what crowd-powered music looks like.`,
-        `${data.totalSongs} tracks in the crate, ${data.contributors} contributors mixing it up. This set is writing itself.`,
-        `"${data.currentSong}" has the floor right now. ${data.totalVotes} votes prove this crowd knows what they want.`,
-        `Late-night energy check: ${data.contributors} DJs have curated ${data.totalSongs} songs — and every vote is moving the needle.`,
-        `The #1 spot belongs to "${data.topSong}" — but in Crate Hackers, nothing stays on top for long.`,
+        `${data.totalSongs} tracks deep${theme}, ${data.totalVotes} votes cast — this playlist is writing itself and the crowd won't stop.`,
+        `"${data.currentSong}" holding at ${scoreLabel} — ${data.contributors} contributors are all in on this set${theme}.`,
+        `The #1 spot belongs to "${data.topSong}" at +${data.topScore} — but in Crate Hackers, nothing stays on top for long.`,
+        `${data.totalVotes} votes prove this crowd knows what they want${theme}. "${data.currentSong}" is the vibe right now.`,
+        `${data.contributors} DJs have curated ${data.totalSongs} songs${theme} — every vote is moving the needle on this live set.`,
     ];
 
     return lines[Math.floor(Math.random() * lines.length)];
@@ -42,6 +45,7 @@ function generateFallbackCommentary(data: {
 async function fetchAICommentary(data: {
     currentSong: string;
     currentArtist: string;
+    currentSongScore: number;
     topSong: string;
     topArtist: string;
     topScore: number;
@@ -49,27 +53,38 @@ async function fetchAICommentary(data: {
     totalVotes: number;
     contributors: number;
     recentActivity: string;
+    playlistTitle: string;
 }): Promise<string> {
     if (!PERPLEXITY_API_KEY) {
-        return generateFallbackCommentary(data as any);
+        return generateFallbackCommentary(data);
     }
+
+    const themeContext = data.playlistTitle
+        ? `\n- CRATE THEME: "${data.playlistTitle}" — reference this theme when relevant`
+        : '';
+
+    const scoreLabel = data.currentSongScore > 0 ? `+${data.currentSongScore}` : `${data.currentSongScore}`;
 
     const prompt = `You are an ESPN-style color commentator for a LIVE DJ music voting event called "Crate Hackers". The audience is voting on songs in real time.
 
-Current state:
-- NOW PLAYING: "${data.currentSong}" by ${data.currentArtist}
+HERE IS WHAT IS ACTUALLY HAPPENING RIGHT NOW — only reference these REAL facts:
+- NOW PLAYING: "${data.currentSong}" by ${data.currentArtist} (currently at ${scoreLabel} votes)
 - #1 SONG: "${data.topSong}" by ${data.topArtist} with +${data.topScore} votes
-- TOTAL: ${data.totalSongs} songs in the crate, ${data.totalVotes} votes cast, ${data.contributors} DJs contributing
-- RECENT: ${data.recentActivity}
+- PLAYLIST: ${data.totalSongs} songs in the crate, ${data.totalVotes} total votes cast, ${data.contributors} DJs contributing
+- RECENT ACTIVITY: ${data.recentActivity}${themeContext}
 
-Write ONE short, punchy commentary line (max 180 characters) that a sports commentator would say about this live music voting event. 
-Be hyped, use music terminology mixed with sports energy. Reference specific songs/artists from the data above.
-NO hashtags. NO emojis. Just raw broadcast energy.
+Write ONE short, punchy commentary line (max 180 characters) that a sports commentator would say about this live music voting event.
+RULES:
+1. Reference SPECIFIC songs, artists, scores, or stats from the data above — be ACCURATE
+2. React to what's actually happening: Is the current song gaining votes? Is one song dominating? Are votes close?
+3. Use music terminology mixed with sports/broadcast energy
+4. NO hashtags, NO emojis — just raw broadcast energy
+5. NEVER make up song names, artists, or stats that aren't in the data above
 
 Examples of the tone:
-- "Three Latin tracks in a row — this crowd is LOCKED IN on the reggaeton wave tonight!"
-- "That's a power move — 'Blinding Lights' just leapfrogged two spots in under a minute!"
-- "We've got a heavyweight fight brewing at the top — and the crowd is eating it UP!"`;
+- "${data.currentSong} holding steady at ${scoreLabel} — this crowd is riding the wave!"
+- "${data.topSong} won't give up that #1 spot — +${data.topScore} votes and STILL climbing!"
+- "${data.contributors} DJs deep and ${data.totalSongs} tracks in the crate — this set is STACKED tonight!"`;
 
     try {
         const response = await fetch('https://api.perplexity.ai/chat/completions', {
@@ -83,7 +98,7 @@ Examples of the tone:
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are an energy-packed ESPN sports commentator covering a live DJ music voting event. Keep it under 180 characters. One line only. Pure hype.',
+                        content: 'You are an energy-packed ESPN sports commentator covering a live DJ music voting event. Keep it under 180 characters. One line only. Pure hype. ONLY reference real data given to you — never invent songs, artists, or stats.',
                     },
                     { role: 'user', content: prompt },
                 ],
@@ -94,7 +109,7 @@ Examples of the tone:
 
         if (!response.ok) {
             console.error(`❌ DJ Commentary API error: ${response.status}`);
-            return generateFallbackCommentary(data as any);
+            return generateFallbackCommentary(data);
         }
 
         const result = await response.json();
@@ -107,10 +122,10 @@ Examples of the tone:
             .trim()
             .slice(0, 200);
 
-        return cleaned || generateFallbackCommentary(data as any);
+        return cleaned || generateFallbackCommentary(data);
     } catch (error) {
         console.error('❌ DJ Commentary fetch failed:', error);
-        return generateFallbackCommentary(data as any);
+        return generateFallbackCommentary(data);
     }
 }
 
@@ -121,6 +136,7 @@ export async function POST(request: Request) {
         const {
             currentSong = 'Unknown',
             currentArtist = 'Unknown',
+            currentSongScore = 0,
             topSong = 'Unknown',
             topArtist = 'Unknown',
             topScore = 0,
@@ -128,6 +144,7 @@ export async function POST(request: Request) {
             totalVotes = 0,
             contributors = 0,
             recentActivity = 'Votes are coming in',
+            playlistTitle = '',
         } = body;
 
         // Simple hash to detect if playlist state has changed
@@ -148,6 +165,7 @@ export async function POST(request: Request) {
         const commentary = await fetchAICommentary({
             currentSong,
             currentArtist,
+            currentSongScore,
             topSong,
             topArtist,
             topScore,
@@ -155,6 +173,7 @@ export async function POST(request: Request) {
             totalVotes,
             contributors,
             recentActivity,
+            playlistTitle,
         });
 
         // Cache it
