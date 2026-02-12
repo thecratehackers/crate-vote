@@ -331,8 +331,14 @@
 }
 
 .jukebox-vote-badge .vote-icon {
-    font-size: 1.2rem;
+    font-size: 1.6rem;
     animation: fireFlicker 1.5s ease-in-out infinite;
+}
+
+.vote-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 @keyframes fireFlicker {

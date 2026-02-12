@@ -1833,13 +1833,15 @@ export default function JukeboxPlayer({
                             <span className="jukebox-artist-name">{currentSong.artist}</span>
                         </div>
                         <div className="jukebox-vote-badge" title="Current vote score">
-                            <span className="vote-icon">🔥</span>
-                            <span className={`vote-count ${(playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) > 0 ? 'positive' : (playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) < 0 ? 'negative' : ''}`}>
-                                {(() => {
-                                    const liveScore = playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score;
-                                    return liveScore > 0 ? `+${liveScore}` : liveScore;
-                                })()}
-                            </span>
+                            <div className="vote-row">
+                                <span className="vote-icon">🔥</span>
+                                <span className={`vote-count ${(playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) > 0 ? 'positive' : (playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score) < 0 ? 'negative' : ''}`}>
+                                    {(() => {
+                                        const liveScore = playlist.find(s => s.id === currentSong.id)?.score ?? currentSong.score;
+                                        return liveScore > 0 ? `+${liveScore}` : liveScore;
+                                    })()}
+                                </span>
+                            </div>
                             <span className="vote-label">votes</span>
                         </div>
                     </div>
