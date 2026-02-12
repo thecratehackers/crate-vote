@@ -1472,10 +1472,7 @@ export default function JukeboxPlayer({
             {idleMode && (
                 <div className="idle-mode-overlay">
                     <div className="idle-content">
-                        <div className="idle-brand">
-                            <span className="idle-brand-icon">🔥</span>
-                            <span className="idle-brand-icon">📦</span>
-                        </div>
+
                         <h1 className="idle-headline">{idleMessages[idleMessageIndex].headline}</h1>
                         <p className="idle-subtext">{idleMessages[idleMessageIndex].subtext}</p>
                         <div className="idle-url-box">
