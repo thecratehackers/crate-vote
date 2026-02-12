@@ -1824,6 +1824,27 @@ export default function JukeboxPlayer({
                         <canvas ref={waveformRef} className="waveform-canvas" />
                     </div>
 
+                    {/* 🗂️ UP NEXT — Compact strip filling the gap */}
+                    <div className="upnext-strip">
+                        <span className="upnext-strip-label">🗂️ UP NEXT</span>
+                        <div className="upnext-strip-items">
+                            {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
+                                <div key={song.id} className="upnext-strip-item" onClick={() => onNextSong(song.id)} title={`Skip to: ${song.name}`}>
+                                    <span className="upnext-strip-pos">{i + 1}</span>
+                                    <img src={song.albumArt} alt="" className="upnext-strip-art" />
+                                    <div className="upnext-strip-info">
+                                        <span className="upnext-strip-name">{song.name.length > 22 ? song.name.slice(0, 22) + '…' : song.name}</span>
+                                        <span className="upnext-strip-artist">{song.artist}</span>
+                                    </div>
+                                    <span className="upnext-strip-score">+{song.score}</span>
+                                </div>
+                            ))}
+                            {playlist.length <= currentIndex + 1 && (
+                                <p className="activity-empty">No more songs in queue</p>
+                            )}
+                        </div>
+                    </div>
+
                     {/* 👻 Ghost controls — discreet corner widget for all modes */}
                     <div className="stream-controls-widget">
                         {!streamMode && (
@@ -1847,125 +1868,10 @@ export default function JukeboxPlayer({
                         )}
                     </div>
 
-                    {/* 🗂️ UP NEXT — Compact strip under the video */}
-                    <div className="upnext-strip">
-                        <span className="upnext-strip-label">🗂️ UP NEXT</span>
-                        <div className="upnext-strip-items">
-                            {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
-                                <div key={song.id} className="upnext-strip-item" onClick={() => onNextSong(song.id)} title={`Skip to: ${song.name}`}>
-                                    <span className="upnext-strip-pos">{i + 1}</span>
-                                    <img src={song.albumArt} alt="" className="upnext-strip-art" />
-                                    <div className="upnext-strip-info">
-                                        <span className="upnext-strip-name">{song.name.length > 22 ? song.name.slice(0, 22) + '…' : song.name}</span>
-                                        <span className="upnext-strip-artist">{song.artist}</span>
-                                    </div>
-                                    <span className="upnext-strip-score">+{song.score}</span>
-                                </div>
-                            ))}
-                            {playlist.length <= currentIndex + 1 && (
-                                <p className="activity-empty">No more songs in queue</p>
-                            )}
-                        </div>
-                    </div>
-
                 </div>
 
-                {/* RIGHT SIDEBAR */}
-                <div className="jukebox-sidebar right">
-                    {streamMode ? (
-                        <>
-                            <div className="sidebar-section">
-                                <h3 className="sidebar-title">📡 Hype Zone</h3>
-                                <div className="hype-zone-stats">
-                                    <div className="hz-stat">
-                                        <span className="hz-icon">🗳️</span>
-                                        <span className="hz-value">{totalVotes}</span>
-                                        <span className="hz-label">votes cast</span>
-                                    </div>
-                                    <div className="hz-stat">
-                                        <span className="hz-icon">💿</span>
-                                        <span className="hz-value">{playlist.length}</span>
-                                        <span className="hz-label">songs battling</span>
-                                    </div>
-                                    <div className="hz-stat">
-                                        <span className="hz-icon">🧑‍💻</span>
-                                        <span className="hz-value">{uniqueContributors}</span>
-                                        <span className="hz-label">DJs active</span>
-                                    </div>
-                                    {playlist.length > 0 && (
-                                        <div className="hz-stat hz-top-song">
-                                            <span className="hz-icon">👑</span>
-                                            <span className="hz-value">{playlist[0].name.slice(0, 18)}</span>
-                                            <span className="hz-label">#{1} with +{playlist[0].score}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="sidebar-section">
-                                <h3 className="sidebar-title">🏆 Recent</h3>
-                                <div className="achievements-feed">
-                                    {achievements.length === 0 ? (
-                                        <p className="activity-empty">Waiting for action...</p>
-                                    ) : (
-                                        achievements.map((ach) => (
-                                            <div key={ach.id} className="achievement-item">
-                                                <span className="ach-emoji">{ach.emoji}</span>
-                                                <span className="ach-text">{ach.text}</span>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                            {/* 💬 CHAT EMBED — Drop your StreamYard/Twitch chat iframe URL here */}
-                            <div className="sidebar-section chat-embed-section">
-                                <h3 className="sidebar-title">💬 Chat</h3>
-                                <div className="chat-embed-box">
-                                    {/* Replace the src below with your chat embed URL */}
-                                    <div className="chat-embed-placeholder">
-                                        <span className="chat-placeholder-icon">💬</span>
-                                        <span className="chat-placeholder-text">Chat Window</span>
-                                        <span className="chat-placeholder-hint">Paste embed URL in code</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div className="sidebar-section">
-                                <h3 className="sidebar-title">📱 How to Vote</h3>
-                                <div className="how-to-vote">
-                                    <div className="vote-step"><span className="step-num">1</span><span>Scan QR or visit</span></div>
-                                    <div className="vote-url">{APP_CONFIG.domain}</div>
-                                    <div className="vote-step"><span className="step-num">2</span><span>Pick a name</span></div>
-                                    <div className="vote-step"><span className="step-num">3</span><span>👍 Upvote favorites</span></div>
-                                    <div className="vote-step"><span className="step-num">4</span><span>👎 Downvote songs you don&apos;t want</span></div>
-                                </div>
-                            </div>
-                            <div className="sidebar-section">
-                                <h3 className="sidebar-title">📋 Rules</h3>
-                                <ul className="rules-list">
-                                    <li>🎵 Add up to 5 songs</li>
-                                    <li>⬆️ Top songs make the final playlist</li>
-                                    <li>⬇️ Low votes = dropped</li>
-                                    <li>⚡ Earn karma by voting</li>
-                                    <li>🏆 Top DJs get bragging rights</li>
-                                </ul>
-                            </div>
-                            {/* 💬 CHAT EMBED — Drop your StreamYard/Twitch chat iframe URL here */}
-                            <div className="sidebar-section chat-embed-section">
-                                <h3 className="sidebar-title">💬 Chat</h3>
-                                <div className="chat-embed-box">
-                                    {/* Replace the src below with your chat embed URL */}
-                                    <div className="chat-embed-placeholder">
-                                        <span className="chat-placeholder-icon">💬</span>
-                                        <span className="chat-placeholder-text">Chat Window</span>
-                                        <span className="chat-placeholder-hint">Paste embed URL in code</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </div>
+                {/* RIGHT SIDEBAR — Background only, content moved to center column */}
+                <div className="jukebox-sidebar right" />
             </div>
 
             {/* 📺 BROADCAST: News Ticker */}
