@@ -1765,7 +1765,26 @@ export default function JukeboxPlayer({
                         )}
                     </div>
 
-
+                    {/* 🗂️ UP NEXT — Compact strip under the video */}
+                    <div className="upnext-strip">
+                        <span className="upnext-strip-label">🗂️ UP NEXT</span>
+                        <div className="upnext-strip-items">
+                            {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
+                                <div key={song.id} className="upnext-strip-item" onClick={() => onNextSong(song.id)} title={`Skip to: ${song.name}`}>
+                                    <span className="upnext-strip-pos">{i + 1}</span>
+                                    <img src={song.albumArt} alt="" className="upnext-strip-art" />
+                                    <div className="upnext-strip-info">
+                                        <span className="upnext-strip-name">{song.name.length > 22 ? song.name.slice(0, 22) + '…' : song.name}</span>
+                                        <span className="upnext-strip-artist">{song.artist}</span>
+                                    </div>
+                                    <span className="upnext-strip-score">+{song.score}</span>
+                                </div>
+                            ))}
+                            {playlist.length <= currentIndex + 1 && (
+                                <p className="activity-empty">No more songs in queue</p>
+                            )}
+                        </div>
+                    </div>
 
                 </div>
 
@@ -1815,24 +1834,16 @@ export default function JukeboxPlayer({
                                     )}
                                 </div>
                             </div>
-                            <div className="sidebar-section">
-                                <h3 className="sidebar-title">🗂️ Up Next</h3>
-                                <div className="sidebar-upnext">
-                                    {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
-                                        <div key={song.id} className="upnext-item" onClick={() => onNextSong(song.id)} title={`Skip to: ${song.name}`}>
-                                            <span className="upnext-pos">{i + 1}</span>
-                                            <img src={song.albumArt} alt="" className="upnext-art" />
-                                            <div className="upnext-info">
-                                                <span className="upnext-name">{song.name.length > 20 ? song.name.slice(0, 20) + '…' : song.name}</span>
-                                                <span className="upnext-artist">{song.artist}</span>
-                                            </div>
-                                            <span className="upnext-score">+{song.score}</span>
-                                            <button className="upnext-skip" onClick={(e) => { e.stopPropagation(); onNextSong(song.id); }} title="Play this song">▶</button>
-                                        </div>
-                                    ))}
-                                    {playlist.length <= currentIndex + 1 && (
-                                        <p className="activity-empty">No more songs in queue</p>
-                                    )}
+                            {/* 💬 CHAT EMBED — Drop your StreamYard/Twitch chat iframe URL here */}
+                            <div className="sidebar-section chat-embed-section">
+                                <h3 className="sidebar-title">💬 Chat</h3>
+                                <div className="chat-embed-box">
+                                    {/* Replace the src below with your chat embed URL */}
+                                    <div className="chat-embed-placeholder">
+                                        <span className="chat-placeholder-icon">💬</span>
+                                        <span className="chat-placeholder-text">Chat Window</span>
+                                        <span className="chat-placeholder-hint">Paste embed URL in code</span>
+                                    </div>
                                 </div>
                             </div>
                         </>
@@ -1858,24 +1869,16 @@ export default function JukeboxPlayer({
                                     <li>🏆 Top DJs get bragging rights</li>
                                 </ul>
                             </div>
-                            <div className="sidebar-section">
-                                <h3 className="sidebar-title">🗂️ Up Next</h3>
-                                <div className="sidebar-upnext">
-                                    {playlist.slice(currentIndex + 1, currentIndex + 4).map((song, i) => (
-                                        <div key={song.id} className="upnext-item" onClick={() => onNextSong(song.id)} title={`Skip to: ${song.name}`}>
-                                            <span className="upnext-pos">{i + 1}</span>
-                                            <img src={song.albumArt} alt="" className="upnext-art" />
-                                            <div className="upnext-info">
-                                                <span className="upnext-name">{song.name.length > 20 ? song.name.slice(0, 20) + '…' : song.name}</span>
-                                                <span className="upnext-artist">{song.artist}</span>
-                                            </div>
-                                            <span className="upnext-score">+{song.score}</span>
-                                            <button className="upnext-skip" onClick={(e) => { e.stopPropagation(); onNextSong(song.id); }} title="Play this song">▶</button>
-                                        </div>
-                                    ))}
-                                    {playlist.length <= currentIndex + 1 && (
-                                        <p className="activity-empty">No more songs in queue</p>
-                                    )}
+                            {/* 💬 CHAT EMBED — Drop your StreamYard/Twitch chat iframe URL here */}
+                            <div className="sidebar-section chat-embed-section">
+                                <h3 className="sidebar-title">💬 Chat</h3>
+                                <div className="chat-embed-box">
+                                    {/* Replace the src below with your chat embed URL */}
+                                    <div className="chat-embed-placeholder">
+                                        <span className="chat-placeholder-icon">💬</span>
+                                        <span className="chat-placeholder-text">Chat Window</span>
+                                        <span className="chat-placeholder-hint">Paste embed URL in code</span>
+                                    </div>
                                 </div>
                             </div>
                         </>
