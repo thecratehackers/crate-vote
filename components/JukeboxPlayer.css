@@ -1946,7 +1946,7 @@
     padding: 3px;
     background: conic-gradient(from 0deg,
             #d3771d, #fbbf24, #f59e0b, #d97706, #b45309, #d3771d);
-    animation: djRingSpin 4s linear infinite;
+    /* animation removed — keep avatar right-side up */
     box-shadow:
         0 0 20px rgba(211, 119, 29, 0.4),
         0 0 40px rgba(211, 119, 29, 0.15);

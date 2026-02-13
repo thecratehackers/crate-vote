@@ -6498,6 +6498,9 @@ body::before {
   background: linear-gradient(135deg, rgba(211, 119, 29, 0.1), rgba(224, 159, 36, 0.05));
   border-bottom: 1px solid rgba(211, 119, 29, 0.2);
   min-height: 44px;
+  max-width: 960px;
+  /* Match song-list constraint */
+  margin: 0 auto;
   /* FIXED HEIGHT - prevents layout shift */
 }
 
@@ -6507,11 +6510,14 @@ body::before {
 
 .playlist-title-text {
   font-family: 'Rubik', sans-serif;
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--orange-primary);
+  font-weight: 800;
+  font-size: 1.05rem;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   /* Broadcast: playlist title edge definition */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  filter: drop-shadow(0 1px 2px rgba(211, 119, 29, 0.4));
 }
 
 /* Activity ticker INLINE - middle area, fixed width */
@@ -6523,8 +6529,9 @@ body::before {
 }
 
 .ticker-item-inline {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.82rem;
+  /* Fix #6: Bolder social proof */
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6602,13 +6609,14 @@ body::before {
 
 /* "This Week's Crate:" label */
 .crate-week-label {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--text-muted);
-  opacity: 0.75;
-  margin-right: 2px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  /* Fix #4: More visible topic label */
+  opacity: 1;
+  margin-right: 4px;
 }
 
 /* ── SAVE LOGOS — Spotify + TIDAL side-by-side ── */
@@ -7234,28 +7242,34 @@ body::before {
   position: relative;
   background: linear-gradient(135deg, rgba(211, 119, 29, 0.08), rgba(224, 159, 36, 0.04));
   border-bottom: 2px solid var(--orange-primary);
+  max-width: 960px;
+  /* Match song-list constraint */
+  margin: 0 auto;
 }
 
 .search-input-stream {
   width: 100%;
   padding: 14px 20px;
-  background: white;
+  background: var(--bg-tertiary);
+  /* Fix #3: Dark-themed — no more white flash on dark page */
   border: 2px solid var(--orange-primary);
   border-radius: 30px;
   font-size: 1rem;
   font-weight: 500;
-  color: #1a1a1a;
-  box-shadow: 0 4px 20px rgba(211, 119, 29, 0.25), 0 0 0 4px rgba(211, 119, 29, 0.1);
+  color: var(--text-primary);
+  box-shadow: 0 4px 20px rgba(211, 119, 29, 0.15), 0 0 0 4px rgba(211, 119, 29, 0.08);
   transition: all 0.2s ease;
 }
 
 .search-input-stream:focus {
   outline: none;
-  box-shadow: 0 4px 30px rgba(211, 119, 29, 0.35), 0 0 0 6px rgba(211, 119, 29, 0.15);
+  background: var(--bg-elevated);
+  box-shadow: 0 4px 30px rgba(211, 119, 29, 0.25), 0 0 0 6px rgba(211, 119, 29, 0.12);
 }
 
 .search-input-stream::placeholder {
-  color: rgba(0, 0, 0, 0.5);
+  color: var(--text-muted);
+  /* Fix #3: Dark-theme placeholder text */
 }
 
 /* Disabled search state — shown when user has exhausted song adds */
@@ -7456,10 +7470,14 @@ body::before {
    ───────────────────────────────────────────────────────────────────────── */
 .song-list-stream {
   padding: 8px;
-  padding-bottom: 20px;
+  padding-bottom: 280px;
+  /* Fix #12: Enough clearance for the fixed DJ widget */
   display: flex;
   flex-direction: column;
   gap: 4px;
+  max-width: 960px;
+  /* Fix #2: Kill dead-space — tighter Fitts's Law compliance */
+  margin: 0 auto;
 }
 
 .empty-state {
@@ -7926,12 +7944,14 @@ body::before {
 }
 
 .vote-score {
-  min-width: 32px;
+  min-width: 40px;
+  /* Fix #11: Wider so +12 doesn't compress */
   text-align: center;
   font-family: 'Rubik', sans-serif;
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--text-secondary);
+  font-weight: 800;
+  font-size: 1.05rem;
+  /* Fix #11: Bigger for instant scanability */
+  color: var(--text-primary);
   /* Broadcast: make score numbers pop on screen share */
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
@@ -9993,13 +10013,31 @@ input:disabled {
 }
 
 .feature-btn.prediction {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
-  border-color: rgba(139, 92, 246, 0.5);
-  color: #a78bfa;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(168, 85, 247, 0.25) 100%);
+  border-color: rgba(139, 92, 246, 0.6);
+  color: #c4b5fd;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
+  animation: predict-glow 3s ease-in-out infinite;
+}
+
+@keyframes predict-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.15);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.35), 0 0 4px rgba(168, 85, 247, 0.2);
+  }
 }
 
 .feature-btn.prediction:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(168, 85, 247, 0.3) 100%);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(168, 85, 247, 0.4) 100%);
+  transform: scale(1.05);
+  animation: none;
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.4);
 }
 
 .feature-btn.sound-toggle {
@@ -14093,6 +14131,7 @@ input:disabled {
   }
 }
 
+
 @media (max-width: 400px) {
   .ai-dj-widget {
     left: 4px;
@@ -14111,6 +14150,368 @@ input:disabled {
   }
 
   .ai-dj-text {
+    font-size: 0.68rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   🎙️ AI DJ WIDGET V2 — Jukebox-style centered avatar + thought bubble
+   Matches the DJ Commentator section from the Jukebox sidebar
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.ai-dj-widget-v2 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 14px 12px;
+}
+
+/* ── Avatar Area: Centered column layout ── */
+.ai-dj-v2-avatar-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.ai-dj-v2-avatar-ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(from 0deg,
+      #d3771d, #fbbf24, #f59e0b, #d97706, #b45309, #d3771d);
+  /* animation removed — keep avatar right-side up */
+  box-shadow:
+    0 0 20px rgba(211, 119, 29, 0.4),
+    0 0 40px rgba(211, 119, 29, 0.15);
+}
+
+@keyframes djV2RingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-dj-v2-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 15%;
+  border: 3px solid rgba(12, 10, 8, 0.95);
+}
+
+.ai-dj-v2-mic {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-size: 1.2rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+  animation: djV2MicBounce 2s ease-in-out infinite;
+}
+
+@keyframes djV2MicBounce {
+
+  0%,
+  100% {
+    transform: scale(1) rotate(-5deg);
+  }
+
+  50% {
+    transform: scale(1.15) rotate(5deg);
+  }
+}
+
+/* ── ON AIR Badge ── */
+.ai-dj-v2-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 20px;
+}
+
+.ai-dj-v2-badge-dot {
+  width: 6px;
+  height: 6px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: djV2BadgePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes djV2BadgePulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0);
+  }
+}
+
+.ai-dj-v2-badge-text {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ef4444;
+}
+
+.ai-dj-v2-name {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary, #f1f5f9);
+  text-align: center;
+}
+
+/* ── Thought Bubble ── */
+.ai-dj-v2-thought-bubble {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ai-dj-v2-thought-dots {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-left: 50%;
+  margin-bottom: -2px;
+  position: relative;
+  z-index: 1;
+}
+
+.ai-dj-v2-dot {
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ai-dj-v2-dot.dot-1 {
+  width: 5px;
+  height: 5px;
+  animation: djV2DotFloat 2s ease-in-out infinite 0s;
+}
+
+.ai-dj-v2-dot.dot-2 {
+  width: 7px;
+  height: 7px;
+  animation: djV2DotFloat 2s ease-in-out infinite 0.3s;
+}
+
+.ai-dj-v2-dot.dot-3 {
+  width: 10px;
+  height: 10px;
+  animation: djV2DotFloat 2s ease-in-out infinite 0.6s;
+}
+
+@keyframes djV2DotFloat {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.ai-dj-v2-cloud {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 12px;
+  position: relative;
+  animation: djV2CloudFadeIn 0.6s ease-out;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.ai-dj-v2-cloud::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 3px 0 0 0;
+}
+
+@keyframes djV2CloudFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ai-dj-v2-text {
+  font-family: 'Inter', 'Rubik', sans-serif;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ── Show Countdown Strip ── */
+.ai-dj-v2-show-strip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: rgba(211, 119, 29, 0.06);
+  border: 1px solid rgba(211, 119, 29, 0.12);
+  border-radius: 8px;
+  margin-top: 2px;
+}
+
+.ai-dj-v2-strip-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ai-dj-v2-strip-label {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--orange-primary, #d3771d);
+  text-transform: uppercase;
+}
+
+.ai-dj-v2-strip-schedule {
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.62rem;
+  color: var(--text-muted, #64748b);
+  font-weight: 500;
+}
+
+.ai-dj-v2-strip-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-dj-v2-strip-countdown {
+  font-family: 'Rubik', monospace;
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #fbbf24;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-dj-v2-calendar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(211, 119, 29, 0.12);
+  border: 1px solid rgba(211, 119, 29, 0.2);
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ai-dj-v2-calendar-btn:hover {
+  background: rgba(211, 119, 29, 0.25);
+  border-color: rgba(211, 119, 29, 0.4);
+  transform: scale(1.08);
+  box-shadow: 0 0 12px rgba(211, 119, 29, 0.2);
+}
+
+/* ── Live Now State ── */
+.ai-dj-v2-strip-live {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.03));
+  border-color: rgba(239, 68, 68, 0.2);
+  gap: 8px;
+  justify-content: center;
+}
+
+.ai-dj-v2-strip-live .ai-dj-v2-strip-label {
+  color: #ef4444;
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+}
+
+.ai-dj-v2-live-pulse {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: djV2BadgePulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ── Mobile Responsive V2 ── */
+@media (max-width: 768px) {
+  .ai-dj-widget-v2 {
+    padding: 12px 10px 10px;
+  }
+
+  .ai-dj-v2-avatar-ring {
+    width: 60px;
+    height: 60px;
+  }
+
+  .ai-dj-v2-text {
+    font-size: 0.72rem;
+  }
+
+  .ai-dj-v2-strip-countdown {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .ai-dj-widget-v2 {
+    padding: 10px 8px 8px;
+  }
+
+  .ai-dj-v2-avatar-ring {
+    width: 52px;
+    height: 52px;
+  }
+
+  .ai-dj-v2-name {
+    font-size: 0.72rem;
+  }
+
+  .ai-dj-v2-text {
     font-size: 0.68rem;
   }
 }

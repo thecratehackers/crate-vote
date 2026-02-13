@@ -2820,32 +2820,6 @@ export default function HomePage() {
                 </div>
             </header>
 
-            {/* 📡 BROADCAST SCHEDULE BAR - Countdown to next Tuesday 8 PM ET + Calendar CTA */}
-            <div className={`broadcast-bar ${isBroadcastLive ? 'broadcast-live' : ''}`}>
-                {isBroadcastLive ? (
-                    <>
-                        <span className="broadcast-live-dot" />
-                        <span className="broadcast-text">LIVE NOW</span>
-                        <span className="broadcast-schedule">Every Tue · 8 PM ET</span>
-                    </>
-                ) : (
-                    <>
-                        <span className="broadcast-text">📡 NEXT LIVE EVENT</span>
-                        <span className="broadcast-countdown">{broadcastCountdown}</span>
-                        <span className="broadcast-schedule">Every Tuesday · 8 PM ET</span>
-                        <a
-                            href={generateCalendarUrl()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="calendar-cta-btn"
-                            title="Add recurring reminder to Google Calendar"
-                        >
-                            📅 Add to Calendar
-                        </a>
-                    </>
-                )}
-            </div>
-
             {/* 🎮 GAME FEATURES BAR - Leaderboard, Predictions, Sound toggle */}
             {
                 timerRunning && (
@@ -3842,60 +3816,15 @@ export default function HomePage() {
                 </div>
             )}
 
-            {/* 🎙️ AI DJ WIDGET — Floating bottom-left with avatar + commentary + show promo */}
-            {(djCommentary || broadcastCountdown) && !jukeboxState && (
-                <div className="ai-dj-widget" id="ai-dj-widget">
-                    <div className="ai-dj-top">
-                        <div className="ai-dj-avatar-wrapper">
-                            <img src="/dj-host.png" alt="DJ" className="ai-dj-avatar" />
-                            <span className="ai-dj-live-dot" />
-                        </div>
-                        <div className="ai-dj-speech">
-                            <div className="ai-dj-name-tag">
-                                <span className="ai-dj-on-air">📻 ON AIR</span>
-                                <span className="ai-dj-name">DJ Crate Hacker</span>
-                            </div>
-                            {djCommentary ? (
-                                <div className="ai-dj-commentary" key={djCommentary.slice(0, 20)}>
-                                    <p className="ai-dj-text">{djCommentary}</p>
-                                </div>
-                            ) : (
-                                <div className="ai-dj-commentary">
-                                    <p className="ai-dj-text">The crowd is shaping tonight&apos;s playlist — every vote moves the needle!</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    {!isBroadcastLive && broadcastCountdown && (
-                        <div className="ai-dj-promo">
-                            <div className="ai-dj-promo-info">
-                                <span className="ai-dj-promo-label">NEXT LIVE SHOW</span>
-                                <span className="ai-dj-promo-countdown">{broadcastCountdown}</span>
-                                <span className="ai-dj-promo-schedule">Every Tuesday · 8 PM ET</span>
-                            </div>
-                            <a
-                                href={generateCalendarUrl()}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ai-dj-calendar-btn"
-                                title="Add recurring reminder to Google Calendar"
-                            >
-                                📅
-                            </a>
-                        </div>
-                    )}
-                    {isBroadcastLive && (
-                        <div className="ai-dj-promo ai-dj-promo-live">
-                            <span className="ai-dj-live-pulse" />
-                            <span className="ai-dj-promo-label">LIVE NOW</span>
-                            <span className="ai-dj-promo-schedule">Tuesday Night Session</span>
-                        </div>
-                    )}
-                </div>
-            )}
+            {/* 🎙️ AI DJ WIDGET — REMOVED from voting page per user request */}
 
             {/* 🍞 TOAST NOTIFICATIONS */}
             <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
         </div >
     );
 }
+
+
+
+
+

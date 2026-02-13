@@ -15,6 +15,7 @@ interface Song {
     addedByName?: string;
     addedByLocation?: string;
     addedByColor?: string;
+    addedAt?: number;
     // DJ metadata
     bpm?: number | null;
     energy?: number | null;
@@ -1753,24 +1754,52 @@ export default function JukeboxPlayer({
                                     .filter(s => s.addedByName)
                                     .reduce((acc, song) => {
                                         const name = song.addedByName!;
-                                        if (!acc[name]) acc[name] = { count: 0, location: song.addedByLocation };
+                                        if (!acc[name]) acc[name] = { count: 0, location: song.addedByLocation, latestAddedAt: song.addedAt || 0 };
                                         acc[name].count += 1;
+                                        if (song.addedAt && song.addedAt > acc[name].latestAddedAt) {
+                                            acc[name].latestAddedAt = song.addedAt;
+                                        }
                                         return acc;
-                                    }, {} as Record<string, { count: number; location?: string }>);
+                                    }, {} as Record<string, { count: number; location?: string; latestAddedAt: number }>);
 
-                                return Object.entries(contributors)
-                                    .sort((a, b) => b[1].count - a[1].count)
-                                    .slice(0, streamMode ? 3 : 2)
-                                    .map(([name, data], i) => (
-                                        <div key={name} className={`lb-row ${i === 0 ? 'lb-row-top' : ''}`}>
-                                            <span className="lb-rank">{i === 0 ? '🎧' : `#${i + 1}`}</span>
-                                            <span className="lb-name">{name}</span>
-                                            {streamMode && data.location && (
-                                                <span className="lb-location">{data.location}</span>
+                                // Row 1: Leader (most contributions)
+                                const leader = Object.entries(contributors)
+                                    .sort((a, b) => b[1].count - a[1].count)[0];
+
+                                // Row 2: Most recently joined user (latest addedAt, excluding leader)
+                                const recentJoiner = Object.entries(contributors)
+                                    .filter(([name]) => !leader || name !== leader[0])
+                                    .sort((a, b) => b[1].latestAddedAt - a[1].latestAddedAt)[0];
+
+                                const rows: JSX.Element[] = [];
+
+                                if (leader) {
+                                    rows.push(
+                                        <div key={leader[0]} className="lb-row lb-row-top">
+                                            <span className="lb-rank">🎧</span>
+                                            <span className="lb-name">{leader[0]}</span>
+                                            {streamMode && leader[1].location && (
+                                                <span className="lb-location">{leader[1].location}</span>
                                             )}
-                                            <span className="lb-score">💿{data.count}</span>
+                                            <span className="lb-score">💿{leader[1].count}</span>
                                         </div>
-                                    ));
+                                    );
+                                }
+
+                                if (recentJoiner) {
+                                    rows.push(
+                                        <div key={recentJoiner[0]} className="lb-row">
+                                            <span className="lb-rank">👋</span>
+                                            <span className="lb-name">{recentJoiner[0]}</span>
+                                            {streamMode && recentJoiner[1].location && (
+                                                <span className="lb-location">{recentJoiner[1].location}</span>
+                                            )}
+                                            <span className="lb-score">🆕 Welcome!</span>
+                                        </div>
+                                    );
+                                }
+
+                                return rows;
                             })()}
                         </div>
                     </div>
