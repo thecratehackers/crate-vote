@@ -2074,7 +2074,7 @@ export default function HomePage() {
                     s.id === songId ? { ...s, score: s.score + 1 } : s
                 ));
             } else {
-                toast.info('All upvotes used');
+                toast.info('All upvotes used — watch the Jukebox to earn karma for more! ⚡');
                 setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
@@ -2111,7 +2111,7 @@ export default function HomePage() {
                     s.id === songId ? { ...s, score: s.score - 1 } : s
                 ));
             } else {
-                toast.info('All downvotes used');
+                toast.info('All downvotes used — earn karma in the Jukebox for more! ⚡');
                 setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
@@ -2374,9 +2374,6 @@ export default function HomePage() {
                                         {isSubmittingKartra ? 'Joining...' : 'Join & Enter →'}
                                     </button>
                                 </div>
-                                <button className="skip-onboarding-btn" onClick={handleSkipOnboarding}>
-                                    Skip for now →
-                                </button>
                                 <p className="join-privacy-note">
                                     🔒 Unsubscribe anytime. We never share your info.
                                 </p>
@@ -2775,13 +2772,13 @@ export default function HomePage() {
                             )}
                             {/* Upvotes remaining - hide if voting disabled */}
                             {permissions.canVote && (
-                                <span className="stat-counter upvotes" data-tooltip={`${userStatus.upvotesRemaining} upvote${userStatus.upvotesRemaining !== 1 ? 's' : ''} left`} tabIndex={0}>
+                                <span className={`stat-counter upvotes${userStatus.upvotesRemaining === 0 ? ' votes-depleted' : userStatus.upvotesRemaining <= 2 ? ' votes-low' : ''}`} data-tooltip={userStatus.upvotesRemaining === 0 ? 'Watch the Jukebox to earn karma → more votes!' : `${userStatus.upvotesRemaining} upvote${userStatus.upvotesRemaining !== 1 ? 's' : ''} left`} tabIndex={0}>
                                     👍 {userStatus.upvotesRemaining}
                                 </span>
                             )}
                             {/* Downvotes remaining - hide if voting disabled */}
                             {permissions.canVote && (
-                                <span className="stat-counter downvotes" data-tooltip={`${userStatus.downvotesRemaining} downvote${userStatus.downvotesRemaining !== 1 ? 's' : ''} left`} tabIndex={0}>
+                                <span className={`stat-counter downvotes${userStatus.downvotesRemaining === 0 ? ' votes-depleted' : userStatus.downvotesRemaining <= 2 ? ' votes-low' : ''}`} data-tooltip={userStatus.downvotesRemaining === 0 ? 'Watch the Jukebox to earn karma → more votes!' : `${userStatus.downvotesRemaining} downvote${userStatus.downvotesRemaining !== 1 ? 's' : ''} left`} tabIndex={0}>
                                     👎 {userStatus.downvotesRemaining}
                                 </span>
                             )}

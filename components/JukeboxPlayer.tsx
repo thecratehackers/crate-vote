@@ -1746,7 +1746,7 @@ export default function JukeboxPlayer({
                     )}
 
                     {/* Leaderboard */}
-                    <div className="sidebar-section">
+                    <div className="sidebar-section active-voters-section">
                         <h3 className="sidebar-title">🧑‍💻 {streamMode ? 'Leaderboard' : 'Active Voters'}</h3>
                         <div className="mini-leaderboard">
                             {(() => {
@@ -1775,26 +1775,37 @@ export default function JukeboxPlayer({
 
                                 if (leader) {
                                     rows.push(
-                                        <div key={leader[0]} className="lb-row lb-row-top">
-                                            <span className="lb-rank">🎧</span>
-                                            <span className="lb-name">{leader[0]}</span>
-                                            {streamMode && leader[1].location && (
-                                                <span className="lb-location">{leader[1].location}</span>
-                                            )}
-                                            <span className="lb-score">💿{leader[1].count}</span>
+                                        <div key={leader[0]} className="lb-row lb-row-stacked lb-row-top">
+                                            <div className="lb-row-line-1">
+                                                <span className="lb-rank">🎧</span>
+                                                <span className="lb-name">
+                                                    <span className="lb-name-scroll lb-name-auto-scroll">
+                                                        {leader[0]}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{leader[0]}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div className="lb-row-line-2">
+                                                <span className="lb-badge lb-badge-leader">👑 LEADING</span>
+                                                <span className="lb-score">💿 {leader[1].count} songs added</span>
+                                            </div>
                                         </div>
                                     );
                                 }
 
                                 if (recentJoiner) {
                                     rows.push(
-                                        <div key={recentJoiner[0]} className="lb-row">
-                                            <span className="lb-rank">👋</span>
-                                            <span className="lb-name">{recentJoiner[0]}</span>
-                                            {streamMode && recentJoiner[1].location && (
-                                                <span className="lb-location">{recentJoiner[1].location}</span>
-                                            )}
-                                            <span className="lb-score">🆕 Welcome!</span>
+                                        <div key={recentJoiner[0]} className="lb-row lb-row-stacked lb-row-welcome">
+                                            <div className="lb-row-line-1">
+                                                <span className="lb-rank">👋</span>
+                                                <span className="lb-name">
+                                                    <span className="lb-name-scroll lb-name-auto-scroll">
+                                                        {recentJoiner[0]}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{recentJoiner[0]}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div className="lb-row-line-2">
+                                                <span className="lb-badge lb-badge-new">🆕 Welcome to the crate!</span>
+                                            </div>
                                         </div>
                                     );
                                 }
@@ -1812,11 +1823,9 @@ export default function JukeboxPlayer({
                                 <div key={song.id} className="lb-row">
                                     <span className="lb-rank">{i === 0 ? '👑' : `#${i + 1}`}</span>
                                     <span className="lb-name">
-                                        {song.name.length > 12 ? (
-                                            <span className="lb-name-scroll">
-                                                {song.name}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{song.name}
-                                            </span>
-                                        ) : song.name}
+                                        <span className="lb-name-scroll lb-name-auto-scroll">
+                                            {song.name}&nbsp;&nbsp;·&nbsp;&nbsp;{song.artist}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{song.name}&nbsp;&nbsp;·&nbsp;&nbsp;{song.artist}
+                                        </span>
                                     </span>
                                     <span className="lb-score">+{song.score}</span>
                                 </div>
@@ -1837,7 +1846,11 @@ export default function JukeboxPlayer({
                                     return (
                                         <div key={item.id} className="sidebar-toast log-entry">
                                             <span className="log-icon">{item.icon}</span>
-                                            <span className="log-text">{item.text}</span>
+                                            <span className="log-text">
+                                                <span className="log-text-scroll">
+                                                    {item.text}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{item.text}
+                                                </span>
+                                            </span>
                                             <span className="log-time">{timeLabel}</span>
                                         </div>
                                     );
@@ -1912,13 +1925,13 @@ export default function JukeboxPlayer({
                                     })()}
                                 </span>
                             </div>
-                            <span className="vote-label">votes</span>
+                            <span className="vote-label">CROWD VOTES</span>
                             {(() => {
                                 const rank = playlist.findIndex(s => s.id === currentSong.id) + 1;
                                 if (rank <= 0) return null;
                                 return (
                                     <div className={`trending-indicator ${rank === 1 ? 'trending-top' : rank <= 3 ? 'trending-rising' : ''}`}>
-                                        {rank === 1 ? '👑 #1' : rank <= 3 ? `↑ #${rank}` : `#${rank}`}
+                                        {rank === 1 ? '👑 #1 IN THE CRATE' : rank <= 3 ? `↑ RANKED #${rank} of ${playlist.length}` : `RANKED #${rank} of ${playlist.length}`}
                                     </div>
                                 );
                             })()}

@@ -1817,6 +1817,12 @@
     }
 }
 
+/* Always-on auto-scroll — no hover-pause, continuous ticker */
+.lb-name-auto-scroll {
+    animation: marqueeScroll 12s linear infinite !important;
+    animation-delay: 0s !important;
+}
+
 .lb-score {
     font-size: 1.3rem;
     font-weight: 600;
@@ -1904,7 +1910,19 @@
     color: rgba(255, 255, 255, 0.8);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    position: relative;
+}
+
+/* Scrolling ticker for log text */
+.log-text-scroll {
+    display: inline-block;
+    animation: marqueeScroll 10s linear infinite;
+    animation-delay: 1s;
+    padding-right: 30px;
+}
+
+.log-entry:hover .log-text-scroll {
+    animation-play-state: paused;
 }
 
 .log-time {
@@ -1921,12 +1939,12 @@
 .dj-commentator-section {
     background: linear-gradient(180deg, rgba(20, 15, 10, 0.9) 0%, rgba(12, 10, 8, 0.95) 100%);
     border: 1px solid rgba(211, 119, 29, 0.3);
-    padding: 14px 12px 10px;
+    padding: 8px 10px 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    overflow: visible;
+    gap: 4px;
+    overflow: hidden;
 }
 
 /* ── Avatar Area ── */
@@ -1934,22 +1952,22 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     flex-shrink: 0;
 }
 
 .dj-commentator-avatar-ring {
     position: relative;
-    width: 80px;
-    height: 80px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
-    padding: 3px;
+    padding: 2px;
     background: conic-gradient(from 0deg,
             #d3771d, #fbbf24, #f59e0b, #d97706, #b45309, #d3771d);
     /* animation removed — keep avatar right-side up */
     box-shadow:
-        0 0 20px rgba(211, 119, 29, 0.4),
-        0 0 40px rgba(211, 119, 29, 0.15);
+        0 0 12px rgba(211, 119, 29, 0.3),
+        0 0 24px rgba(211, 119, 29, 0.1);
 }
 
 @keyframes djRingSpin {
@@ -2039,14 +2057,7 @@
 
 /* Classic ascending dots from avatar to cloud */
 .thought-dots {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    margin-left: 50%;
-    margin-bottom: -2px;
-    position: relative;
-    z-index: 1;
+    display: none;
 }
 
 .thought-dot {
@@ -2091,8 +2102,8 @@
     width: 100%;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 18px;
-    padding: 12px 14px;
+    border-radius: 14px;
+    padding: 8px 10px;
     position: relative;
     animation: cloudFadeIn 0.6s ease-out;
     box-shadow:
@@ -2130,12 +2141,18 @@
 
 .thought-text {
     font-family: 'Inter', 'Rubik', sans-serif;
-    font-size: 1.1rem;
-    line-height: 1.4;
+    font-size: 0.85rem;
+    line-height: 1.3;
     color: rgba(255, 255, 255, 0.85);
     margin: 0;
     font-style: italic;
     text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-height: 3.9em;
+    /* strict fallback: 3 lines × 1.3 line-height */
 }
 
 /* ── Show Countdown Strip ── */
@@ -3280,6 +3297,105 @@
     background: rgba(211, 119, 29, 0.12);
     border: 1px solid rgba(211, 119, 29, 0.3);
     border-radius: 8px;
+}
+
+/* ── Active Voters Section — expanded breathing room ── */
+.active-voters-section {
+    padding: 14px 14px 16px;
+}
+
+.active-voters-section .mini-leaderboard {
+    gap: 10px;
+}
+
+.active-voters-section .lb-row {
+    padding: 10px 12px;
+    gap: 10px;
+}
+
+/* Badge pills for leader/new user */
+.lb-badge {
+    font-family: 'Rubik', sans-serif;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.lb-badge-leader {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    animation: leaderPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes leaderPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+    }
+
+    50% {
+        box-shadow: 0 0 8px rgba(251, 191, 36, 0.25);
+    }
+}
+
+.lb-badge-new {
+    background: rgba(34, 197, 94, 0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    animation: welcomeFadeIn 0.6s ease-out;
+}
+
+@keyframes welcomeFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.lb-row-welcome {
+    background: rgba(34, 197, 94, 0.06);
+    border: 1px solid rgba(34, 197, 94, 0.15);
+    border-radius: 8px;
+}
+
+/* ── Stacked 2-line layout for Active Voters ── */
+.lb-row-stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px 12px;
+}
+
+.lb-row-line-1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lb-row-line-1 .lb-name {
+    flex: 1;
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+.lb-row-line-2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 32px;
+    /* indent past the emoji rank */
 }
 
 /* --- Right Sidebar: Hype Zone Stats --- */

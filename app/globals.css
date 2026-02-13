@@ -7021,6 +7021,44 @@ body::before {
   color: #fbbf24;
 }
 
+/* Vote depletion states — draws attention to scarcity + guides toward karma earning */
+.stat-counter.votes-depleted {
+  border-color: rgba(239, 68, 68, 0.5);
+  animation: votesDepleted 2s ease-in-out infinite;
+  cursor: pointer;
+}
+
+@keyframes votesDepleted {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.0);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 12px 2px rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.8);
+  }
+}
+
+.stat-counter.votes-low {
+  border-color: rgba(251, 191, 36, 0.4);
+  animation: votesLow 3s ease-in-out infinite;
+}
+
+@keyframes votesLow {
+
+  0%,
+  100% {
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  50% {
+    border-color: rgba(251, 191, 36, 0.7);
+  }
+}
+
 /* 👑 GOD MODE BADGE - User's song is #1 */
 .god-mode-badge {
   display: inline-flex;
