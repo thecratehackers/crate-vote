@@ -82,6 +82,8 @@ export default function AdminPage() {
     const [timerRemaining, setTimerRemaining] = useState(0);
     const [timerEndTime, setTimerEndTime] = useState<number | null>(null);
     const [selectedDuration, setSelectedDuration] = useState(60); // minutes
+    const [timerMode, setTimerMode] = useState<'preset' | 'custom'>('preset');
+    const [customEndTime, setCustomEndTime] = useState(''); // HH:MM format
 
     // Playlist title state
     const [playlistTitle, setPlaylistTitle] = useState(`${APP_CONFIG.name} Playlist`);
@@ -510,29 +512,60 @@ export default function AdminPage() {
     };
 
     // Timer controls
+    const calculateCustomDuration = (): { durationMs: number; label: string } | null => {
+        if (!customEndTime) return null;
+        const [hours, minutes] = customEndTime.split(':').map(Number);
+        const now = new Date();
+        const target = new Date();
+        target.setHours(hours, minutes, 0, 0);
+        // If target is in the past, assume tomorrow
+        let isTomorrow = false;
+        if (target.getTime() <= now.getTime()) {
+            target.setDate(target.getDate() + 1);
+            isTomorrow = true;
+        }
+        const durationMs = target.getTime() - now.getTime();
+        const timeStr = target.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        const label = isTomorrow ? `${timeStr} tomorrow` : timeStr;
+        return { durationMs, label };
+    };
+
     const handleStartTimer = async () => {
+        let durationMs: number;
+        let durationText: string;
+
+        if (timerMode === 'custom') {
+            const calc = calculateCustomDuration();
+            if (!calc) {
+                setMessage({ type: 'error', text: 'Please enter a target end time.' });
+                return;
+            }
+            durationMs = calc.durationMs;
+            durationText = `Countdown ends at ${calc.label}`;
+        } else {
+            durationMs = selectedDuration * 60 * 1000;
+            if (selectedDuration >= 1440) {
+                const days = selectedDuration / 1440;
+                durationText = `${days} day${days > 1 ? 's' : ''}`;
+            } else if (selectedDuration >= 60) {
+                const hours = selectedDuration / 60;
+                durationText = `${hours} hour${hours > 1 ? 's' : ''}`;
+            } else {
+                durationText = `${selectedDuration} minutes`;
+            }
+        }
+
         setIsTimerAction(true);
         try {
             const res = await adminFetch('/api/timer', {
                 method: 'POST',
-                body: JSON.stringify({ action: 'start', duration: selectedDuration * 60 * 1000 }),
+                body: JSON.stringify({ action: 'start', duration: durationMs }),
             });
             const data = await res.json();
             if (res.ok) {
                 setTimerRunning(data.running);
                 setTimerEndTime(data.endTime);
-                // Format duration nicely
-                let durationText = '';
-                if (selectedDuration >= 1440) {
-                    const days = selectedDuration / 1440;
-                    durationText = `${days} day${days > 1 ? 's' : ''}`;
-                } else if (selectedDuration >= 60) {
-                    const hours = selectedDuration / 60;
-                    durationText = `${hours} hour${hours > 1 ? 's' : ''}`;
-                } else {
-                    durationText = `${selectedDuration} minutes`;
-                }
-                setMessage({ type: 'success', text: `✓ Session started! ${durationText} on the clock.` });
+                setMessage({ type: 'success', text: `✓ Session started! ${durationText}` });
                 fetchPlaylist();
             } else {
                 setMessage({ type: 'error', text: data.error || 'Failed to start timer' });
@@ -1519,25 +1552,51 @@ export default function AdminPage() {
                     )}
                     {/* Inline timer controls */}
                     <div className="timer-controls-inline">
-                        <select
-                            value={selectedDuration}
-                            onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                        <button
+                            className={`timer-mode-toggle ${timerMode === 'custom' ? 'active' : ''}`}
+                            onClick={() => setTimerMode(timerMode === 'preset' ? 'custom' : 'preset')}
                             disabled={timerRunning}
-                            className="duration-select-mini"
+                            title={timerMode === 'preset' ? 'Switch to end time' : 'Switch to presets'}
                         >
-                            <option value={5}>5m</option>
-                            <option value={10}>10m</option>
-                            <option value={15}>15m</option>
-                            <option value={30}>30m</option>
-                            <option value={60}>1h</option>
-                            <option value={120}>2h</option>
-                            <option value={240}>4h</option>
-                            <option value={480}>8h</option>
-                            <option value={1440}>24h</option>
-                            <option value={10080}>7d</option>
-                        </select>
+                            {timerMode === 'preset' ? '🕒' : '⏱️'}
+                        </button>
+                        {timerMode === 'preset' ? (
+                            <select
+                                value={selectedDuration}
+                                onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                                disabled={timerRunning}
+                                className="duration-select-mini"
+                            >
+                                <option value={5}>5m</option>
+                                <option value={10}>10m</option>
+                                <option value={15}>15m</option>
+                                <option value={30}>30m</option>
+                                <option value={60}>1h</option>
+                                <option value={120}>2h</option>
+                                <option value={240}>4h</option>
+                                <option value={480}>8h</option>
+                                <option value={1440}>24h</option>
+                                <option value={10080}>7d</option>
+                            </select>
+                        ) : (
+                            <div className="custom-time-wrapper">
+                                <input
+                                    type="time"
+                                    value={customEndTime}
+                                    onChange={(e) => setCustomEndTime(e.target.value)}
+                                    disabled={timerRunning}
+                                    className="custom-time-input"
+                                />
+                                {customEndTime && !timerRunning && (() => {
+                                    const calc = calculateCustomDuration();
+                                    return calc ? (
+                                        <span className="end-time-hint">Ends {calc.label}</span>
+                                    ) : null;
+                                })()}
+                            </div>
+                        )}
                         {!timerRunning ? (
-                            <button className="timer-btn start" onClick={handleStartTimer} disabled={isTimerAction}>
+                            <button className="timer-btn start" onClick={handleStartTimer} disabled={isTimerAction || (timerMode === 'custom' && !customEndTime)}>
                                 {isTimerAction ? '...' : '▶'}
                             </button>
                         ) : (

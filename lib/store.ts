@@ -40,7 +40,7 @@ export interface SessionState {
 
 // ============ CONSTANTS ============
 // Timer settings
-export const MAX_SESSION_DURATION = 60 * 60 * 1000; // 1 hour max
+export const MAX_SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days max
 export const DEFAULT_SESSION_DURATION = 60 * 60 * 1000; // 1 hour default
 
 // User limits

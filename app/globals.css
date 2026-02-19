@@ -1189,6 +1189,69 @@ body::before {
   opacity: 0.5;
 }
 
+/* Timer mode toggle (preset ↔ custom) */
+.timer-mode-toggle {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.timer-mode-toggle:hover:not(:disabled) {
+  border-color: var(--orange-primary);
+  background: var(--bg-elevated);
+}
+
+.timer-mode-toggle.active {
+  background: rgba(211, 119, 29, 0.15);
+  border-color: var(--orange-primary);
+}
+
+.timer-mode-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Custom time input */
+.custom-time-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.custom-time-input {
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: 'Rubik', sans-serif;
+  cursor: pointer;
+  width: 100px;
+}
+
+.custom-time-input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+}
+
+.custom-time-input:disabled {
+  opacity: 0.5;
+}
+
+.end-time-hint {
+  font-size: 0.65rem;
+  color: var(--orange-primary);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
 .timer-btn {
   padding: 6px 10px;
   border: none;
