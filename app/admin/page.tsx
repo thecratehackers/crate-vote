@@ -84,6 +84,7 @@ export default function AdminPage() {
     const [selectedDuration, setSelectedDuration] = useState(60); // minutes
     const [timerMode, setTimerMode] = useState<'preset' | 'custom'>('preset');
     const [customEndTime, setCustomEndTime] = useState(''); // HH:MM format
+    const [customEndDate, setCustomEndDate] = useState(''); // YYYY-MM-DD format
 
     // Playlist title state
     const [playlistTitle, setPlaylistTitle] = useState(`${APP_CONFIG.name} Playlist`);
@@ -516,18 +517,42 @@ export default function AdminPage() {
         if (!customEndTime) return null;
         const [hours, minutes] = customEndTime.split(':').map(Number);
         const now = new Date();
-        const target = new Date();
-        target.setHours(hours, minutes, 0, 0);
-        // If target is in the past, assume tomorrow
-        let isTomorrow = false;
-        if (target.getTime() <= now.getTime()) {
-            target.setDate(target.getDate() + 1);
-            isTomorrow = true;
+        let target: Date;
+
+        if (customEndDate) {
+            // Use the explicitly selected date
+            const [year, month, day] = customEndDate.split('-').map(Number);
+            target = new Date(year, month - 1, day, hours, minutes, 0, 0);
+        } else {
+            // No date selected — assume today, or tomorrow if past
+            target = new Date();
+            target.setHours(hours, minutes, 0, 0);
+            if (target.getTime() <= now.getTime()) {
+                target.setDate(target.getDate() + 1);
+            }
         }
+
         const durationMs = target.getTime() - now.getTime();
+        if (durationMs <= 0) {
+            return null; // Target is in the past
+        }
+
         const timeStr = target.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-        const label = isTomorrow ? `${timeStr} tomorrow` : timeStr;
-        return { durationMs, label };
+        const isToday = target.toDateString() === now.toDateString();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const isTomorrow = target.toDateString() === tomorrow.toDateString();
+
+        let dateLabel: string;
+        if (isToday) {
+            dateLabel = `today at ${timeStr}`;
+        } else if (isTomorrow) {
+            dateLabel = `tomorrow at ${timeStr}`;
+        } else {
+            const dayName = target.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            dateLabel = `${dayName} at ${timeStr}`;
+        }
+        return { durationMs, label: dateLabel };
     };
 
     const handleStartTimer = async () => {
@@ -1581,6 +1606,14 @@ export default function AdminPage() {
                         ) : (
                             <div className="custom-time-wrapper">
                                 <input
+                                    type="date"
+                                    value={customEndDate}
+                                    onChange={(e) => setCustomEndDate(e.target.value)}
+                                    disabled={timerRunning}
+                                    className="custom-date-input"
+                                    min={new Date().toISOString().split('T')[0]}
+                                />
+                                <input
                                     type="time"
                                     value={customEndTime}
                                     onChange={(e) => setCustomEndTime(e.target.value)}
@@ -1591,12 +1624,14 @@ export default function AdminPage() {
                                     const calc = calculateCustomDuration();
                                     return calc ? (
                                         <span className="end-time-hint">Ends {calc.label}</span>
-                                    ) : null;
+                                    ) : (
+                                        <span className="end-time-hint end-time-error">Date/time is in the past</span>
+                                    );
                                 })()}
                             </div>
                         )}
                         {!timerRunning ? (
-                            <button className="timer-btn start" onClick={handleStartTimer} disabled={isTimerAction || (timerMode === 'custom' && !customEndTime)}>
+                            <button className="timer-btn start" onClick={handleStartTimer} disabled={isTimerAction || (timerMode === 'custom' && !customEndTime) || (timerMode === 'custom' && !!customEndTime && !calculateCustomDuration())}>
                                 {isTimerAction ? '...' : '▶'}
                             </button>
                         ) : (

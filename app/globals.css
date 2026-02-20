@@ -1220,8 +1220,30 @@ body::before {
 .custom-time-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   position: relative;
+  flex-wrap: wrap;
+}
+
+.custom-date-input {
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: 'Rubik', sans-serif;
+  cursor: pointer;
+  width: 120px;
+}
+
+.custom-date-input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+}
+
+.custom-date-input:disabled {
+  opacity: 0.5;
 }
 
 .custom-time-input {
@@ -1250,6 +1272,10 @@ body::before {
   color: var(--orange-primary);
   white-space: nowrap;
   font-weight: 500;
+}
+
+.end-time-hint.end-time-error {
+  color: #ef4444;
 }
 
 .timer-btn {
