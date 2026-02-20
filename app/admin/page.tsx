@@ -1604,30 +1604,17 @@ export default function AdminPage() {
                                 <option value={10080}>7d</option>
                             </select>
                         ) : (
-                            <div className="custom-time-wrapper">
-                                <input
-                                    type="date"
-                                    value={customEndDate}
-                                    onChange={(e) => setCustomEndDate(e.target.value)}
-                                    disabled={timerRunning}
-                                    className="custom-date-input"
-                                    min={new Date().toISOString().split('T')[0]}
-                                />
-                                <input
-                                    type="time"
-                                    value={customEndTime}
-                                    onChange={(e) => setCustomEndTime(e.target.value)}
-                                    disabled={timerRunning}
-                                    className="custom-time-input"
-                                />
-                                {customEndTime && !timerRunning && (() => {
+                            <div className="custom-time-inline-label">
+                                {customEndDate && customEndTime ? (() => {
                                     const calc = calculateCustomDuration();
                                     return calc ? (
-                                        <span className="end-time-hint">Ends {calc.label}</span>
+                                        <span className="end-time-hint">📅 {calc.label}</span>
                                     ) : (
-                                        <span className="end-time-hint end-time-error">Date/time is in the past</span>
+                                        <span className="end-time-hint end-time-error">⚠ Past date</span>
                                     );
-                                })()}
+                                })() : (
+                                    <span className="end-time-hint" style={{ opacity: 0.5 }}>Set date & time ↓</span>
+                                )}
                             </div>
                         )}
                         {!timerRunning ? (
@@ -1677,6 +1664,125 @@ export default function AdminPage() {
                     </button>
                 </div>
             </div>
+
+            {/* 📅 SCHEDULE SESSION PANEL — drops down when custom timer mode is active */}
+            {timerMode === 'custom' && !timerRunning && (
+                <div className="schedule-panel">
+                    <div className="schedule-panel-header">
+                        <span className="schedule-panel-title">📅 Schedule Session End</span>
+                        <span className="schedule-panel-subtitle">Pick a date & time — today, next week, or next month</span>
+                    </div>
+
+                    {/* Quick date shortcuts */}
+                    <div className="schedule-shortcuts">
+                        {(() => {
+                            const today = new Date();
+                            const shortcuts: { label: string; date: Date }[] = [];
+
+                            // Today
+                            shortcuts.push({ label: 'Today', date: new Date(today) });
+
+                            // Tomorrow
+                            const tmrw = new Date(today);
+                            tmrw.setDate(tmrw.getDate() + 1);
+                            shortcuts.push({ label: 'Tomorrow', date: tmrw });
+
+                            // Next 5 weekdays from day-after-tomorrow
+                            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                            for (let i = 2; i <= 6; i++) {
+                                const d = new Date(today);
+                                d.setDate(d.getDate() + i);
+                                shortcuts.push({ label: dayNames[d.getDay()], date: d });
+                            }
+
+                            // Next week (same day)
+                            const nextWeek = new Date(today);
+                            nextWeek.setDate(nextWeek.getDate() + 7);
+                            shortcuts.push({ label: 'Next Week', date: nextWeek });
+
+                            // Next month (same day)
+                            const nextMonth = new Date(today);
+                            nextMonth.setMonth(nextMonth.getMonth() + 1);
+                            shortcuts.push({ label: 'Next Month', date: nextMonth });
+
+                            return shortcuts.map((s, i) => {
+                                const dateStr = s.date.toISOString().split('T')[0];
+                                const isActive = customEndDate === dateStr;
+                                return (
+                                    <button
+                                        key={i}
+                                        className={`schedule-shortcut-btn ${isActive ? 'active' : ''}`}
+                                        onClick={() => {
+                                            setCustomEndDate(dateStr);
+                                            if (!customEndTime) setCustomEndTime('20:00');
+                                        }}
+                                    >
+                                        {s.label}
+                                        <span className="shortcut-date-sub">
+                                            {s.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                        </span>
+                                    </button>
+                                );
+                            });
+                        })()}
+                    </div>
+
+                    {/* Date + Time pickers */}
+                    <div className="schedule-pickers">
+                        <div className="schedule-picker-group">
+                            <label className="schedule-label">📆 Date</label>
+                            <input
+                                type="date"
+                                value={customEndDate}
+                                onChange={(e) => setCustomEndDate(e.target.value)}
+                                className="schedule-date-input"
+                                min={new Date().toISOString().split('T')[0]}
+                            />
+                        </div>
+                        <div className="schedule-picker-group">
+                            <label className="schedule-label">🕐 Time</label>
+                            <input
+                                type="time"
+                                value={customEndTime}
+                                onChange={(e) => setCustomEndTime(e.target.value)}
+                                className="schedule-time-input"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Live preview */}
+                    {customEndDate && customEndTime && (() => {
+                        const calc = calculateCustomDuration();
+                        if (!calc) return (
+                            <div className="schedule-preview error">
+                                ⚠️ That date/time is in the past. Pick a future time.
+                            </div>
+                        );
+
+                        // Calculate human-readable duration
+                        const totalMins = Math.round(calc.durationMs / 60000);
+                        const days = Math.floor(totalMins / 1440);
+                        const hrs = Math.floor((totalMins % 1440) / 60);
+                        const mins = totalMins % 60;
+                        let durationStr = '';
+                        if (days > 0) durationStr += `${days}d `;
+                        if (hrs > 0) durationStr += `${hrs}h `;
+                        if (mins > 0) durationStr += `${mins}m`;
+                        if (!durationStr) durationStr = '< 1m';
+
+                        return (
+                            <div className="schedule-preview">
+                                <span className="schedule-preview-main">
+                                    Session ends <strong>{calc.label}</strong>
+                                </span>
+                                <span className="schedule-preview-duration">
+                                    ⏱ {durationStr.trim()} from now
+                                </span>
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
 
             {/* 🔒 CONFIRMATION MODAL */}
             {confirmModal.isOpen && (
