@@ -14813,3 +14813,191 @@ input:disabled {
     font-size: 0.68rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   📡 DEMO NIGHT MODE — Hero panel when voting is paused
+   ═══════════════════════════════════════════════════════════════════ */
+
+.demo-night-hero {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 16px;
+  min-height: 320px;
+  animation: demoNightFadeIn 0.5s ease-out;
+}
+
+@keyframes demoNightFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.demo-night-card {
+  background: linear-gradient(135deg,
+    rgba(168, 85, 247, 0.12) 0%,
+    rgba(59, 130, 246, 0.08) 50%,
+    rgba(168, 85, 247, 0.06) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  border-radius: 24px;
+  padding: 40px 32px;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  box-shadow:
+    0 0 60px rgba(168, 85, 247, 0.15),
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle animated gradient border glow */
+.demo-night-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 25px;
+  background: linear-gradient(135deg,
+    rgba(168, 85, 247, 0.4) 0%,
+    rgba(59, 130, 246, 0.2) 50%,
+    rgba(168, 85, 247, 0.4) 100%);
+  background-size: 200% 200%;
+  animation: demoGlowShift 4s ease-in-out infinite;
+  z-index: -1;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  padding: 1px;
+}
+
+@keyframes demoGlowShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.demo-night-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+  animation: livePulse 2s ease-in-out infinite;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes livePulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.7);
+    transform: scale(1.03);
+  }
+}
+
+.demo-night-headline {
+  font-family: 'Rubik', sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
+  color: white;
+  margin: 0 0 12px;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 20px rgba(168, 85, 247, 0.3);
+}
+
+.demo-night-description {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 0 0 24px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.demo-night-download-btn {
+  display: inline-block;
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  color: white;
+  font-family: 'Rubik', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 14px;
+  transition: all 0.25s ease;
+  box-shadow:
+    0 4px 20px rgba(168, 85, 247, 0.4),
+    0 0 0 0 rgba(168, 85, 247, 0);
+  margin-bottom: 20px;
+}
+
+.demo-night-download-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 8px 30px rgba(168, 85, 247, 0.6),
+    0 0 0 4px rgba(168, 85, 247, 0.15);
+}
+
+.demo-night-download-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.demo-night-footer {
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+  font-size: 0.85rem;
+  margin: 0;
+  font-style: italic;
+}
+
+/* Admin panel: Demo Night toggle active state */
+.demo-night-toggle.demo-night-active {
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%) !important;
+  color: white !important;
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+}
+
+/* ═══════════════════════════════════════════
+   📱 DEMO NIGHT RESPONSIVE
+   ═══════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  .demo-night-hero {
+    padding: 24px 12px;
+    min-height: 240px;
+  }
+
+  .demo-night-card {
+    padding: 28px 20px;
+    border-radius: 20px;
+  }
+
+  .demo-night-headline {
+    font-size: 1.5rem;
+  }
+
+  .demo-night-description {
+    font-size: 0.95rem;
+  }
+
+  .demo-night-download-btn {
+    font-size: 1rem;
+    padding: 12px 24px;
+  }
+}

@@ -265,6 +265,9 @@ export default function HomePage() {
     const youtubeWasUnmuted = useRef<boolean>(false);  // Track if user had audio on
     const [twitchMuted, setTwitchMuted] = useState(true); // Twitch starts muted
 
+    // 📡 DEMO NIGHT - Content-only mode (admin-toggled, hides voting UI)
+    const [demoNight, setDemoNight] = useState<{ enabled: boolean; headline: string; description: string; linkUrl: string; linkLabel: string }>({ enabled: false, headline: '', description: '', linkUrl: '', linkLabel: '' });
+
     // 📜 SCROLL-TRIGGERED EXPAND - expands PiP when user scrolls into playlist
     const [scrollExpandedMuted, setScrollExpandedMuted] = useState(false); // true = expanded by scroll (still muted)
     const hasAutoExpanded = useRef(false);   // prevent re-triggering after manual minimize
@@ -1068,6 +1071,13 @@ export default function HomePage() {
                 const videoId = data.youtubeEmbed ? extractYouTubeId(data.youtubeEmbed) : null;
                 setYoutubeEmbed(videoId);
                 setStreamPlatform(videoId ? 'youtube' : null);
+            }
+
+            // 📡 Sync Demo Night config
+            if (data.demoNight) {
+                setDemoNight(data.demoNight);
+            } else {
+                setDemoNight({ enabled: false, headline: '', description: '', linkUrl: '', linkLabel: '' });
             }
 
             // ⚔️ Handle Versus Battle data
@@ -3258,62 +3268,87 @@ export default function HomePage() {
             )}
 
 
+            {/* 📡 DEMO NIGHT HERO — Replaces playlist when admin activates demo mode */}
+            {demoNight.enabled && (
+                <div className="demo-night-hero">
+                    <div className="demo-night-card">
+                        <div className="demo-night-badge">📡 LIVE</div>
+                        <h1 className="demo-night-headline">{demoNight.headline || 'Demo Night'}</h1>
+                        {demoNight.description && (
+                            <p className="demo-night-description">{demoNight.description}</p>
+                        )}
+                        {demoNight.linkUrl && (
+                            <a
+                                href={demoNight.linkUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="demo-night-download-btn"
+                            >
+                                📥 {demoNight.linkLabel || 'Download'}
+                            </a>
+                        )}
+                        <p className="demo-night-footer">Voting is paused tonight — enjoy the show!</p>
+                    </div>
+                </div>
+            )}
 
             {/* 📦 PLAYLIST HEADER - Title + Activity ticker in fixed-height banner */}
-            <div className="playlist-header-bar">
-                <div className="playlist-header-left">
-                    <span className="playlist-title-text">
-                        <span className="crate-week-label">This Week's Crate:</span> {playlistTitle}
-                    </span>
-                </div>
-
-                {/* 🔔 ACTIVITY TICKER - Middle area, fixed height, doesn't push content */}
-                <div className="activity-ticker-inline">
-                    {toastQueue.length > 0 ? (
-                        <span className={`ticker-item-inline ${toastQueue[0].type}`}>
-                            {toastQueue[0].userName === 'System' ? toastQueue[0].songName : (
-                                <>
-                                    {toastQueue[0].type === 'add' && `💿 ${toastQueue[0].userName} added "${toastQueue[0].songName.length > 18 ? toastQueue[0].songName.slice(0, 18) + '…' : toastQueue[0].songName}"`}
-                                    {toastQueue[0].type === 'upvote' && `👍 ${toastQueue[0].userName} upvoted`}
-                                    {toastQueue[0].type === 'downvote' && `👎 ${toastQueue[0].userName} downvoted`}
-                                </>
-                            )}
+            {!demoNight.enabled && (
+                <div className="playlist-header-bar">
+                    <div className="playlist-header-left">
+                        <span className="playlist-title-text">
+                            <span className="crate-week-label">This Week's Crate:</span> {playlistTitle}
                         </span>
-                    ) : (
-                        <span className="ticker-placeholder">
-                            {timerRunning ? currentShoutout || '💿 Vote for your favorites!' : 'Waiting for the next event...'}
-                        </span>
-                    )}
-                </div>
+                    </div>
 
-                {/* 🎵 SAVE TO — Spotify + TIDAL logo buttons */}
-                <div className="save-logos-group">
-                    <span className="save-logos-label">Export Playlist</span>
-                    <button
-                        className="save-logo-btn spotify"
-                        onClick={handleExport}
-                        disabled={isExporting}
-                        title="Save to Spotify"
-                        aria-label="Save playlist to Spotify"
-                    >
-                        <svg className="save-logo-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                        </svg>
-                    </button>
-                    <button
-                        className="save-logo-btn tidal"
-                        onClick={handleExport}
-                        disabled={isExporting}
-                        title="Save to TIDAL"
-                        aria-label="Save playlist to TIDAL"
-                    >
-                        <svg className="save-logo-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12.012 3.992L8.008 7.996 4.004 3.992 0 7.996l4.004 4.004L8.008 8l4.004 4 4.004-4-4.004-4.004zM12.012 12l-4.004 4.004L12.012 20l4.004-4.004L12.012 12z" />
-                            <path d="M20 3.992l-4.004 4.004L20 12l4-4.004L20 3.992z" />
-                        </svg>
-                    </button>
+                    {/* 🔔 ACTIVITY TICKER - Middle area, fixed height, doesn't push content */}
+                    <div className="activity-ticker-inline">
+                        {toastQueue.length > 0 ? (
+                            <span className={`ticker-item-inline ${toastQueue[0].type}`}>
+                                {toastQueue[0].userName === 'System' ? toastQueue[0].songName : (
+                                    <>
+                                        {toastQueue[0].type === 'add' && `💿 ${toastQueue[0].userName} added "${toastQueue[0].songName.length > 18 ? toastQueue[0].songName.slice(0, 18) + '…' : toastQueue[0].songName}"`}
+                                        {toastQueue[0].type === 'upvote' && `👍 ${toastQueue[0].userName} upvoted`}
+                                        {toastQueue[0].type === 'downvote' && `👎 ${toastQueue[0].userName} downvoted`}
+                                    </>
+                                )}
+                            </span>
+                        ) : (
+                            <span className="ticker-placeholder">
+                                {timerRunning ? currentShoutout || '💿 Vote for your favorites!' : 'Waiting for the next event...'}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* 🎵 SAVE TO — Spotify + TIDAL logo buttons */}
+                    <div className="save-logos-group">
+                        <span className="save-logos-label">Export Playlist</span>
+                        <button
+                            className="save-logo-btn spotify"
+                            onClick={handleExport}
+                            disabled={isExporting}
+                            title="Save to Spotify"
+                            aria-label="Save playlist to Spotify"
+                        >
+                            <svg className="save-logo-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                            </svg>
+                        </button>
+                        <button
+                            className="save-logo-btn tidal"
+                            onClick={handleExport}
+                            disabled={isExporting}
+                            title="Save to TIDAL"
+                            aria-label="Save playlist to TIDAL"
+                        >
+                            <svg className="save-logo-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12.012 3.992L8.008 7.996 4.004 3.992 0 7.996l4.004 4.004L8.008 8l4.004 4 4.004-4-4.004-4.004zM12.012 12l-4.004 4.004L12.012 20l4.004-4.004L12.012 12z" />
+                                <path d="M20 3.992l-4.004 4.004L20 12l4-4.004L20 3.992z" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
 
             {/* 💀 THE PURGE - Now handled by mega-announcement splash + persistent indicator above */}
@@ -3339,7 +3374,7 @@ export default function HomePage() {
             {/* ═══════════════════════════════════════════════════════════
                 SEARCH BAR - Only when session active and adding is enabled
                ═══════════════════════════════════════════════════════════ */}
-            {
+            {!demoNight.enabled && (
                 (isAdminOnFrontPage || (permissions.canAddSongs && canParticipate && (userStatus.songsRemaining > 0 || karmaBonuses.bonusSongAdds > 0))) ? (
                     <div className={`search-bar-container ${showCoachMark === 'search' ? 'coach-highlight' : ''}`}>
                         <input
@@ -3411,306 +3446,308 @@ export default function HomePage() {
                         />
                     </div>
                 )
-            }
+            )}
 
             {/* ═══════════════════════════════════════════════════════════
                 SONG LIST - The main star. Music first!
                ═══════════════════════════════════════════════════════════ */}
-            <div className={`song-list-stream${chatDocked ? ' chat-docked' : ''}`} id="song-list">
-                {sortedSongs.length === 0 ? (
-                    <div className="empty-state">
-                        <div className="empty-icon"><img src="/logo.png" alt="" className="empty-crate-icon" /></div>
-                        {timerRunning ? (
-                            <>
-                                <div className="empty-title">
-                                    Playlist is empty — be the first to add a song
-                                </div>
-                                <div className="empty-subtitle">
-                                    Search above to add a song.
-                                </div>
-                            </>
-                        ) : username ? (
-                            <>
-                                <div className="empty-title">
-                                    Welcome back, {username}! 🎧
-                                </div>
-
-                                {/* 📊 WELCOME-BACK CARD — Show last session recap if available */}
-                                {lastSession ? (
-                                    <div className="welcome-back-card">
-                                        <div className="welcome-back-header">Your Last Event</div>
-                                        <div className="welcome-back-stats">
-                                            {lastSession.topSongName && lastSession.topSongRank && (
-                                                <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">{lastSession.topSongRank <= 3 ? '🏆' : '💿'}</span>
-                                                    <span className="wb-stat-text">
-                                                        <strong>&ldquo;{lastSession.topSongName}&rdquo;</strong> finished <strong>#{lastSession.topSongRank}</strong>
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {lastSession.totalVotesCast > 0 && (
-                                                <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">🗳️</span>
-                                                    <span className="wb-stat-text">{lastSession.totalVotesCast} votes cast</span>
-                                                </div>
-                                            )}
-                                            {lastSession.totalSongsAdded > 0 && (
-                                                <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">💿</span>
-                                                    <span className="wb-stat-text">{lastSession.totalSongsAdded} songs added</span>
-                                                </div>
-                                            )}
-                                            {lastSession.karmaEarned > 0 && (
-                                                <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">⭐</span>
-                                                    <span className="wb-stat-text">+{lastSession.karmaEarned} karma earned</span>
-                                                </div>
-                                            )}
-                                            {lastSession.playlistSize > 0 && (
-                                                <div className="welcome-back-stat">
-                                                    <span className="wb-stat-icon">🗂️</span>
-                                                    <span className="wb-stat-text">{lastSession.playlistSize} songs in playlist · {lastSession.participantCount || '?'} participants</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <a
-                                            href={generateCalendarUrl()}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="welcome-back-calendar"
-                                        >
-                                            📅 Add to Calendar
-                                        </a>
+            {!demoNight.enabled && (
+                <div className={`song-list-stream${chatDocked ? ' chat-docked' : ''}`} id="song-list">
+                    {sortedSongs.length === 0 ? (
+                        <div className="empty-state">
+                            <div className="empty-icon"><img src="/logo.png" alt="" className="empty-crate-icon" /></div>
+                            {timerRunning ? (
+                                <>
+                                    <div className="empty-title">
+                                        Playlist is empty — be the first to add a song
                                     </div>
-                                ) : (
                                     <div className="empty-subtitle">
-                                        No live event right now. We go live weekly — add songs, vote, and build playlists together.
+                                        Search above to add a song.
                                     </div>
-                                )}
+                                </>
+                            ) : username ? (
+                                <>
+                                    <div className="empty-title">
+                                        Welcome back, {username}! 🎧
+                                    </div>
 
-                                {broadcastCountdown && (
-                                    <div className="empty-countdown">
-                                        🕐 Next live event in <strong>{broadcastCountdown}</strong>
-                                        <a
-                                            href={generateCalendarUrl()}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="countdown-calendar-link"
-                                        >
-                                            📅 Add to Calendar
-                                        </a>
-                                    </div>
-                                )}
-                            </>
-                        ) : (
-                            <>
-                                <div className="empty-title">
-                                    Welcome to Crate Hackers
-                                </div>
-                                <div className="empty-subtitle">
-                                    Every week we go live. Add songs, vote, and build the playlist together.
-                                </div>
-                                {broadcastCountdown && (
-                                    <div className="empty-countdown">
-                                        🕐 Next live event in <strong>{broadcastCountdown}</strong>
-                                        <a
-                                            href={generateCalendarUrl()}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="countdown-calendar-link"
-                                        >
-                                            📅 Add to Calendar
-                                        </a>
-                                    </div>
-                                )}
-                            </>
-                        )}
+                                    {/* 📊 WELCOME-BACK CARD — Show last session recap if available */}
+                                    {lastSession ? (
+                                        <div className="welcome-back-card">
+                                            <div className="welcome-back-header">Your Last Event</div>
+                                            <div className="welcome-back-stats">
+                                                {lastSession.topSongName && lastSession.topSongRank && (
+                                                    <div className="welcome-back-stat">
+                                                        <span className="wb-stat-icon">{lastSession.topSongRank <= 3 ? '🏆' : '💿'}</span>
+                                                        <span className="wb-stat-text">
+                                                            <strong>&ldquo;{lastSession.topSongName}&rdquo;</strong> finished <strong>#{lastSession.topSongRank}</strong>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {lastSession.totalVotesCast > 0 && (
+                                                    <div className="welcome-back-stat">
+                                                        <span className="wb-stat-icon">🗳️</span>
+                                                        <span className="wb-stat-text">{lastSession.totalVotesCast} votes cast</span>
+                                                    </div>
+                                                )}
+                                                {lastSession.totalSongsAdded > 0 && (
+                                                    <div className="welcome-back-stat">
+                                                        <span className="wb-stat-icon">💿</span>
+                                                        <span className="wb-stat-text">{lastSession.totalSongsAdded} songs added</span>
+                                                    </div>
+                                                )}
+                                                {lastSession.karmaEarned > 0 && (
+                                                    <div className="welcome-back-stat">
+                                                        <span className="wb-stat-icon">⭐</span>
+                                                        <span className="wb-stat-text">+{lastSession.karmaEarned} karma earned</span>
+                                                    </div>
+                                                )}
+                                                {lastSession.playlistSize > 0 && (
+                                                    <div className="welcome-back-stat">
+                                                        <span className="wb-stat-icon">🗂️</span>
+                                                        <span className="wb-stat-text">{lastSession.playlistSize} songs in playlist · {lastSession.participantCount || '?'} participants</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <a
+                                                href={generateCalendarUrl()}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="welcome-back-calendar"
+                                            >
+                                                📅 Add to Calendar
+                                            </a>
+                                        </div>
+                                    ) : (
+                                        <div className="empty-subtitle">
+                                            No live event right now. We go live weekly — add songs, vote, and build playlists together.
+                                        </div>
+                                    )}
 
-                        {/* 📬 Mailing List RSVP — only shown when session is NOT active AND user hasn't already signed up */}
-                        {!timerRunning && !waitingRsvpAlreadyDone && (
-                            <div className="waiting-rsvp">
-                                {waitingRsvpStatus === 'success' ? (
-                                    <div className="waiting-rsvp-success">
-                                        <span className="waiting-rsvp-check">✅</span> You're on the list! We'll notify you before the next event.
+                                    {broadcastCountdown && (
+                                        <div className="empty-countdown">
+                                            🕐 Next live event in <strong>{broadcastCountdown}</strong>
+                                            <a
+                                                href={generateCalendarUrl()}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="countdown-calendar-link"
+                                            >
+                                                📅 Add to Calendar
+                                            </a>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <div className="empty-title">
+                                        Welcome to Crate Hackers
                                     </div>
-                                ) : (
-                                    <>
-                                        <p className="waiting-rsvp-label">Get notified when we go live</p>
-                                        <form className="waiting-rsvp-form" onSubmit={async (e) => {
-                                            e.preventDefault();
-                                            const email = waitingEmail.trim();
-                                            if (!email || !isValidEmail(email)) {
-                                                setWaitingRsvpError('Enter a valid email address');
-                                                return;
-                                            }
-                                            setWaitingRsvpStatus('submitting');
-                                            setWaitingRsvpError(null);
-                                            try {
-                                                const res = await fetch('/api/kartra', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ email, firstName: username || 'Visitor' }),
-                                                });
-                                                const data = await res.json();
-                                                if (data.success) {
-                                                    setWaitingRsvpStatus('success');
-                                                    setWaitingRsvpAlreadyDone(true);
-                                                    persistSet('crate-rsvp-done', 'true');
-                                                } else {
-                                                    if (data.error?.includes('already')) {
+                                    <div className="empty-subtitle">
+                                        Every week we go live. Add songs, vote, and build the playlist together.
+                                    </div>
+                                    {broadcastCountdown && (
+                                        <div className="empty-countdown">
+                                            🕐 Next live event in <strong>{broadcastCountdown}</strong>
+                                            <a
+                                                href={generateCalendarUrl()}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="countdown-calendar-link"
+                                            >
+                                                📅 Add to Calendar
+                                            </a>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* 📬 Mailing List RSVP — only shown when session is NOT active AND user hasn't already signed up */}
+                            {!timerRunning && !waitingRsvpAlreadyDone && (
+                                <div className="waiting-rsvp">
+                                    {waitingRsvpStatus === 'success' ? (
+                                        <div className="waiting-rsvp-success">
+                                            <span className="waiting-rsvp-check">✅</span> You're on the list! We'll notify you before the next event.
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <p className="waiting-rsvp-label">Get notified when we go live</p>
+                                            <form className="waiting-rsvp-form" onSubmit={async (e) => {
+                                                e.preventDefault();
+                                                const email = waitingEmail.trim();
+                                                if (!email || !isValidEmail(email)) {
+                                                    setWaitingRsvpError('Enter a valid email address');
+                                                    return;
+                                                }
+                                                setWaitingRsvpStatus('submitting');
+                                                setWaitingRsvpError(null);
+                                                try {
+                                                    const res = await fetch('/api/kartra', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ email, firstName: username || 'Visitor' }),
+                                                    });
+                                                    const data = await res.json();
+                                                    if (data.success) {
                                                         setWaitingRsvpStatus('success');
                                                         setWaitingRsvpAlreadyDone(true);
                                                         persistSet('crate-rsvp-done', 'true');
                                                     } else {
-                                                        setWaitingRsvpStatus('error');
-                                                        setWaitingRsvpError('Something went wrong — try again');
+                                                        if (data.error?.includes('already')) {
+                                                            setWaitingRsvpStatus('success');
+                                                            setWaitingRsvpAlreadyDone(true);
+                                                            persistSet('crate-rsvp-done', 'true');
+                                                        } else {
+                                                            setWaitingRsvpStatus('error');
+                                                            setWaitingRsvpError('Something went wrong — try again');
+                                                        }
                                                     }
+                                                } catch (_) {
+                                                    setWaitingRsvpStatus('error');
+                                                    setWaitingRsvpError('Connection issue — try again');
                                                 }
-                                            } catch (_) {
-                                                setWaitingRsvpStatus('error');
-                                                setWaitingRsvpError('Connection issue — try again');
-                                            }
-                                        }}>
-                                            <input
-                                                type="email"
-                                                className="waiting-rsvp-input"
-                                                placeholder="your@email.com"
-                                                value={waitingEmail}
-                                                onChange={(e) => { setWaitingEmail(e.target.value); setWaitingRsvpError(null); }}
-                                                disabled={waitingRsvpStatus === 'submitting'}
-                                            />
-                                            <button
-                                                type="submit"
-                                                className="waiting-rsvp-btn"
-                                                disabled={waitingRsvpStatus === 'submitting' || !waitingEmail.trim()}
-                                            >
-                                                {waitingRsvpStatus === 'submitting' ? 'Submitting...' : 'Notify Me'}
-                                            </button>
-                                        </form>
-                                        {waitingRsvpError && (
-                                            <p className="waiting-rsvp-error">{waitingRsvpError}</p>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        )}
-
-                        {/* ✅ Already on the list — subtle confirmation */}
-                        {!timerRunning && waitingRsvpAlreadyDone && (
-                            <div className="waiting-rsvp-already">
-                                ✅ You're on the list — we'll email you before the next event.
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    sortedSongs.map((song, index) => {
-                        const hasUpvoted = userVotes.upvotedSongIds.includes(song.id);
-                        const hasDownvoted = userVotes.downvotedSongIds.includes(song.id);
-                        const isMyComment = song.addedBy === visitorId;
-                        const movement = recentlyMoved[song.id];
-                        const isNewEntry = (Date.now() - song.addedAt) < 60000; // 60s
-
-                        return (
-                            <div
-                                key={song.id}
-                                data-song-id={song.id}
-                                className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''} ${isNewEntry ? 'new-entry' : ''}`}
-                                onMouseEnter={markInteraction}
-                                onTouchStart={markInteraction}
-                            >
-                                {/* Rank */}
-                                <span
-                                    className={`rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}
-                                    data-tooltip={index < 3 ? `Top 3 earn +5 karma` : `Rank #${index + 1}`}
-                                    tabIndex={0}
-                                >
-                                    {index === 0 ? '👑' : `#${index + 1}`}
-                                    {isNewEntry && <span className="new-entry-badge">🆕</span>}
-                                </span>
-
-                                {/* Album Art - clean, no overlay */}
-                                <div className="album-art-wrapper">
-                                    <img src={song.albumArt || '/placeholder.svg'} alt="" className="album-thumb" />
+                                            }}>
+                                                <input
+                                                    type="email"
+                                                    className="waiting-rsvp-input"
+                                                    placeholder="your@email.com"
+                                                    value={waitingEmail}
+                                                    onChange={(e) => { setWaitingEmail(e.target.value); setWaitingRsvpError(null); }}
+                                                    disabled={waitingRsvpStatus === 'submitting'}
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    className="waiting-rsvp-btn"
+                                                    disabled={waitingRsvpStatus === 'submitting' || !waitingEmail.trim()}
+                                                >
+                                                    {waitingRsvpStatus === 'submitting' ? 'Submitting...' : 'Notify Me'}
+                                                </button>
+                                            </form>
+                                            {waitingRsvpError && (
+                                                <p className="waiting-rsvp-error">{waitingRsvpError}</p>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
+                            )}
 
-                                {/* Play Button - separate, always visible */}
-                                <button
-                                    className={`play-preview-btn ${isLoadingVideo === song.id ? 'loading' : ''}`}
-                                    onClick={(e) => handleOpenVideoPreview(song.id, song.name, song.artist, e)}
-                                    title="Play music video"
-                                >
-                                    {isLoadingVideo === song.id ? '⏳ Loading...' : '▶'}
-                                </button>
-
-                                {/* Song Info - super compact */}
-                                <div className="song-info-stream">
-                                    <span className="song-title">{song.name}</span>
-                                    <span className="song-artist">
-                                        {song.artist} <span className="by-user" style={{ color: isMyComment ? userColor : (song.addedByColor || '#9ca3af'), opacity: 1 }}>• {song.addedByName}{isMyComment && ' (you)'}</span>
-                                        {song.addedByLocation && <span className="location-badge" title={`From ${song.addedByLocation}`}>📍{song.addedByLocation}</span>}
-                                    </span>
+                            {/* ✅ Already on the list — subtle confirmation */}
+                            {!timerRunning && waitingRsvpAlreadyDone && (
+                                <div className="waiting-rsvp-already">
+                                    ✅ You're on the list — we'll email you before the next event.
                                 </div>
+                            )}
+                        </div>
+                    ) : (
+                        sortedSongs.map((song, index) => {
+                            const hasUpvoted = userVotes.upvotedSongIds.includes(song.id);
+                            const hasDownvoted = userVotes.downvotedSongIds.includes(song.id);
+                            const isMyComment = song.addedBy === visitorId;
+                            const movement = recentlyMoved[song.id];
+                            const isNewEntry = (Date.now() - song.addedAt) < 60000; // 60s
 
-                                {/* Voting - inline thumbs down/up with score (hidden if voting disabled) */}
-                                {permissions.canVote && (
-                                    <div className="vote-inline">
-                                        <button
-                                            className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''} ${!canParticipate && !isAdminOnFrontPage ? 'participation-locked' : ''}`}
-                                            onClick={() => handleVote(song.id, -1)}
-                                            disabled={votingInProgress.has(song.id)}
-                                            aria-label={hasDownvoted ? `Remove downvote from ${song.name}` : `Downvote ${song.name}`}
-                                            data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote'}
-                                        >
-                                            {votingInProgress.has(song.id) ? '⏳' : '👎'}
-                                        </button>
-                                        <span
-                                            className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
-                                            data-tooltip={`Score: ${song.score > 0 ? '+' : ''}${song.score}`}
-                                            tabIndex={0}
-                                            aria-label={`Score: ${song.score > 0 ? 'plus ' : song.score < 0 ? 'minus ' : ''}${Math.abs(song.score)}`}
-                                        >
-                                            {song.score > 0 ? '+' : ''}{song.score}
-                                        </span>
-                                        <button
-                                            className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''} ${!canParticipate && !isAdminOnFrontPage ? 'participation-locked' : ''}`}
-                                            onClick={() => handleVote(song.id, 1)}
-                                            disabled={votingInProgress.has(song.id)}
-                                            aria-label={hasUpvoted ? `Remove upvote from ${song.name}` : `Upvote ${song.name}`}
-                                            data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote'}
-                                        >
-                                            {votingInProgress.has(song.id) ? '⏳' : '👍'}
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* 💀 THE PURGE - Only visible during purge window */}
-                                {deleteWindow.active && deleteWindow.canDelete && (
-                                    <button
-                                        className={`chaos-delete-btn ${purgeArmedSongId === song.id ? 'armed' : ''}`}
-                                        onClick={() => {
-                                            if (purgeArmedSongId === song.id) {
-                                                handleWindowDelete(song.id);
-                                                setPurgeArmedSongId(null);
-                                                if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
-                                            } else {
-                                                setPurgeArmedSongId(song.id);
-                                                if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
-                                                purgeArmTimeout.current = setTimeout(() => setPurgeArmedSongId(null), 3000);
-                                            }
-                                        }}
-                                        disabled={isDeleting}
-                                        title={purgeArmedSongId === song.id ? 'Tap again to confirm' : 'Delete this song'}
+                            return (
+                                <div
+                                    key={song.id}
+                                    data-song-id={song.id}
+                                    className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''} ${isNewEntry ? 'new-entry' : ''}`}
+                                    onMouseEnter={markInteraction}
+                                    onTouchStart={markInteraction}
+                                >
+                                    {/* Rank */}
+                                    <span
+                                        className={`rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}
+                                        data-tooltip={index < 3 ? `Top 3 earn +5 karma` : `Rank #${index + 1}`}
+                                        tabIndex={0}
                                     >
-                                        {purgeArmedSongId === song.id ? '⚠️ Confirm?' : '💀'}
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })
-                )}
-            </div>
+                                        {index === 0 ? '👑' : `#${index + 1}`}
+                                        {isNewEntry && <span className="new-entry-badge">🆕</span>}
+                                    </span>
 
-            {/* � JUKEBOX MODE - Full-screen music experience */}
+                                    {/* Album Art - clean, no overlay */}
+                                    <div className="album-art-wrapper">
+                                        <img src={song.albumArt || '/placeholder.svg'} alt="" className="album-thumb" />
+                                    </div>
+
+                                    {/* Play Button - separate, always visible */}
+                                    <button
+                                        className={`play-preview-btn ${isLoadingVideo === song.id ? 'loading' : ''}`}
+                                        onClick={(e) => handleOpenVideoPreview(song.id, song.name, song.artist, e)}
+                                        title="Play music video"
+                                    >
+                                        {isLoadingVideo === song.id ? '⏳ Loading...' : '▶'}
+                                    </button>
+
+                                    {/* Song Info - super compact */}
+                                    <div className="song-info-stream">
+                                        <span className="song-title">{song.name}</span>
+                                        <span className="song-artist">
+                                            {song.artist} <span className="by-user" style={{ color: isMyComment ? userColor : (song.addedByColor || '#9ca3af'), opacity: 1 }}>• {song.addedByName}{isMyComment && ' (you)'}</span>
+                                            {song.addedByLocation && <span className="location-badge" title={`From ${song.addedByLocation}`}>📍{song.addedByLocation}</span>}
+                                        </span>
+                                    </div>
+
+                                    {/* Voting - inline thumbs down/up with score (hidden if voting disabled) */}
+                                    {permissions.canVote && (
+                                        <div className="vote-inline">
+                                            <button
+                                                className={`thumb-btn down ${hasDownvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''} ${!canParticipate && !isAdminOnFrontPage ? 'participation-locked' : ''}`}
+                                                onClick={() => handleVote(song.id, -1)}
+                                                disabled={votingInProgress.has(song.id)}
+                                                aria-label={hasDownvoted ? `Remove downvote from ${song.name}` : `Downvote ${song.name}`}
+                                                data-tooltip={hasDownvoted ? 'Remove downvote' : 'Downvote'}
+                                            >
+                                                {votingInProgress.has(song.id) ? '⏳' : '👎'}
+                                            </button>
+                                            <span
+                                                className={`vote-score ${song.score > 0 ? 'positive' : song.score < 0 ? 'negative' : ''}`}
+                                                data-tooltip={`Score: ${song.score > 0 ? '+' : ''}${song.score}`}
+                                                tabIndex={0}
+                                                aria-label={`Score: ${song.score > 0 ? 'plus ' : song.score < 0 ? 'minus ' : ''}${Math.abs(song.score)}`}
+                                            >
+                                                {song.score > 0 ? '+' : ''}{song.score}
+                                            </span>
+                                            <button
+                                                className={`thumb-btn up ${hasUpvoted ? 'active' : ''} ${votingInProgress.has(song.id) ? 'voting' : ''} ${!canParticipate && !isAdminOnFrontPage ? 'participation-locked' : ''}`}
+                                                onClick={() => handleVote(song.id, 1)}
+                                                disabled={votingInProgress.has(song.id)}
+                                                aria-label={hasUpvoted ? `Remove upvote from ${song.name}` : `Upvote ${song.name}`}
+                                                data-tooltip={hasUpvoted ? 'Remove upvote' : 'Upvote'}
+                                            >
+                                                {votingInProgress.has(song.id) ? '⏳' : '👍'}
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* 💀 THE PURGE - Only visible during purge window */}
+                                    {deleteWindow.active && deleteWindow.canDelete && (
+                                        <button
+                                            className={`chaos-delete-btn ${purgeArmedSongId === song.id ? 'armed' : ''}`}
+                                            onClick={() => {
+                                                if (purgeArmedSongId === song.id) {
+                                                    handleWindowDelete(song.id);
+                                                    setPurgeArmedSongId(null);
+                                                    if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
+                                                } else {
+                                                    setPurgeArmedSongId(song.id);
+                                                    if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
+                                                    purgeArmTimeout.current = setTimeout(() => setPurgeArmedSongId(null), 3000);
+                                                }
+                                            }}
+                                            disabled={isDeleting}
+                                            title={purgeArmedSongId === song.id ? 'Tap again to confirm' : 'Delete this song'}
+                                        >
+                                            {purgeArmedSongId === song.id ? '⚠️ Confirm?' : '💀'}
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+
+            {/* 🎬 JUKEBOX MODE - Full-screen music experience */}
             {
                 jukeboxState && (
                     <JukeboxPlayer

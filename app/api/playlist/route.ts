@@ -25,6 +25,8 @@ import {
     getStreamConfig,
     setStreamConfig,
     getShowClock,
+    getDemoNightConfig,
+    setDemoNightConfig,
 } from '@/lib/redis-store';
 
 // GET - Get playlist status and stats
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
         await adminHeartbeat(adminId);
     }
 
-    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity, sessionPermissions, youtubeEmbed, streamConfig, showClock] = await Promise.all([
+    const [songs, isLocked, stats, activeUsersRaw, activeAdminCount, playlistTitle, recentActivity, sessionPermissions, youtubeEmbed, streamConfig, showClock, demoNight] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getStats(),
@@ -50,6 +52,7 @@ export async function GET(request: Request) {
         getYouTubeEmbed(),
         getStreamConfig(),
         getShowClock(),
+        getDemoNightConfig(),
     ]);
 
     // Format active users for frontend (check ban status and karma for each)
@@ -77,6 +80,7 @@ export async function GET(request: Request) {
         youtubeEmbed,
         streamConfig,
         showClock,
+        demoNight,
     });
 }
 
@@ -170,6 +174,17 @@ export async function POST(request: Request) {
                 };
                 await setStreamConfig(newConfig);
                 return NextResponse.json({ success: true, streamConfig: newConfig });
+            case 'setDemoNight':
+                // Toggle Demo Night mode (disables voting, shows content link)
+                const demoNightConfig = {
+                    enabled: !!body.demoNightEnabled,
+                    headline: (body.demoNightHeadline || 'Demo Night').slice(0, 100),
+                    description: (body.demoNightDescription || '').slice(0, 300),
+                    linkUrl: (body.demoNightLinkUrl || '').slice(0, 500),
+                    linkLabel: (body.demoNightLinkLabel || 'Download').slice(0, 60),
+                };
+                await setDemoNightConfig(demoNightConfig);
+                return NextResponse.json({ success: true, demoNight: demoNightConfig });
             default:
                 return NextResponse.json({ error: 'Unknown action. Please refresh and try again.' }, { status: 400 });
         }

@@ -84,6 +84,7 @@ const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } -
 const PRIZE_DROP_KEY = 'hackathon:prizeDrop';  // { winnerVisitorId, winnerName, timestamp, prizeType } - active prize drop
 const LEADERBOARD_KING_KEY = 'hackathon:leaderboardKing';  // { winnerVisitorId, winnerName, score, timestamp } - session-end MVP
 const SHOW_CLOCK_KEY = 'hackathon:showClock';  // ShowClock state for ESPN-style segment ticker
+const DEMO_NIGHT_KEY = 'hackathon:demoNight';  // { enabled, headline, description, linkUrl, linkLabel } - Demo Night mode
 
 // 💣 BOMB FEATURE KEYS - Skip currently playing jukebox song via crowd consensus
 const NOW_PLAYING_KEY = 'hackathon:nowPlaying';  // { songId, songName, artistName, albumArt, startedAt } - current jukebox song
@@ -797,6 +798,83 @@ export async function getUserStatus(visitorId: string): Promise<{
     }
 }
 
+// ============ EXPORT ELIGIBILITY ============
+// Users must fully participate to export the playlist to Spotify/TIDAL
+// Requirements: add 5 songs + use at least 1 upvote + use at least 1 downvote
+export const EXPORT_MIN_SONGS = 5;  // Must add at least 5 songs
+export const EXPORT_MIN_UPVOTES = 1;  // Must cast at least 1 upvote
+export const EXPORT_MIN_DOWNVOTES = 1;  // Must cast at least 1 downvote
+
+export interface ExportEligibility {
+    eligible: boolean;
+    songsAdded: number;
+    songsRequired: number;
+    upvotesUsed: number;
+    upvotesRequired: number;
+    downvotesUsed: number;
+    downvotesRequired: number;
+    // Progress percentage (0-100)
+    progress: number;
+    // Human-readable reasons why they can't export
+    reasons: string[];
+}
+
+export async function getExportEligibility(visitorId: string): Promise<ExportEligibility> {
+    try {
+        const songsAdded = await redis.hget<number>(USER_SONG_COUNTS_KEY, visitorId) || 0;
+        const upvotes = await redis.hget<string[]>(USER_UPVOTE_KEY, visitorId) || [];
+        const downvotes = await redis.hget<string[]>(USER_DOWNVOTE_KEY, visitorId) || [];
+
+        const upvotesUsed = upvotes.length;
+        const downvotesUsed = downvotes.length;
+
+        const reasons: string[] = [];
+        if (songsAdded < EXPORT_MIN_SONGS) {
+            reasons.push(`Add ${EXPORT_MIN_SONGS - songsAdded} more song${EXPORT_MIN_SONGS - songsAdded === 1 ? '' : 's'} (${songsAdded}/${EXPORT_MIN_SONGS})`);
+        }
+        if (upvotesUsed < EXPORT_MIN_UPVOTES) {
+            reasons.push(`Cast ${EXPORT_MIN_UPVOTES - upvotesUsed} more upvote${EXPORT_MIN_UPVOTES - upvotesUsed === 1 ? '' : 's'}`);
+        }
+        if (downvotesUsed < EXPORT_MIN_DOWNVOTES) {
+            reasons.push(`Cast ${EXPORT_MIN_DOWNVOTES - downvotesUsed} more downvote${EXPORT_MIN_DOWNVOTES - downvotesUsed === 1 ? '' : 's'}`);
+        }
+
+        const eligible = reasons.length === 0;
+
+        // Calculate progress as average of all 3 requirements
+        const songProgress = Math.min(1, songsAdded / EXPORT_MIN_SONGS);
+        const upvoteProgress = Math.min(1, upvotesUsed / EXPORT_MIN_UPVOTES);
+        const downvoteProgress = Math.min(1, downvotesUsed / EXPORT_MIN_DOWNVOTES);
+        const progress = Math.round(((songProgress + upvoteProgress + downvoteProgress) / 3) * 100);
+
+        return {
+            eligible,
+            songsAdded,
+            songsRequired: EXPORT_MIN_SONGS,
+            upvotesUsed,
+            upvotesRequired: EXPORT_MIN_UPVOTES,
+            downvotesUsed,
+            downvotesRequired: EXPORT_MIN_DOWNVOTES,
+            progress,
+            reasons,
+        };
+    } catch (error) {
+        console.error('Failed to check export eligibility:', error);
+        // Default to ineligible on error
+        return {
+            eligible: false,
+            songsAdded: 0,
+            songsRequired: EXPORT_MIN_SONGS,
+            upvotesUsed: 0,
+            upvotesRequired: EXPORT_MIN_UPVOTES,
+            downvotesUsed: 0,
+            downvotesRequired: EXPORT_MIN_DOWNVOTES,
+            progress: 0,
+            reasons: ['Could not verify participation. Please try again.'],
+        };
+    }
+}
+
 // ============ LOCK/UNLOCK ============
 export async function setPlaylistLocked(locked: boolean): Promise<void> {
     await redis.set(LOCKED_KEY, locked);
@@ -896,6 +974,45 @@ export async function setYouTubeEmbed(url: string | null): Promise<void> {
         await setStreamConfig({ platform: 'youtube', youtubeUrl: url });
     } else {
         await setStreamConfig({ platform: null });
+    }
+}
+
+// ============ DEMO NIGHT CONFIG ============
+export interface DemoNightConfig {
+    enabled: boolean;
+    headline: string;       // e.g. "Demo Night" or "Q&A Night"
+    description: string;    // e.g. "Grab your free sample pack below"
+    linkUrl: string;        // Dropbox / Google Drive / any URL
+    linkLabel: string;      // "Download Sample Pack" or "Get the PDF"
+}
+
+const DEFAULT_DEMO_NIGHT: DemoNightConfig = {
+    enabled: false,
+    headline: '',
+    description: '',
+    linkUrl: '',
+    linkLabel: '',
+};
+
+export async function getDemoNightConfig(): Promise<DemoNightConfig> {
+    try {
+        const config = await redis.get<DemoNightConfig>(DEMO_NIGHT_KEY);
+        return config || DEFAULT_DEMO_NIGHT;
+    } catch (error) {
+        console.error('Failed to get demo night config:', error);
+        return DEFAULT_DEMO_NIGHT;
+    }
+}
+
+export async function setDemoNightConfig(config: DemoNightConfig): Promise<void> {
+    try {
+        if (config.enabled) {
+            await redis.set(DEMO_NIGHT_KEY, config);
+        } else {
+            await redis.del(DEMO_NIGHT_KEY);
+        }
+    } catch (error) {
+        console.error('Failed to set demo night config:', error);
     }
 }
 

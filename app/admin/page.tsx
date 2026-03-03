@@ -141,6 +141,15 @@ export default function AdminPage() {
     const autoPilotTimeouts = useRef<NodeJS.Timeout[]>([]);
     const adminFetchFailures = useRef(0);
 
+    // 📡 DEMO NIGHT - Content-only mode (disables voting)
+    const [demoNightEnabled, setDemoNightEnabled] = useState(false);
+    const [demoNightHeadline, setDemoNightHeadline] = useState('Demo Night');
+    const [demoNightDescription, setDemoNightDescription] = useState('');
+    const [demoNightLinkUrl, setDemoNightLinkUrl] = useState('');
+    const [demoNightLinkLabel, setDemoNightLinkLabel] = useState('Download');
+    const [isSavingDemoNight, setIsSavingDemoNight] = useState(false);
+    const demoNightLoaded = useRef(false);
+
     // Delete window (chaos mode) state
     const [isStartingDeleteWindow, setIsStartingDeleteWindow] = useState(false);
     const [deleteWindowActive, setDeleteWindowActive] = useState(false);
@@ -245,6 +254,17 @@ export default function AdminPage() {
                     // Legacy compat
                     setStreamPlatform(data.youtubeEmbed ? 'youtube' : null);
                     setYoutubeUrl(data.youtubeEmbed || '');
+                }
+            }
+            // Sync demo night config ONLY on initial load (prevents overwriting active edits)
+            if (!demoNightLoaded.current) {
+                demoNightLoaded.current = true;
+                if (data.demoNight) {
+                    setDemoNightEnabled(data.demoNight.enabled || false);
+                    setDemoNightHeadline(data.demoNight.headline || 'Demo Night');
+                    setDemoNightDescription(data.demoNight.description || '');
+                    setDemoNightLinkUrl(data.demoNight.linkUrl || '');
+                    setDemoNightLinkLabel(data.demoNight.linkLabel || 'Download');
                 }
             }
         } catch (error) {
@@ -975,6 +995,37 @@ export default function AdminPage() {
             // Reset editing flag after save completes
             isEditingStream.current = false;
             if (editingStreamTimeout.current) clearTimeout(editingStreamTimeout.current);
+        }
+    };
+
+    // Save Demo Night config
+    const handleSaveDemoNight = async (enabledOverride?: boolean) => {
+        const isEnabled = enabledOverride !== undefined ? enabledOverride : demoNightEnabled;
+        setIsSavingDemoNight(true);
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'setDemoNight',
+                    demoNightEnabled: isEnabled,
+                    demoNightHeadline: demoNightHeadline.trim() || 'Demo Night',
+                    demoNightDescription: demoNightDescription.trim(),
+                    demoNightLinkUrl: demoNightLinkUrl.trim(),
+                    demoNightLinkLabel: demoNightLinkLabel.trim() || 'Download',
+                }),
+            });
+            if (res.ok) {
+                setMessage({
+                    type: 'success',
+                    text: isEnabled ? '📡 Demo Night is LIVE! Voting disabled.' : '📡 Demo Night OFF — voting restored.'
+                });
+            } else {
+                setMessage({ type: 'error', text: 'Failed to save Demo Night config' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to save Demo Night config' });
+        } finally {
+            setIsSavingDemoNight(false);
         }
     };
 
@@ -2393,6 +2444,91 @@ export default function AdminPage() {
                                         <span className="tool-icon">{hideStreamLocally ? '👁️‍🗨️' : '🙈'}</span>
                                         <span className="tool-name">{hideStreamLocally ? 'Stream Hidden (My Screen)' : 'Hide Stream (My Screen)'}</span>
                                     </button>
+                                )}
+                            </div>
+
+                            {/* 📡 DEMO NIGHT MODE */}
+                            <div className="youtube-embed-control stream-config-panel">
+                                <div className="control-label">
+                                    <span className="tool-icon">📡</span>
+                                    <span className="tool-name">Demo Night</span>
+                                </div>
+
+                                {/* Master Toggle */}
+                                <button
+                                    className={`platform-btn demo-night-toggle ${demoNightEnabled ? 'active demo-night-active' : ''}`}
+                                    onClick={() => {
+                                        const newState = !demoNightEnabled;
+                                        setDemoNightEnabled(newState);
+                                        // Auto-save the toggle immediately
+                                        handleSaveDemoNight(newState);
+                                    }}
+                                    disabled={isSavingDemoNight}
+                                >
+                                    {demoNightEnabled ? '🟢 Demo Night ON' : '⚫ Demo Night OFF'}
+                                </button>
+
+                                {/* Config fields (shown when enabled) */}
+                                {demoNightEnabled && (
+                                    <>
+                                        <input
+                                            type="text"
+                                            className="youtube-url-input"
+                                            value={demoNightHeadline}
+                                            onChange={(e) => setDemoNightHeadline(e.target.value)}
+                                            placeholder="Headline (e.g. Demo Night)"
+                                            maxLength={100}
+                                        />
+                                        <input
+                                            type="text"
+                                            className="youtube-url-input"
+                                            value={demoNightDescription}
+                                            onChange={(e) => setDemoNightDescription(e.target.value)}
+                                            placeholder="Description (e.g. Grab your free sample pack)"
+                                            maxLength={300}
+                                        />
+                                        <input
+                                            type="text"
+                                            className="youtube-url-input"
+                                            value={demoNightLinkUrl}
+                                            onChange={(e) => setDemoNightLinkUrl(e.target.value)}
+                                            placeholder="Link URL (Dropbox, Google Drive, etc.)"
+                                            maxLength={500}
+                                        />
+                                        <input
+                                            type="text"
+                                            className="youtube-url-input"
+                                            value={demoNightLinkLabel}
+                                            onChange={(e) => setDemoNightLinkLabel(e.target.value)}
+                                            placeholder="Button label (e.g. Download Sample Pack)"
+                                            maxLength={60}
+                                        />
+                                        <div className="stream-actions">
+                                            <button
+                                                className="tool-btn youtube-save"
+                                                onClick={() => handleSaveDemoNight()}
+                                                disabled={isSavingDemoNight}
+                                            >
+                                                <span className="tool-icon">💾</span>
+                                                <span className="tool-name">{isSavingDemoNight ? 'Saving...' : 'Save Config'}</span>
+                                            </button>
+                                            <button
+                                                className="tool-btn danger-subtle"
+                                                onClick={() => {
+                                                    setDemoNightEnabled(false);
+                                                    setDemoNightHeadline('Demo Night');
+                                                    setDemoNightDescription('');
+                                                    setDemoNightLinkUrl('');
+                                                    setDemoNightLinkLabel('Download');
+                                                    handleSaveDemoNight(false);
+                                                }}
+                                                disabled={isSavingDemoNight}
+                                            >
+                                                <span className="tool-icon">🗑️</span>
+                                                <span className="tool-name">Clear</span>
+                                            </button>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </div>

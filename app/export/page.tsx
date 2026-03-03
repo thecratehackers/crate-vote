@@ -14,6 +14,18 @@ interface ExportTrack {
     score: number;
 }
 
+interface ExportEligibility {
+    eligible: boolean;
+    songsAdded: number;
+    songsRequired: number;
+    upvotesUsed: number;
+    upvotesRequired: number;
+    downvotesUsed: number;
+    downvotesRequired: number;
+    progress: number;
+    reasons: string[];
+}
+
 export default function ExportPage() {
     const { data: session, status } = useSession();
     const searchParams = useSearchParams();
@@ -41,6 +53,11 @@ export default function ExportPage() {
         missingTracks?: { name: string; artist: string }[];
     } | null>(null);
 
+    // 🔒 PARTICIPATION GATE STATE
+    const [visitorId, setVisitorId] = useState<string | null>(null);
+    const [eligibility, setEligibility] = useState<ExportEligibility | null>(null);
+    const [eligibilityLoading, setEligibilityLoading] = useState(true);
+
     // Strip emojis from text for playlist names
     const stripEmojis = (text: string): string => {
         return text
@@ -56,6 +73,41 @@ export default function ExportPage() {
             .replace(/\s+/g, ' ')
             .trim();
     };
+
+    // Initialize fingerprint
+    useEffect(() => {
+        async function initFingerprint() {
+            try {
+                const { getVisitorId } = await import('@/lib/fingerprint');
+                const id = await getVisitorId();
+                setVisitorId(id);
+            } catch (err) {
+                console.error('Failed to init fingerprint:', err);
+                setEligibilityLoading(false);
+            }
+        }
+        initFingerprint();
+    }, []);
+
+    // Check export eligibility once we have visitorId
+    useEffect(() => {
+        if (!visitorId) return;
+
+        async function checkEligibility() {
+            try {
+                const res = await fetch('/api/playlist/eligibility', {
+                    headers: { 'x-visitor-id': visitorId! },
+                });
+                const data = await res.json();
+                setEligibility(data);
+            } catch (err) {
+                console.error('Failed to check eligibility:', err);
+            } finally {
+                setEligibilityLoading(false);
+            }
+        }
+        checkEligibility();
+    }, [visitorId]);
 
     // Fetch the current playlist and title
     useEffect(() => {
@@ -105,10 +157,10 @@ export default function ExportPage() {
 
     // Auto-export to TIDAL when returning from TIDAL auth
     useEffect(() => {
-        if (searchParams.get('tidal_connected') === 'true' && !loading && tracks.length > 0 && !playlistUrl) {
+        if (searchParams.get('tidal_connected') === 'true' && !loading && tracks.length > 0 && !playlistUrl && eligibility?.eligible) {
             doTidalExport();
         }
-    }, [tidalConnected, loading, tracks, searchParams]);
+    }, [tidalConnected, loading, tracks, searchParams, eligibility]);
 
     // === SPOTIFY EXPORT ===
     const handleSpotifyExport = async () => {
@@ -225,9 +277,12 @@ export default function ExportPage() {
         }, 1800);
     };
 
+    // Helper: is user eligible to export?
+    const canExport = eligibility?.eligible === true;
+
     // ─── LOADING STATE ──────────────────────────────────────────────────────────
 
-    if (loading) {
+    if (loading || eligibilityLoading) {
         return (
             <div className="export-page">
                 <div className="loading">Loading playlist...</div>
@@ -489,14 +544,61 @@ export default function ExportPage() {
 
             {error && <div className="error-msg">{error}</div>}
 
-            {/* CLEAR EXPLANATION */}
-            <div className="export-explainer">
-                <div className="explainer-icon">🎧</div>
-                <div className="explainer-text">
-                    <strong>Export anytime!</strong>
-                    <span>Save up to 100 songs to Crate Hackers, Spotify, or TIDAL — export whenever you want.</span>
+            {/* 🔒 PARTICIPATION GATE */}
+            {!canExport && eligibility && (
+                <div className="participation-gate">
+                    <div className="gate-icon">🔒</div>
+                    <div className="gate-content">
+                        <h2 className="gate-title">Participate to Unlock</h2>
+                        <p className="gate-subtitle">You must fully participate before you can save the playlist to Spotify or TIDAL. No free rides!</p>
+
+                        {/* Progress bar */}
+                        <div className="gate-progress-container">
+                            <div className="gate-progress-bar">
+                                <div
+                                    className="gate-progress-fill"
+                                    style={{ width: `${eligibility.progress}%` }}
+                                />
+                            </div>
+                            <span className="gate-progress-text">{eligibility.progress}%</span>
+                        </div>
+
+                        {/* Checklist */}
+                        <div className="gate-checklist">
+                            <div className={`gate-check-item ${eligibility.songsAdded >= eligibility.songsRequired ? 'done' : ''}`}>
+                                <span className="check-icon">{eligibility.songsAdded >= eligibility.songsRequired ? '✅' : '⬜'}</span>
+                                <span className="check-label">Add {eligibility.songsRequired} songs</span>
+                                <span className="check-progress">{eligibility.songsAdded}/{eligibility.songsRequired}</span>
+                            </div>
+                            <div className={`gate-check-item ${eligibility.upvotesUsed >= eligibility.upvotesRequired ? 'done' : ''}`}>
+                                <span className="check-icon">{eligibility.upvotesUsed >= eligibility.upvotesRequired ? '✅' : '⬜'}</span>
+                                <span className="check-label">Vote songs up 👍</span>
+                                <span className="check-progress">{eligibility.upvotesUsed}/{eligibility.upvotesRequired}</span>
+                            </div>
+                            <div className={`gate-check-item ${eligibility.downvotesUsed >= eligibility.downvotesRequired ? 'done' : ''}`}>
+                                <span className="check-icon">{eligibility.downvotesUsed >= eligibility.downvotesRequired ? '✅' : '⬜'}</span>
+                                <span className="check-label">Vote songs down 👎</span>
+                                <span className="check-progress">{eligibility.downvotesUsed}/{eligibility.downvotesRequired}</span>
+                            </div>
+                        </div>
+
+                        <Link href="/" className="gate-cta">
+                            🎶 Go Participate Now
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {/* CLEAR EXPLANATION */}
+            {canExport && (
+                <div className="export-explainer">
+                    <div className="explainer-icon">🎧</div>
+                    <div className="explainer-text">
+                        <strong>You&apos;re all set!</strong>
+                        <span>Save up to 100 songs to Crate Hackers, Spotify, or TIDAL — export whenever you want.</span>
+                    </div>
+                </div>
+            )}
 
             {/* TRACK PREVIEW */}
             <div className="export-preview">
@@ -520,18 +622,24 @@ export default function ExportPage() {
             </div>
 
             {/* ── EXPORT DESTINATIONS ────────────────────────────────────────── */}
-            <div className="export-destinations">
-                <h2 className="destinations-title">Choose your platform</h2>
+            <div className={`export-destinations ${!canExport ? 'locked' : ''}`}>
+                <h2 className="destinations-title">
+                    {canExport ? 'Choose your platform' : '🔒 Complete participation to unlock'}
+                </h2>
 
                 {/* CRATE HACKERS CARD */}
-                <div className={`destination-card crate-hackers-card ${crateHackersSynced ? 'synced' : ''}`}>
+                <div className={`destination-card crate-hackers-card ${crateHackersSynced ? 'synced' : ''} ${!canExport ? 'disabled-card' : ''}`}>
                     <div className="destination-header">
                         <img src="/logo.png" alt="" className="ch-card-logo" />
                         <span className="destination-name">Crate Hackers</span>
                         <span className="home-badge">HOME</span>
                     </div>
 
-                    {crateHackersSyncing ? (
+                    {!canExport ? (
+                        <div className="locked-overlay">
+                            <span className="locked-text">🔒 Participate to unlock</span>
+                        </div>
+                    ) : crateHackersSyncing ? (
                         <div className="destination-loading ch-syncing">
                             <div className="mini-spinner" style={{ borderTopColor: '#d3771d' }} />
                             <span>Syncing to your crate...</span>
@@ -563,7 +671,7 @@ export default function ExportPage() {
                 </div>
 
                 {/* SPOTIFY CARD */}
-                <div className="destination-card spotify-card">
+                <div className={`destination-card spotify-card ${!canExport ? 'disabled-card' : ''}`}>
                     <div className="destination-header">
                         <svg viewBox="0 0 24 24" width="28" height="28" fill="#1DB954">
                             <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
@@ -571,7 +679,11 @@ export default function ExportPage() {
                         <span className="destination-name">Spotify</span>
                     </div>
 
-                    {status === 'authenticated' && session?.user ? (
+                    {!canExport ? (
+                        <div className="locked-overlay">
+                            <span className="locked-text">🔒 Participate to unlock</span>
+                        </div>
+                    ) : status === 'authenticated' && session?.user ? (
                         <div className="destination-auth">
                             <div className="connected-as">
                                 <span className="connected-dot" style={{ background: '#1DB954' }} />
@@ -599,14 +711,18 @@ export default function ExportPage() {
                 </div>
 
                 {/* TIDAL CARD */}
-                <div className="destination-card tidal-card">
+                <div className={`destination-card tidal-card ${!canExport ? 'disabled-card' : ''}`}>
                     <div className="destination-header">
                         <TidalIcon size={28} />
                         <span className="destination-name">TIDAL</span>
                         <span className="new-badge">NEW</span>
                     </div>
 
-                    {tidalLoading ? (
+                    {!canExport ? (
+                        <div className="locked-overlay">
+                            <span className="locked-text">🔒 Participate to unlock</span>
+                        </div>
+                    ) : tidalLoading ? (
                         <div className="destination-loading">
                             <div className="mini-spinner" style={{ borderTopColor: '#00FFFF' }} />
                             <span>Checking...</span>
@@ -705,6 +821,165 @@ export default function ExportPage() {
                     border-radius: 8px;
                     margin-bottom: 16px;
                 }
+
+                /* ── PARTICIPATION GATE ─────────────────────────── */
+                .participation-gate {
+                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(211, 119, 29, 0.12) 50%, rgba(239, 68, 68, 0.06) 100%);
+                    border: 1px solid rgba(239, 68, 68, 0.35);
+                    border-radius: 16px;
+                    padding: 28px 24px;
+                    margin-bottom: 24px;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .participation-gate::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 3px;
+                    background: linear-gradient(90deg, #ef4444, #d3771d, #ef4444);
+                    animation: gate-shimmer 3s linear infinite;
+                }
+                @keyframes gate-shimmer {
+                    0% { background-position: -200% center; }
+                    100% { background-position: 200% center; }
+                }
+                .gate-icon {
+                    font-size: 2rem;
+                    text-align: center;
+                    margin-bottom: 12px;
+                    animation: gate-shake 2s ease-in-out infinite;
+                }
+                @keyframes gate-shake {
+                    0%, 100% { transform: rotate(0deg); }
+                    10% { transform: rotate(-5deg); }
+                    20% { transform: rotate(5deg); }
+                    30% { transform: rotate(0deg); }
+                }
+                .gate-content {
+                    text-align: center;
+                }
+                .gate-title {
+                    font-size: 1.3rem;
+                    font-weight: 800;
+                    color: var(--text-primary);
+                    margin-bottom: 8px;
+                    letter-spacing: -0.3px;
+                }
+                .gate-subtitle {
+                    font-size: 0.9rem;
+                    color: var(--text-secondary);
+                    line-height: 1.5;
+                    margin-bottom: 20px;
+                }
+                .gate-progress-container {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 20px;
+                }
+                .gate-progress-bar {
+                    flex: 1;
+                    height: 10px;
+                    background: rgba(255, 255, 255, 0.08);
+                    border-radius: 10px;
+                    overflow: hidden;
+                }
+                .gate-progress-fill {
+                    height: 100%;
+                    background: linear-gradient(90deg, #ef4444, #d3771d, #22c55e);
+                    border-radius: 10px;
+                    transition: width 0.6s ease;
+                    box-shadow: 0 0 8px rgba(211, 119, 29, 0.4);
+                }
+                .gate-progress-text {
+                    font-size: 0.9rem;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    min-width: 40px;
+                    text-align: right;
+                }
+                .gate-checklist {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                    margin-bottom: 20px;
+                    text-align: left;
+                }
+                .gate-check-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px 14px;
+                    background: rgba(255, 255, 255, 0.04);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 10px;
+                    transition: all 0.3s ease;
+                }
+                .gate-check-item.done {
+                    background: rgba(34, 197, 94, 0.08);
+                    border-color: rgba(34, 197, 94, 0.25);
+                }
+                .check-icon {
+                    font-size: 1.1rem;
+                    flex-shrink: 0;
+                }
+                .check-label {
+                    flex: 1;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    color: var(--text-primary);
+                }
+                .gate-check-item.done .check-label {
+                    color: #22c55e;
+                }
+                .check-progress {
+                    font-size: 0.8rem;
+                    font-weight: 700;
+                    color: var(--text-muted);
+                    font-variant-numeric: tabular-nums;
+                }
+                .gate-check-item.done .check-progress {
+                    color: #22c55e;
+                }
+                .gate-cta {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    padding: 14px 32px;
+                    background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
+                    color: #000;
+                    font-weight: 700;
+                    font-size: 1rem;
+                    border-radius: 50px;
+                    text-decoration: none;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 16px rgba(211, 119, 29, 0.3);
+                }
+                .gate-cta:hover {
+                    transform: scale(1.04);
+                    box-shadow: 0 6px 24px rgba(211, 119, 29, 0.45);
+                }
+
+                /* ── Locked destination cards ──────────────────── */
+                .disabled-card {
+                    opacity: 0.5;
+                    pointer-events: none;
+                    filter: grayscale(0.4);
+                }
+                .locked-overlay {
+                    padding: 12px;
+                    text-align: center;
+                }
+                .locked-text {
+                    font-size: 0.85rem;
+                    color: var(--text-muted);
+                    font-weight: 600;
+                }
+
                 .export-explainer {
                     display: flex;
                     align-items: center;
@@ -814,6 +1089,9 @@ export default function ExportPage() {
                 .export-destinations {
                     margin-top: 28px;
                 }
+                .export-destinations.locked {
+                    margin-top: 16px;
+                }
                 .destinations-title {
                     font-size: 1.1rem;
                     font-weight: 700;
@@ -833,10 +1111,10 @@ export default function ExportPage() {
                     border-color: var(--border-color);
                     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
                 }
-                .spotify-card:hover {
+                .spotify-card:hover:not(.disabled-card) {
                     border-color: rgba(29, 185, 84, 0.4);
                 }
-                .tidal-card:hover {
+                .tidal-card:hover:not(.disabled-card) {
                     border-color: rgba(0, 255, 255, 0.4);
                 }
                 .destination-header {
@@ -987,7 +1265,7 @@ export default function ExportPage() {
                     background: linear-gradient(90deg, #d3771d, #e0a030, #d3771d);
                     opacity: 0.8;
                 }
-                .crate-hackers-card:hover {
+                .crate-hackers-card:hover:not(.disabled-card) {
                     border-color: rgba(211, 119, 29, 0.6);
                     box-shadow: 0 4px 24px rgba(211, 119, 29, 0.2);
                 }
