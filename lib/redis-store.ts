@@ -121,6 +121,7 @@ export interface Song {
     addedBy: string;
     addedByName: string;
     addedByLocation?: string;  // Location display string (e.g., "Austin, TX" or "🇬🇧 London, UK")
+    remixTag?: string;  // Optional freeform remix/bootleg/edit label (e.g., "Purple Disco Machine Edit")
     addedAt: number;
     upvotes: string[];
     downvotes: string[];
@@ -480,7 +481,8 @@ export async function addSong(
 
 // Admin add song - bypasses lock but respects 100-song cap
 export async function adminAddSong(
-    song: Omit<Song, 'upvotes' | 'downvotes' | 'addedAt'>
+    song: Omit<Song, 'upvotes' | 'downvotes' | 'addedAt'>,
+    addedAt?: number
 ): Promise<{ success: boolean; error?: string; displaced?: string }> {
     try {
         // Check if song already exists
@@ -511,7 +513,7 @@ export async function adminAddSong(
             ...song,
             upvotes: [],
             downvotes: [],
-            addedAt: Date.now(),
+            addedAt: addedAt ?? Date.now(),
         };
 
         await redis.hset(SONGS_KEY, { [song.id]: newSong });

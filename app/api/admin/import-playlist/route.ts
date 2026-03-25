@@ -40,7 +40,13 @@ export async function POST(request: Request) {
         let skipped = 0;
         const errors: string[] = [];
 
-        for (const track of tracks) {
+        // Use descending timestamps to preserve playlist order
+        // Track 0 gets the highest addedAt (appears first under "newest first" sort)
+        const baseTimestamp = Date.now();
+
+        for (let i = 0; i < tracks.length; i++) {
+            const track = tracks[i];
+            const addedAt = baseTimestamp - i;
             const songData = {
                 id: track.id,
                 spotifyUri: track.spotifyUri,
@@ -59,7 +65,7 @@ export async function POST(request: Request) {
                 camelotKey: track.camelotKey,
             };
 
-            const result = await adminAddSong(songData);
+            const result = await adminAddSong(songData, addedAt);
 
             if (result.success) {
                 imported++;

@@ -117,6 +117,7 @@ interface Song {
     addedByAvatar?: string;
     addedByColor?: string;
     addedByLocation?: string;  // Location annotation (e.g., "Austin, TX" or "🇬🇧 London, UK")
+    remixTag?: string;  // Optional freeform remix/bootleg/edit label (e.g., "Purple Disco Machine Edit")
     addedAt: number;
     score: number;
     // Audio features for DJs
@@ -210,6 +211,7 @@ export default function HomePage() {
     // 🔄 LOADING STATES - Explicit feedback for all actions
     const [isSavingUsername, setIsSavingUsername] = useState(false);
     const [isAddingSong, setIsAddingSong] = useState<string | null>(null); // Track which song is being added
+    const [remixTags, setRemixTags] = useState<Record<string, string>>({}); // Per-track remix/edit labels
     const [votingInProgress, setVotingInProgress] = useState<Set<string>>(new Set()); // Track songs being voted on
     const [isExporting, setIsExporting] = useState(false);
     const [noSearchResults, setNoSearchResults] = useState(false);
@@ -707,8 +709,9 @@ export default function HomePage() {
             setTwitchParent(window.location.hostname);
 
             // 🔑 Check for admin session (set by admin page login)
+            // Check BOTH sessionStorage (tab-scoped) and localStorage (persistent) 
             try {
-                const storedAdminKey = sessionStorage.getItem('crate-admin-key');
+                const storedAdminKey = sessionStorage.getItem('crate-admin-key') || localStorage.getItem('crate-admin-key');
                 if (storedAdminKey) {
                     // Validate the key against the backend
                     const authRes = await fetch('/api/admin/auth', {
@@ -720,14 +723,17 @@ export default function HomePage() {
                     if (authData.success) {
                         setIsAdminOnFrontPage(true);
                         setAdminKey(storedAdminKey);
+                        // Re-sync to sessionStorage if it came from localStorage
+                        try { sessionStorage.setItem('crate-admin-key', storedAdminKey); } catch (e) { }
                         console.log('🔑 Admin mode activated on front page');
                     } else {
-                        // Invalid key, clean up
+                        // Invalid key, clean up both storage locations
                         sessionStorage.removeItem('crate-admin-key');
+                        try { localStorage.removeItem('crate-admin-key'); } catch (e) { }
                     }
                 }
             } catch (e) {
-                // sessionStorage not available or auth failed — not admin
+                // Storage not available or auth failed — not admin
             }
 
             // 🔐 Hydrate localStorage from cookie (heals Twitch in-app browser wipes)
@@ -1725,6 +1731,7 @@ export default function HomePage() {
 
         setIsAddingSong(track.id);
         try {
+            const trackRemixTag = remixTags[track.id]?.trim() || undefined;
             const res = await fetch('/api/songs', {
                 method: 'POST',
                 headers: {
@@ -1732,7 +1739,7 @@ export default function HomePage() {
                     'x-visitor-id': visitorId,
                     ...(isAdminOnFrontPage && adminKey ? { 'x-admin-key': adminKey } : {}),
                 },
-                body: JSON.stringify({ ...track, addedByName: username || 'Admin', addedByAvatar: userAvatar, addedByColor: userColor, addedByLocation: userLocation || undefined }),
+                body: JSON.stringify({ ...track, addedByName: username || 'Admin', addedByAvatar: userAvatar, addedByColor: userColor, addedByLocation: userLocation || undefined, remixTag: trackRemixTag }),
             });
 
             const data = await res.json();
@@ -1746,6 +1753,8 @@ export default function HomePage() {
             setSearchQuery('');
             setShowResults(false);
             setNoSearchResults(false);
+            // Clear remix tags on successful add
+            setRemixTags({});
             fetchPlaylist();
 
             // Advance coach mark: after first song add, show vote coach mark
@@ -2828,8 +2837,9 @@ export default function HomePage() {
             </header>
 
             {/* 🎮 GAME FEATURES BAR - Leaderboard, Predictions, Sound toggle */}
+            {/* Hidden during Demo Night - no voting games when demo mode is active */}
             {
-                timerRunning && (
+                timerRunning && !demoNight.enabled && (
                     <div className="game-features-bar">
                         <button
                             className={`feature-btn ${showLeaderboard ? 'active' : ''}`}
@@ -2857,9 +2867,10 @@ export default function HomePage() {
             }
 
             {/* 📺 LIVE STREAM HOST — YouTube / Twitch */}
+            {/* Hidden during Demo Night — video is rendered fullscreen inside demo takeover instead */}
             {/* YouTube Mode */}
             {
-                !hideStreamLocally && streamPlatform === 'youtube' && youtubeEmbed && (
+                !demoNight.enabled && !hideStreamLocally && streamPlatform === 'youtube' && youtubeEmbed && (
                     <div className={`stream-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
                         <div className="stream-host-header">
                             <span className="live-host-badge replay-badge">🎬 REPLAY</span>
@@ -2956,9 +2967,9 @@ export default function HomePage() {
             }
 
 
-            {/* Twitch Mode */}
+            {/* Twitch Mode — hidden during Demo Night */}
             {
-                !hideStreamLocally && streamPlatform === 'twitch' && twitchChannel && (
+                !demoNight.enabled && !hideStreamLocally && streamPlatform === 'twitch' && twitchChannel && (
                     <div className={`stream-host twitch-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
                         <div className="stream-host-header twitch-header">
                             <span className="live-host-badge twitch-badge">🟣 LIVE</span>
@@ -3087,7 +3098,7 @@ export default function HomePage() {
 
             {/* 💬 DOCKED TWITCH CHAT - Fixed bottom panel for chatting while scrolling */}
             {
-                chatDocked && streamPlatform === 'twitch' && twitchChannel && !streamMinimized && (
+                !demoNight.enabled && chatDocked && streamPlatform === 'twitch' && twitchChannel && !streamMinimized && (
                     <div className="docked-chat-panel">
                         <div className="docked-chat-header">
                             <span className="docked-chat-handle" />
@@ -3268,27 +3279,119 @@ export default function HomePage() {
             )}
 
 
-            {/* 📡 DEMO NIGHT HERO — Replaces playlist when admin activates demo mode */}
+            {/* 📡 DEMO NIGHT EXPERIENCE — Full takeover when admin activates demo mode */}
             {demoNight.enabled && (
-                <div className="demo-night-hero">
-                    <div className="demo-night-card">
-                        <div className="demo-night-badge">📡 LIVE</div>
-                        <h1 className="demo-night-headline">{demoNight.headline || 'Demo Night'}</h1>
-                        {demoNight.description && (
-                            <p className="demo-night-description">{demoNight.description}</p>
-                        )}
-                        {demoNight.linkUrl && (
+                <div className="demo-night-takeover">
+                    {/* ══ TOP ALERT BANNER ══ */}
+                    <div className="demo-night-alert-banner">
+                        <span className="demo-night-alert-pulse" />
+                        <span className="demo-night-alert-text">🎬 Demo Night — Crate Voting Paused</span>
+                        <span className="demo-night-alert-pulse" />
+                    </div>
+
+                    {/* ══ HERO VIDEO — Near-fullscreen YouTube / Twitch ══ */}
+                    {(youtubeEmbed || twitchChannel) && (
+                        <div className="demo-night-video-hero">
+                            <div className="demo-night-video-wrapper">
+                                {streamPlatform === 'youtube' && youtubeEmbed && (
+                                    <iframe
+                                        ref={youtubePlayerRef}
+                                        src={getYouTubeEmbedSrc(youtubeEmbed)}
+                                        title="Demo Night Stream"
+                                        frameBorder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        className="demo-night-video-iframe"
+                                    />
+                                )}
+                                {streamPlatform === 'twitch' && twitchChannel && (
+                                    <iframe
+                                        src={`https://player.twitch.tv/?channel=${twitchChannel}&parent=${twitchParent}&muted=false`}
+                                        title="Demo Night Twitch Stream"
+                                        frameBorder="0"
+                                        allowFullScreen
+                                        scrolling="no"
+                                        className="demo-night-video-iframe"
+                                    />
+                                )}
+                            </div>
+                            <div className="demo-night-video-label">
+                                <span className="demo-night-video-live-dot" />
+                                <span>{demoNight.headline || 'Demo Night'}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ══ CONTENT DOWNLOAD STRIP ══ */}
+                    {demoNight.linkUrl && (
+                        <div className="demo-night-content-strip">
+                            <div className="demo-night-content-info">
+                                <span className="demo-night-content-badge">🎁 FREE</span>
+                                <div className="demo-night-content-text">
+                                    <span className="demo-night-content-label">{demoNight.linkLabel || 'Download'}</span>
+                                    {demoNight.description && (
+                                        <span className="demo-night-content-desc">{demoNight.description}</span>
+                                    )}
+                                </div>
+                            </div>
                             <a
                                 href={demoNight.linkUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="demo-night-download-btn"
                             >
-                                📥 {demoNight.linkLabel || 'Download'}
+                                📥 Get It Free
                             </a>
-                        )}
-                        <p className="demo-night-footer">Voting is paused tonight — enjoy the show!</p>
+                        </div>
+                    )}
+
+                    {/* ══ GREYED-OUT PHANTOM PLAYLIST ══ */}
+                    <div className="demo-night-phantom-section">
+                        <div className="demo-night-phantom-header">
+                            <div className="demo-night-phantom-left">
+                                <span className="demo-night-phantom-lock">🔒</span>
+                                <span className="demo-night-phantom-title">Crate Voting Returns Next Week</span>
+                            </div>
+                            <div className="demo-night-phantom-logos">
+                                <span className="demo-night-phantom-logo-disabled">Spotify</span>
+                                <span className="demo-night-phantom-logo-disabled">TIDAL</span>
+                            </div>
+                        </div>
+                        <div className="demo-night-phantom-search">
+                            <input type="text" className="demo-night-phantom-input" placeholder="🔍 Search for a song..." disabled />
+                        </div>
+                        <div className="demo-night-phantom-rows">
+                            {[1, 2, 3, 4].map((i) => (
+                                <div key={i} className="demo-night-phantom-row">
+                                    <span className="demo-night-phantom-rank">#{i}</span>
+                                    <div className="demo-night-phantom-art" />
+                                    <div className="demo-night-phantom-info">
+                                        <div className="demo-night-phantom-bar long" />
+                                        <div className="demo-night-phantom-bar short" />
+                                    </div>
+                                    <div className="demo-night-phantom-votes">
+                                        <span className="demo-night-phantom-thumb">👎</span>
+                                        <span className="demo-night-phantom-score">—</span>
+                                        <span className="demo-night-phantom-thumb">👍</span>
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="demo-night-phantom-fade" />
+                        </div>
+                        <div className="demo-night-phantom-cta">
+                            <p className="demo-night-phantom-cta-text">
+                                🗓️ Add songs, vote, and build the playlist — <strong>every week when we go live</strong>
+                            </p>
+                            {broadcastCountdown && (
+                                <p className="demo-night-phantom-countdown">
+                                    Next session in <strong>{broadcastCountdown}</strong>
+                                </p>
+                            )}
+                        </div>
                     </div>
+
+                    {/* ══ BOTTOM INFO ══ */}
+                    <p className="demo-night-footer">Tonight's focus is the live demo — enjoy the show! 🎧</p>
                 </div>
             )}
 
@@ -3384,7 +3487,15 @@ export default function HomePage() {
                             placeholder="Search for a song..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            onBlur={() => setTimeout(() => setShowResults(false), 450)}
+                            onBlur={(e) => {
+                                // Don't close dropdown if focus moved to another element inside the search container
+                                // (e.g. the remix-tag-input). relatedTarget is the element receiving focus.
+                                const container = e.currentTarget.closest('.search-bar-container');
+                                if (container && e.relatedTarget && container.contains(e.relatedTarget as Node)) {
+                                    return; // Focus stayed inside — keep dropdown open
+                                }
+                                setTimeout(() => setShowResults(false), 450);
+                            }}
                             onFocus={() => { searchResults.length > 0 && setShowResults(true); if (showCoachMark === 'search') setShowCoachMark(null); }}
                         />
                         {showCoachMark === 'search' && (
@@ -3403,20 +3514,43 @@ export default function HomePage() {
                                     <div
                                         key={track.id}
                                         className={`search-result-row ${isAddingSong === track.id ? 'adding' : ''} ${isSongInPlaylist(track.id) ? 'in-playlist' : 'can-add'}`}
-                                        onMouseDown={() => isSongInPlaylist(track.id) ? scrollToSongInPlaylist(track.id) : (!isAddingSong && handleAddSong(track))}
                                     >
-                                        <img src={track.albumArt || '/placeholder.svg'} alt="" />
-                                        <div className="result-info">
+                                        <img src={track.albumArt || '/placeholder.svg'} alt="" onMouseDown={() => isSongInPlaylist(track.id) ? scrollToSongInPlaylist(track.id) : (!isAddingSong && handleAddSong(track))} />
+                                        <div className="result-info" onMouseDown={() => isSongInPlaylist(track.id) ? scrollToSongInPlaylist(track.id) : (!isAddingSong && handleAddSong(track))}>
                                             <span className="result-name">{track.name}</span>
                                             <span className="result-artist">{track.artist}</span>
                                         </div>
-                                        {isAddingSong === track.id ? (
-                                            <span className="adding-spinner">⏳</span>
-                                        ) : isSongInPlaylist(track.id) ? (
-                                            <span className="already-added">✓ Already added</span>
-                                        ) : (
-                                            <span className="add-btn-stream">+ Add</span>
+                                        {/* 🔀 Remix Tag — optional inline input */}
+                                        {!isSongInPlaylist(track.id) && (
+                                            <input
+                                                type="text"
+                                                className="remix-tag-input"
+                                                placeholder="🔀 Remix?"
+                                                value={remixTags[track.id] || ''}
+                                                onChange={(e) => setRemixTags(prev => ({ ...prev, [track.id]: e.target.value }))}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onFocus={() => setShowResults(true)}
+                                                onBlur={(e) => {
+                                                    // Same guard: don't close if focus stays inside search container
+                                                    const container = e.currentTarget.closest('.search-bar-container');
+                                                    if (container && e.relatedTarget && container.contains(e.relatedTarget as Node)) {
+                                                        return;
+                                                    }
+                                                    setTimeout(() => setShowResults(false), 450);
+                                                }}
+                                                maxLength={80}
+                                            />
                                         )}
+                                        <div onMouseDown={() => isSongInPlaylist(track.id) ? scrollToSongInPlaylist(track.id) : (!isAddingSong && handleAddSong(track))}>
+                                            {isAddingSong === track.id ? (
+                                                <span className="adding-spinner">⏳</span>
+                                            ) : isSongInPlaylist(track.id) ? (
+                                                <span className="already-added">✓ Already added</span>
+                                            ) : (
+                                                <span className="add-btn-stream">+ Add</span>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -3685,6 +3819,7 @@ export default function HomePage() {
                                             {song.artist} <span className="by-user" style={{ color: isMyComment ? userColor : (song.addedByColor || '#9ca3af'), opacity: 1 }}>• {song.addedByName}{isMyComment && ' (you)'}</span>
                                             {song.addedByLocation && <span className="location-badge" title={`From ${song.addedByLocation}`}>📍{song.addedByLocation}</span>}
                                         </span>
+                                        {song.remixTag && <span className="remix-tag" title={song.remixTag}>🔀 {song.remixTag}</span>}
                                     </div>
 
                                     {/* Voting - inline thumbs down/up with score (hidden if voting disabled) */}

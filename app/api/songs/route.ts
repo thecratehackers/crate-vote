@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getDemoNightConfig } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 
     // Fetch data in parallel - most of these are cached
     // Timer + ban status included here to eliminate separate /api/timer polling
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying, demoNight] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
@@ -76,6 +76,7 @@ export async function GET(request: Request) {
         getTimerStatus(),
         visitorId ? isUserBanned(visitorId) : Promise.resolve(false),
         getNowPlaying(),
+        getDemoNightConfig(),
     ]);
 
     // Check if user can delete during window
@@ -137,6 +138,7 @@ export async function GET(request: Request) {
             isBanned,
         },
         nowPlaying: nowPlaying || null,
+        demoNight,
     });
 }
 
@@ -185,7 +187,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { id, spotifyUri, name, artist, album, albumArt, previewUrl, popularity, bpm, energy, valence, danceability, camelotKey, addedByName, addedByAvatar, addedByLocation, explicit, durationMs } = body;
+        const { id, spotifyUri, name, artist, album, albumArt, previewUrl, popularity, bpm, energy, valence, danceability, camelotKey, addedByName, addedByAvatar, addedByLocation, explicit, durationMs, remixTag } = body;
 
         // ============ INPUT VALIDATION & SANITIZATION ============
 
@@ -237,6 +239,15 @@ export async function POST(request: Request) {
             .trim()
             .slice(0, 50); // Max length
 
+        // Sanitize remixTag (optional, max 80 chars)
+        const sanitizedRemixTag = remixTag
+            ? String(remixTag)
+                .replace(/<[^>]*>/g, '') // Strip HTML tags
+                .replace(/[<>"'&]/g, '') // Remove dangerous chars
+                .trim()
+                .slice(0, 80) || undefined
+            : undefined;
+
         // ⏱️ DURATION LIMIT - Block songs over 8 minutes (skip for admins)
         const MAX_DURATION_MS = 8 * 60 * 1000; // 8 minutes
         if (!isAdmin && durationMs && durationMs > MAX_DURATION_MS) {
@@ -268,6 +279,7 @@ export async function POST(request: Request) {
             addedByName: isAdmin ? `${sanitizedAddedByName} (admin)` : sanitizedAddedByName,
             addedByAvatar: addedByAvatar || '🎧',
             addedByLocation: addedByLocation || undefined,  // Location where user is voting from
+            remixTag: sanitizedRemixTag,  // Optional remix/bootleg/edit label
             // Audio features for DJs
             popularity: popularity || 0,
             bpm: bpm || null,

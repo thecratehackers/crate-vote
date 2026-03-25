@@ -893,7 +893,9 @@ export default function AdminPage() {
             if (data.success) {
                 setIsAuthenticated(true);
                 // Persist admin key so front page can detect admin mode
+                // Use BOTH sessionStorage (tab-scoped) and localStorage (persistent across tabs/sessions)
                 try { sessionStorage.setItem('crate-admin-key', adminPassword); } catch (e) { }
+                try { localStorage.setItem('crate-admin-key', adminPassword); } catch (e) { }
             } else {
                 setLoginError(data.error || 'Incorrect password');
             }
@@ -2164,6 +2166,91 @@ export default function AdminPage() {
                             </div>
                         </div>
 
+                        {/* 📡 DEMO NIGHT MODE */}
+                        <div className="youtube-embed-control stream-config-panel" style={{ marginBottom: '16px' }}>
+                            <div className="control-label">
+                                <span className="tool-icon">📡</span>
+                                <span className="tool-name">Demo Night</span>
+                            </div>
+
+                            {/* Master Toggle */}
+                            <button
+                                className={`platform-btn demo-night-toggle ${demoNightEnabled ? 'active demo-night-active' : ''}`}
+                                onClick={() => {
+                                    const newState = !demoNightEnabled;
+                                    setDemoNightEnabled(newState);
+                                    // Auto-save the toggle immediately
+                                    handleSaveDemoNight(newState);
+                                }}
+                                disabled={isSavingDemoNight}
+                            >
+                                {demoNightEnabled ? '🟢 Demo Night ON' : '⚫ Demo Night OFF'}
+                            </button>
+
+                            {/* Config fields (shown when enabled) */}
+                            {demoNightEnabled && (
+                                <>
+                                    <input
+                                        type="text"
+                                        className="youtube-url-input"
+                                        value={demoNightHeadline}
+                                        onChange={(e) => setDemoNightHeadline(e.target.value)}
+                                        placeholder="Headline (e.g. Demo Night)"
+                                        maxLength={100}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="youtube-url-input"
+                                        value={demoNightDescription}
+                                        onChange={(e) => setDemoNightDescription(e.target.value)}
+                                        placeholder="Description (e.g. Grab your free sample pack)"
+                                        maxLength={300}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="youtube-url-input"
+                                        value={demoNightLinkUrl}
+                                        onChange={(e) => setDemoNightLinkUrl(e.target.value)}
+                                        placeholder="Link URL (Dropbox, Google Drive, etc.)"
+                                        maxLength={500}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="youtube-url-input"
+                                        value={demoNightLinkLabel}
+                                        onChange={(e) => setDemoNightLinkLabel(e.target.value)}
+                                        placeholder="Button label (e.g. Download Sample Pack)"
+                                        maxLength={60}
+                                    />
+                                    <div className="stream-actions">
+                                        <button
+                                            className="tool-btn youtube-save"
+                                            onClick={() => handleSaveDemoNight()}
+                                            disabled={isSavingDemoNight}
+                                        >
+                                            <span className="tool-icon">💾</span>
+                                            <span className="tool-name">{isSavingDemoNight ? 'Saving...' : 'Save Config'}</span>
+                                        </button>
+                                        <button
+                                            className="tool-btn danger-subtle"
+                                            onClick={() => {
+                                                setDemoNightEnabled(false);
+                                                setDemoNightHeadline('Demo Night');
+                                                setDemoNightDescription('');
+                                                setDemoNightLinkUrl('');
+                                                setDemoNightLinkLabel('Download');
+                                                handleSaveDemoNight(false);
+                                            }}
+                                            disabled={isSavingDemoNight}
+                                        >
+                                            <span className="tool-icon">🗑️</span>
+                                            <span className="tool-name">Clear</span>
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
                         {/* 📺 SHOW CLOCK - ESPN-Style Segment Ticker */}
                         <div className="show-clock-section">
                             <button
@@ -2447,90 +2534,7 @@ export default function AdminPage() {
                                 )}
                             </div>
 
-                            {/* 📡 DEMO NIGHT MODE */}
-                            <div className="youtube-embed-control stream-config-panel">
-                                <div className="control-label">
-                                    <span className="tool-icon">📡</span>
-                                    <span className="tool-name">Demo Night</span>
-                                </div>
 
-                                {/* Master Toggle */}
-                                <button
-                                    className={`platform-btn demo-night-toggle ${demoNightEnabled ? 'active demo-night-active' : ''}`}
-                                    onClick={() => {
-                                        const newState = !demoNightEnabled;
-                                        setDemoNightEnabled(newState);
-                                        // Auto-save the toggle immediately
-                                        handleSaveDemoNight(newState);
-                                    }}
-                                    disabled={isSavingDemoNight}
-                                >
-                                    {demoNightEnabled ? '🟢 Demo Night ON' : '⚫ Demo Night OFF'}
-                                </button>
-
-                                {/* Config fields (shown when enabled) */}
-                                {demoNightEnabled && (
-                                    <>
-                                        <input
-                                            type="text"
-                                            className="youtube-url-input"
-                                            value={demoNightHeadline}
-                                            onChange={(e) => setDemoNightHeadline(e.target.value)}
-                                            placeholder="Headline (e.g. Demo Night)"
-                                            maxLength={100}
-                                        />
-                                        <input
-                                            type="text"
-                                            className="youtube-url-input"
-                                            value={demoNightDescription}
-                                            onChange={(e) => setDemoNightDescription(e.target.value)}
-                                            placeholder="Description (e.g. Grab your free sample pack)"
-                                            maxLength={300}
-                                        />
-                                        <input
-                                            type="text"
-                                            className="youtube-url-input"
-                                            value={demoNightLinkUrl}
-                                            onChange={(e) => setDemoNightLinkUrl(e.target.value)}
-                                            placeholder="Link URL (Dropbox, Google Drive, etc.)"
-                                            maxLength={500}
-                                        />
-                                        <input
-                                            type="text"
-                                            className="youtube-url-input"
-                                            value={demoNightLinkLabel}
-                                            onChange={(e) => setDemoNightLinkLabel(e.target.value)}
-                                            placeholder="Button label (e.g. Download Sample Pack)"
-                                            maxLength={60}
-                                        />
-                                        <div className="stream-actions">
-                                            <button
-                                                className="tool-btn youtube-save"
-                                                onClick={() => handleSaveDemoNight()}
-                                                disabled={isSavingDemoNight}
-                                            >
-                                                <span className="tool-icon">💾</span>
-                                                <span className="tool-name">{isSavingDemoNight ? 'Saving...' : 'Save Config'}</span>
-                                            </button>
-                                            <button
-                                                className="tool-btn danger-subtle"
-                                                onClick={() => {
-                                                    setDemoNightEnabled(false);
-                                                    setDemoNightHeadline('Demo Night');
-                                                    setDemoNightDescription('');
-                                                    setDemoNightLinkUrl('');
-                                                    setDemoNightLinkLabel('Download');
-                                                    handleSaveDemoNight(false);
-                                                }}
-                                                disabled={isSavingDemoNight}
-                                            >
-                                                <span className="tool-icon">🗑️</span>
-                                                <span className="tool-name">Clear</span>
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
                         </div>
                     </div>
                 )}
