@@ -152,3 +152,41 @@ export const KEYS = {
 
 export const MAIN_TAB_ID = 'main';
 export const MAIN_TAB_SLUG = 'cratevote';
+
+// ----------------------------------------------------------------------------
+// Archive voting window
+// ----------------------------------------------------------------------------
+// After a show is archived, votes (and song adds, if the tab allows) remain
+// open for this window. Once the window elapses, the show transitions to
+// permanently locked: the timestamp and ranking are preserved forever, but
+// no further mutations are accepted.
+// ----------------------------------------------------------------------------
+
+export const ARCHIVE_VOTING_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * Returns true when an archived show is past its 30-day votable window.
+ * Active and draft shows always return false (their lock state is governed
+ * by the per-show `locked` flag, not the archive timer).
+ */
+export function isArchivePastVotingWindow(show: {
+    status: ShowStatus;
+    archivedAt: number | null;
+}): boolean {
+    if (show.status !== 'archived') return false;
+    if (!show.archivedAt) return false;
+    return Date.now() - show.archivedAt > ARCHIVE_VOTING_WINDOW_MS;
+}
+
+/**
+ * Milliseconds remaining in the 30-day archive voting window.
+ * Returns null for non-archived shows; 0 for expired archives.
+ */
+export function archiveVotingWindowRemainingMs(show: {
+    status: ShowStatus;
+    archivedAt: number | null;
+}): number | null {
+    if (show.status !== 'archived' || !show.archivedAt) return null;
+    const elapsed = Date.now() - show.archivedAt;
+    return Math.max(0, ARCHIVE_VOTING_WINDOW_MS - elapsed);
+}

@@ -16,6 +16,7 @@ import {
     ShowStatus,
     ShowExportEligibility,
     KEYS,
+    isArchivePastVotingWindow,
 } from '../entities';
 import type { Song as LegacySong, SessionPermissions } from '../redis-store';
 import { getTab, generateId } from './tab-store';
@@ -206,7 +207,10 @@ export async function archiveShow(showId: string): Promise<{ success: boolean; e
         ...show,
         status: 'archived',
         archivedAt: snapshot.archivedAt,
-        locked: true,    // Lock by default; admin can unlock for archived voting
+        // Stay unlocked: archived voting is governed by the 30-day window
+        // enforced in voteOnShowSong / addShowSong. Admins can still flip
+        // `locked` manually via updateShow if they want a hard freeze.
+        locked: false,
     };
 
     const ops: Promise<unknown>[] = [
@@ -309,8 +313,13 @@ export async function addShowSong(input: AddShowSongInput): Promise<{
     if (!tab) return { success: false, error: 'Tab not found.' };
 
     if (!input.isAdmin) {
-        if (show.status === 'archived' && !tab.settings.allowArchivedVoting) {
-            return { success: false, error: 'This show is archived and no longer accepts new songs.' };
+        if (show.status === 'archived') {
+            if (!tab.settings.allowArchivedVoting) {
+                return { success: false, error: 'This show is archived and no longer accepts new songs.' };
+            }
+            if (isArchivePastVotingWindow(show)) {
+                return { success: false, error: 'This archive is past its 30-day window and is permanently locked.' };
+            }
         }
         if (show.locked) {
             return { success: false, error: 'This show is currently locked.' };
@@ -401,8 +410,13 @@ export async function voteOnShowSong(
     if (!tab) return { success: false, error: 'Tab not found.' };
 
     if (!isAdmin) {
-        if (show.status === 'archived' && !tab.settings.allowArchivedVoting) {
-            return { success: false, error: 'Voting on archived shows is disabled.' };
+        if (show.status === 'archived') {
+            if (!tab.settings.allowArchivedVoting) {
+                return { success: false, error: 'Voting on archived shows is disabled.' };
+            }
+            if (isArchivePastVotingWindow(show)) {
+                return { success: false, error: 'This archive is past its 30-day window and is permanently locked.' };
+            }
         }
         if (show.locked) {
             return { success: false, error: 'This show is currently locked.' };

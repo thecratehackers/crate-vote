@@ -9,6 +9,10 @@ import { ensureMainTabHasShow } from '@/lib/migration/legacy-to-multi-tab';
 import VotingDashboard, {
     type DashboardSong,
 } from '@/components/voting/VotingDashboard';
+import {
+    isArchivePastVotingWindow,
+    archiveVotingWindowRemainingMs,
+} from '@/lib/entities';
 import Link from 'next/link';
 
 // Tab landing page: shows the tab's current active show, or invites the user
@@ -65,6 +69,11 @@ export default async function TabPage({
         tabId: s.tabId,
     }));
 
+    const archiveExpired = isArchivePastVotingWindow(currentShow);
+    const archiveAllowsVoting =
+        currentShow.status !== 'archived' ||
+        (tab.settings.allowArchivedVoting && !archiveExpired);
+
     return (
         <VotingDashboard
             tab={{
@@ -90,10 +99,19 @@ export default async function TabPage({
             initialSongs={dashboardSongs}
             initialUserVotes={{ upvotedSongIds: [], downvotedSongIds: [] }}
             snapshot={snapshot}
+            archiveWindow={
+                currentShow.status === 'archived'
+                    ? {
+                          expired: archiveExpired,
+                          remainingMs: archiveVotingWindowRemainingMs(currentShow),
+                          windowDays: 30,
+                      }
+                    : null
+            }
             canVote={
+                archiveAllowsVoting &&
                 !currentShow.locked &&
-                currentShow.permissions.canVote &&
-                (currentShow.status !== 'archived' || tab.settings.allowArchivedVoting)
+                currentShow.permissions.canVote
             }
             canAddSongs={
                 currentShow.status === 'active' &&

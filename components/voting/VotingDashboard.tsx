@@ -55,6 +55,12 @@ export interface DashboardSnapshot {
     ranking: Array<{ rank: number; songId: string; name: string; artist: string; score: number }>;
 }
 
+export interface ArchiveWindowInfo {
+    expired: boolean;
+    remainingMs: number | null;
+    windowDays: number;
+}
+
 interface VotingDashboardProps {
     tab: DashboardTab;
     show: DashboardShow;
@@ -63,6 +69,7 @@ interface VotingDashboardProps {
     snapshot?: DashboardSnapshot | null;
     canVote: boolean;
     canAddSongs: boolean;
+    archiveWindow?: ArchiveWindowInfo | null;
     pollIntervalMs?: number;
 }
 
@@ -78,6 +85,7 @@ export default function VotingDashboard({
     snapshot,
     canVote,
     canAddSongs,
+    archiveWindow,
     pollIntervalMs = 8000,
 }: VotingDashboardProps) {
     const [songs, setSongs] = useState<DashboardSong[]>(initialSongs);
@@ -237,7 +245,11 @@ export default function VotingDashboard({
 
             {error && <div className="vd-error">{error}</div>}
 
-            {!canVote && show.status === 'archived' && (
+            {show.status === 'archived' && archiveWindow && (
+                <ArchiveWindowBanner archive={archiveWindow} canVote={canVote} />
+            )}
+
+            {!canVote && show.status === 'archived' && !archiveWindow?.expired && (
                 <div className="vd-notice">
                     Voting is disabled on this archived show.
                 </div>
@@ -279,6 +291,30 @@ export default function VotingDashboard({
 // ----------------------------------------------------------------------------
 // Sub-components
 // ----------------------------------------------------------------------------
+
+function ArchiveWindowBanner({
+    archive,
+    canVote,
+}: {
+    archive: ArchiveWindowInfo;
+    canVote: boolean;
+}) {
+    if (archive.expired) {
+        return (
+            <div className="vd-notice vd-notice-locked">
+                🔒 This archive is past its {archive.windowDays}-day voting window.
+                Rankings are permanently locked, but the show stays preserved here.
+            </div>
+        );
+    }
+    const remaining = archive.remainingMs ?? 0;
+    return (
+        <div className="vd-notice vd-notice-window">
+            ⏳ Archived show — voting open for {formatDuration(remaining)} more
+            {canVote ? '. Keep voting to shift the ranking.' : '.'}
+        </div>
+    );
+}
 
 function ShowStatusBadge({ show }: { show: DashboardShow }) {
     const label =
@@ -389,4 +425,21 @@ function formatRelativeDate(timestamp: number): string {
     if (diff < day) return `${Math.floor(diff / hour)}h ago`;
     if (diff < 7 * day) return `${Math.floor(diff / day)}d ago`;
     return new Date(timestamp).toLocaleDateString();
+}
+
+function formatDuration(ms: number): string {
+    if (ms <= 0) return '0 minutes';
+    const day = 24 * 60 * 60 * 1000;
+    const hour = 60 * 60 * 1000;
+    const min = 60 * 1000;
+    if (ms >= day) {
+        const days = Math.floor(ms / day);
+        return `${days} day${days !== 1 ? 's' : ''}`;
+    }
+    if (ms >= hour) {
+        const hours = Math.floor(ms / hour);
+        return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    }
+    const mins = Math.max(1, Math.floor(ms / min));
+    return `${mins} minute${mins !== 1 ? 's' : ''}`;
 }

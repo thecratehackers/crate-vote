@@ -292,6 +292,70 @@ export async function endCurrentShowAndArchive(
 }
 
 // ----------------------------------------------------------------------------
+// "Stop the hackathon" - the canonical end-of-show flow.
+// ----------------------------------------------------------------------------
+// Called by the legacy reset endpoints (POST /api/playlist {action:'reset'}
+// and POST /api/admin/wipe-session). Always:
+//   1. Snapshots the current legacy session into an archived Show under the
+//      main tab (preserved with timestamp, votable for 30 days, then locked).
+//   2. Resets the legacy session so a fresh round can start.
+//
+// If the snapshot fails (e.g. no songs), the legacy reset still proceeds so
+// admins are never blocked from starting a new round.
+// ----------------------------------------------------------------------------
+
+export async function archiveAndResetLegacySession(
+    adminId: string,
+    title?: string
+): Promise<{
+    success: boolean;
+    archivedShowId?: string;
+    songsArchived?: number;
+    archiveError?: string;
+}> {
+    // Lazy import to avoid a circular dependency between migration and
+    // redis-store (which imports nothing from migration but is heavy).
+    const { resetSession, getSortedSongs } = await import('../redis-store');
+
+    let archivedShowId: string | undefined;
+    let songsArchived = 0;
+    let archiveError: string | undefined;
+
+    try {
+        // Skip the snapshot if the playlist is empty - no point archiving an
+        // empty show. Admins can still create empty drafts manually.
+        const liveSongs = await getSortedSongs();
+        if (liveSongs.length > 0) {
+            const result = await snapshotLegacySessionAsShow({
+                title: title || `Hackathon ended ${new Date().toLocaleString()}`,
+                createdBy: adminId,
+                archiveImmediately: true,
+            });
+            if (result.success && result.showId) {
+                archivedShowId = result.showId;
+                songsArchived = result.songsCopied || 0;
+            } else {
+                archiveError = result.error || 'Snapshot returned no show.';
+            }
+        }
+    } catch (error) {
+        console.error('[migration] archive-on-reset snapshot failed:', error);
+        archiveError = 'Snapshot threw an exception - check server logs.';
+    }
+
+    // Always reset the legacy session, even if the snapshot failed, so the
+    // admin's "stop the hackathon" intent is honored.
+    await resetSession();
+
+    return {
+        success: true,
+        archivedShowId,
+        songsArchived,
+        archiveError,
+    };
+}
+
+// ----------------------------------------------------------------------------
 // Diagnostic helpers
 // ----------------------------------------------------------------------------
 

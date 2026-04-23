@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resetSession } from '@/lib/redis-store';
 import { cookies } from 'next/headers';
+import { archiveAndResetLegacySession } from '@/lib/migration/legacy-to-multi-tab';
 
 export async function POST(request: NextRequest) {
-    // Check admin auth via cookie
     const cookieStore = cookies();
     const adminAuth = cookieStore.get('admin-auth');
 
@@ -12,13 +11,18 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        await resetSession();
+        // Snapshot the live session into an archived show before wiping.
+        // The archive is votable for 30 days, then permanently locked.
+        const result = await archiveAndResetLegacySession(adminAuth.value);
         return NextResponse.json({
             success: true,
-            message: 'Session wiped! All songs, votes, and user data cleared.'
+            message: 'Session archived and wiped. Archive is votable for 30 days.',
+            archivedShowId: result.archivedShowId,
+            songsArchived: result.songsArchived,
+            archiveError: result.archiveError,
         });
     } catch (error) {
-        console.error('Failed to wipe session:', error);
+        console.error('Failed to archive + wipe session:', error);
         return NextResponse.json({ error: 'Failed to wipe session' }, { status: 500 });
     }
 }

@@ -8,6 +8,10 @@ import {
 import VotingDashboard, {
     type DashboardSong,
 } from '@/components/voting/VotingDashboard';
+import {
+    isArchivePastVotingWindow,
+    archiveVotingWindowRemainingMs,
+} from '@/lib/entities';
 
 // Specific show page - works for both current and archived shows.
 export default async function ShowPage({
@@ -75,10 +79,20 @@ export default async function ShowPage({
             initialSongs={dashboardSongs}
             initialUserVotes={{ upvotedSongIds: [], downvotedSongIds: [] }}
             snapshot={snapshot}
+            archiveWindow={
+                show.status === 'archived'
+                    ? {
+                          expired: isArchivePastVotingWindow(show),
+                          remainingMs: archiveVotingWindowRemainingMs(show),
+                          windowDays: 30,
+                      }
+                    : null
+            }
             canVote={
                 !show.locked &&
                 show.permissions.canVote &&
-                (show.status !== 'archived' || tab.settings.allowArchivedVoting)
+                (show.status !== 'archived' ||
+                    (tab.settings.allowArchivedVoting && !isArchivePastVotingWindow(show)))
             }
             canAddSongs={
                 show.status === 'active' &&

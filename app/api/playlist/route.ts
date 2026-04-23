@@ -109,9 +109,19 @@ export async function POST(request: Request) {
             case 'unlock':
                 await setPlaylistLocked(false);
                 return NextResponse.json({ success: true, isLocked: false });
-            case 'reset':
-                await resetSession();
-                return NextResponse.json({ success: true });
+            case 'reset': {
+                // "Stop the hackathon": snapshot current session into the
+                // archive (votable for 30 days, then permanently locked) and
+                // then reset the legacy session for a fresh round.
+                const { archiveAndResetLegacySession } = await import('@/lib/migration/legacy-to-multi-tab');
+                const result = await archiveAndResetLegacySession(adminId, title);
+                return NextResponse.json({
+                    success: true,
+                    archivedShowId: result.archivedShowId,
+                    songsArchived: result.songsArchived,
+                    archiveError: result.archiveError,
+                });
+            }
             case 'ban':
                 if (!visitorId) {
                     return NextResponse.json({ error: 'User ID is required to ban someone. Select a user from the list.' }, { status: 400 });

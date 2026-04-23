@@ -173,6 +173,18 @@
     font-size: 13px;
 }
 
+.vd-notice-window {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: var(--success);
+}
+
+.vd-notice-locked {
+    background: rgba(176, 176, 176, 0.06);
+    border-color: rgba(176, 176, 176, 0.2);
+    color: var(--text-secondary);
+}
+
 .vd-empty {
     text-align: center;
     padding: 60px 20px;
