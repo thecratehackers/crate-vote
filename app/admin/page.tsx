@@ -83,7 +83,7 @@ export default function AdminPage() {
         return (
             <div className="admin-login">
                 <div className="admin-login-box">
-                    <h1>CrateVote Admin</h1>
+                    <h1>Hackathons Admin</h1>
                     <p>Enter the admin password to manage tabs and shows.</p>
                     <input
                         type="password"
@@ -94,7 +94,7 @@ export default function AdminPage() {
                     />
                     <button onClick={() => authenticate(adminKey)}>Enter</button>
                     {authError && <div className="admin-error">{authError}</div>}
-                    <Link href="/" className="admin-back">← Back to CrateVote</Link>
+                    <Link href="/" className="admin-back">← Back to Hackathons</Link>
                 </div>
             </div>
         );
@@ -169,7 +169,7 @@ function AdminDashboard({ adminKey }: { adminKey: string }) {
 
     const snapshotLegacyAsArchive = async () => {
         if (!confirm(
-            'This will snapshot the current live CrateVote session into an archived show under the main tab. ' +
+            'This will snapshot the current live Hackathons session into an archived show under the main tab. ' +
             'The live session will continue running. Proceed?'
         )) return;
         setBusy(true);
@@ -177,7 +177,7 @@ function AdminDashboard({ adminKey }: { adminKey: string }) {
             const res = await fetch('/api/admin/shows', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ action: 'endLegacy', title: prompt('Title for the archived show?', 'CrateVote Show') || undefined }),
+                body: JSON.stringify({ action: 'endLegacy', title: prompt('Title for the archived show?', 'Hackathons Show') || undefined }),
             });
             const data = await res.json();
             if (res.ok) {
@@ -328,7 +328,7 @@ function AdminDashboard({ adminKey }: { adminKey: string }) {
         <div className="admin-root">
             <header className="admin-header">
                 <div>
-                    <h1>CrateVote Admin</h1>
+                    <h1>Hackathons Admin</h1>
                     <p className="admin-sub">Manage tabs, shows, and the historical archive.</p>
                 </div>
                 <div className="admin-header-actions">

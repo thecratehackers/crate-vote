@@ -252,7 +252,7 @@ export default function VotingDashboard({
                             <p>No songs in this show yet.</p>
                             {canAddSongs && (
                                 <p className="vd-empty-sub">
-                                    Songs can be added from the main CrateVote experience.
+                                    Songs can be added from the main Hackathons experience.
                                 </p>
                             )}
                         </div>

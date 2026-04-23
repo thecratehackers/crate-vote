@@ -1,4 +1,4 @@
-# Crate Vote 🎵
+# Hackathons 🎵
 
 A collaborative playlist voting app. Let your audience build and vote on the playlist together!
 

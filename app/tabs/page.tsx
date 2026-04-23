@@ -19,7 +19,7 @@ export default async function TabsBrowsePage() {
     return (
         <div className="tabs-browse-root">
             <header className="tabs-browse-header">
-                <h1>CrateVote Tabs</h1>
+                <h1>Hackathons Tabs</h1>
                 <p>The main show plus every community-curated voting space.</p>
             </header>
 

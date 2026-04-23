@@ -2757,10 +2757,7 @@ export default function HomePage() {
                         <img src="/crate-hackers-master-logo.png" alt="Crate Hackers" className="master-logo" />
                     </Link>
 
-                    {/* Multi-tab navigation - browse community tabs and the historical archive */}
-                    <Link href="/tabs" className="admin-link-subtle" title="Browse all tabs">
-                        🧭 Tabs
-                    </Link>
+                    {/* Historical archive - browse past shows */}
                     <Link href="/archive" className="admin-link-subtle" title="View past shows">
                         📚 Archive
                     </Link>

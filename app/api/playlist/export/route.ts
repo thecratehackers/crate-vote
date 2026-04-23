@@ -92,7 +92,7 @@ export async function POST(request: Request) {
             accessToken,
             user.id,
             name || 'Hackathon Playlist',
-            description || 'Created with Crate Vote by Crate Hackers. Get your own live voting playlist at www.cratehackers.com 🎧',
+            description || 'Created with Hackathons by Crate Hackers. Get your own live voting playlist at www.cratehackers.com 🎧',
             trackUris
         );
 

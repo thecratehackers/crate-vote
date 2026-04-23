@@ -237,8 +237,8 @@ export async function ensureMainTabHasShow(): Promise<void> {
                 // No shows yet - snapshot the legacy session as Show #1
                 const result = await snapshotLegacySessionAsShow({
                     createdBy: 'system-bootstrap',
-                    title: 'CrateVote #1',
-                    description: 'Imported from the original CrateVote session.',
+                    title: 'Hackathons #1',
+                    description: 'Imported from the original Hackathons session.',
                 });
 
                 if (result.success && result.showId) {

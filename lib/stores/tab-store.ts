@@ -216,8 +216,8 @@ export async function ensureMainTab(): Promise<Tab> {
     const result = await createTab({
         id: MAIN_TAB_ID,
         slug: MAIN_TAB_SLUG,
-        name: 'CrateVote',
-        description: 'The original CrateVote show.',
+        name: 'Hackathons',
+        description: 'The original Hackathons show.',
         isMainTab: true,
         createdBy: 'system',
     });
