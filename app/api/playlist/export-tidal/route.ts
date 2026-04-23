@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getSortedSongs, getPlaylistTitle } from '@/lib/redis-store';
+import { getSortedSongs, getPlaylistTitle, getExportEligibility } from '@/lib/redis-store';
 import {
     getTidalClientToken,
     getSpotifyISRCs,
@@ -11,6 +11,35 @@ import {
 
 // POST /api/playlist/export-tidal — Export playlist to TIDAL
 export async function POST(request: Request) {
+    const visitorId = request.headers.get('x-visitor-id');
+    console.log('[export-tidal] request received', { visitorId });
+
+    // Server-side participation gate. Without this, the client-side check is the
+    // only thing stopping a stale-state user (or a direct POST) from exporting.
+    if (!visitorId) {
+        return NextResponse.json(
+            { error: 'Missing visitor ID. Please refresh the page and try again.' },
+            { status: 400 }
+        );
+    }
+    const eligibility = await getExportEligibility(visitorId);
+    if (!eligibility.eligible) {
+        console.warn('[export-tidal] blocked - ineligible', {
+            visitorId,
+            songsAdded: eligibility.songsAdded,
+            upvotesUsed: eligibility.upvotesUsed,
+            downvotesUsed: eligibility.downvotesUsed,
+            reasons: eligibility.reasons,
+        });
+        return NextResponse.json(
+            {
+                error: 'You need to participate before exporting. ' + eligibility.reasons.join(' '),
+                eligibility,
+            },
+            { status: 403 }
+        );
+    }
+
     const cookieStore = await cookies();
     const accessToken = cookieStore.get('tidal_access_token')?.value;
 

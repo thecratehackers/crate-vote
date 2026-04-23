@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { vote, adminVote, isPlaylistLocked, addActivity } from '@/lib/redis-store';
+import { vote, adminVote, isPlaylistLocked, addActivity, getSortedSongs, getUserVotes, censorProfanity } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { checkRateLimit, checkSongVoteLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
@@ -87,7 +87,25 @@ export async function POST(
             });
         }
 
-        return NextResponse.json({ success: true });
+        // 🚀 Return fresh state so client can skip the next poll cycle entirely
+        const [freshSongs, freshUserVotes] = await Promise.all([
+            getSortedSongs(),
+            getUserVotes(visitorId),
+        ]);
+
+        const censoredSongs = freshSongs.map(song => ({
+            ...song,
+            name: censorProfanity(song.name),
+            artist: censorProfanity(song.artist),
+        }));
+
+        return NextResponse.json({
+            success: true,
+            freshState: {
+                songs: censoredSongs,
+                userVotes: freshUserVotes,
+            },
+        });
     } catch (error) {
         console.error('Vote error:', error);
         return NextResponse.json({ error: 'Something went wrong. Please refresh and try voting again.' }, { status: 500 });

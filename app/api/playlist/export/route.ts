@@ -1,11 +1,40 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getSortedSongs, getPlaylistTitle } from '@/lib/redis-store';
+import { getSortedSongs, getPlaylistTitle, getExportEligibility } from '@/lib/redis-store';
 import { createPlaylist, getCurrentUser } from '@/lib/spotify';
 
 // POST - Export playlist to Spotify
 export async function POST(request: Request) {
+    const visitorId = request.headers.get('x-visitor-id');
+    console.log('[export-spotify] request received', { visitorId });
+
+    // Server-side participation gate. Without this, the client-side check is the
+    // only thing stopping a stale-state user (or a direct POST) from exporting.
+    if (!visitorId) {
+        return NextResponse.json(
+            { error: 'Missing visitor ID. Please refresh the page and try again.' },
+            { status: 400 }
+        );
+    }
+    const eligibility = await getExportEligibility(visitorId);
+    if (!eligibility.eligible) {
+        console.warn('[export-spotify] blocked - ineligible', {
+            visitorId,
+            songsAdded: eligibility.songsAdded,
+            upvotesUsed: eligibility.upvotesUsed,
+            downvotesUsed: eligibility.downvotesUsed,
+            reasons: eligibility.reasons,
+        });
+        return NextResponse.json(
+            {
+                error: 'You need to participate before exporting. ' + eligibility.reasons.join(' '),
+                eligibility,
+            },
+            { status: 403 }
+        );
+    }
+
     const session = await getServerSession(authOptions);
 
     // @ts-expect-error - custom session type

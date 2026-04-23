@@ -190,7 +190,10 @@ export default function ExportPage() {
             const cleanTitle = stripEmojis(playlistTitle);
             const res = await fetch('/api/playlist/export', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(visitorId ? { 'x-visitor-id': visitorId } : {}),
+                },
                 body: JSON.stringify({
                     name: cleanTitle,
                     description: `Collaborative playlist from DJ Booth | ${tracks.length} songs`,
@@ -200,6 +203,10 @@ export default function ExportPage() {
             const data = await res.json();
 
             if (!res.ok) {
+                // Server says we're not eligible — sync the client gate so the UI matches reality
+                if (res.status === 403 && data.eligibility) {
+                    setEligibility(data.eligibility);
+                }
                 throw new Error(data.error || 'Export failed');
             }
 
@@ -237,7 +244,10 @@ export default function ExportPage() {
             const cleanTitle = stripEmojis(playlistTitle);
             const res = await fetch('/api/playlist/export-tidal', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(visitorId ? { 'x-visitor-id': visitorId } : {}),
+                },
                 body: JSON.stringify({
                     name: cleanTitle,
                     description: `Collaborative playlist from Crate Hackers | ${tracks.length} crowd-approved songs 🎧`,
@@ -247,6 +257,10 @@ export default function ExportPage() {
             const data = await res.json();
 
             if (!res.ok) {
+                // Server says we're not eligible — sync the client gate so the UI matches reality
+                if (res.status === 403 && data.eligibility) {
+                    setEligibility(data.eligibility);
+                }
                 throw new Error(data.error || 'TIDAL export failed');
             }
 
@@ -575,11 +589,13 @@ export default function ExportPage() {
                                 <span className="check-label">Vote songs up 👍</span>
                                 <span className="check-progress">{eligibility.upvotesUsed}/{eligibility.upvotesRequired}</span>
                             </div>
-                            <div className={`gate-check-item ${eligibility.downvotesUsed >= eligibility.downvotesRequired ? 'done' : ''}`}>
-                                <span className="check-icon">{eligibility.downvotesUsed >= eligibility.downvotesRequired ? '✅' : '⬜'}</span>
-                                <span className="check-label">Vote songs down 👎</span>
-                                <span className="check-progress">{eligibility.downvotesUsed}/{eligibility.downvotesRequired}</span>
-                            </div>
+                            {eligibility.downvotesRequired > 0 && (
+                                <div className={`gate-check-item ${eligibility.downvotesUsed >= eligibility.downvotesRequired ? 'done' : ''}`}>
+                                    <span className="check-icon">{eligibility.downvotesUsed >= eligibility.downvotesRequired ? '✅' : '⬜'}</span>
+                                    <span className="check-label">Vote songs down 👎</span>
+                                    <span className="check-progress">{eligibility.downvotesUsed}/{eligibility.downvotesRequired}</span>
+                                </div>
+                            )}
                         </div>
 
                         <Link href="/" className="gate-cta">

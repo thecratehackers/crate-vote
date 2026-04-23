@@ -2172,6 +2172,14 @@ export default function HomePage() {
                     toast.error(data.error || 'Vote failed — try again');
                 }
             } else {
+                const data = await res.json();
+                // ✅ Hydrate with authoritative server state — skips the next poll cycle
+                if (data.freshState?.songs) {
+                    setSongs(data.freshState.songs);
+                }
+                if (data.freshState?.userVotes) {
+                    setUserVotes(data.freshState.userVotes);
+                }
                 // Success — always confirm so users know their vote counted
                 toast.success(vote === 1 ? '👍 Upvote counted' : '👎 Downvote counted');
                 // Dismiss vote coach mark on first successful vote
@@ -2747,6 +2755,14 @@ export default function HomePage() {
                 <div className="header-left">
                     <Link href="/" className="logo-home-link" title="Go to Home">
                         <img src="/crate-hackers-master-logo.png" alt="Crate Hackers" className="master-logo" />
+                    </Link>
+
+                    {/* Multi-tab navigation - browse community tabs and the historical archive */}
+                    <Link href="/tabs" className="admin-link-subtle" title="Browse all tabs">
+                        🧭 Tabs
+                    </Link>
+                    <Link href="/archive" className="admin-link-subtle" title="View past shows">
+                        📚 Archive
                     </Link>
 
                     {/* Rules info popover */}

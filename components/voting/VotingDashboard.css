@@ -1,0 +1,332 @@
+/* =====================================================================
+   VotingDashboard - shared voting UI for community tabs and archives
+   Inherits the dark CrateVote palette via CSS variables in globals.css.
+   ===================================================================== */
+
+.vd-root {
+    --tab-accent: var(--orange-primary);
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    color: var(--text-primary);
+}
+
+.vd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.vd-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vd-back {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    width: fit-content;
+}
+
+.vd-back:hover {
+    color: var(--tab-accent);
+}
+
+.vd-tab-name {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--tab-accent);
+    margin: 0;
+    font-family: 'Rubik', sans-serif;
+}
+
+.vd-tab-desc {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 0;
+    max-width: 60ch;
+}
+
+.vd-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    border: 1px solid currentColor;
+}
+
+.vd-status-active { color: var(--success); background: rgba(34, 197, 94, 0.1); }
+.vd-status-archived { color: var(--text-secondary); background: rgba(176, 176, 176, 0.08); }
+.vd-status-draft { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+
+.vd-show-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 18px;
+}
+
+.vd-show-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    flex: 1;
+    min-width: 200px;
+}
+
+.vd-show-number {
+    color: var(--tab-accent);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.vd-show-meta {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.vd-show-links {
+    margin-left: auto;
+}
+
+.vd-link {
+    color: var(--tab-accent);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.vd-link:hover {
+    text-decoration: underline;
+}
+
+.vd-snapshot-toggle {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    width: fit-content;
+}
+
+.vd-tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+}
+
+.vd-tab-btn:hover { color: var(--text-primary); }
+
+.vd-tab-btn.active {
+    background: var(--bg-elevated);
+    color: var(--tab-accent);
+}
+
+.vd-snapshot-header {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+}
+
+.vd-error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.vd-notice {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--warning);
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    font-size: 13px;
+}
+
+.vd-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+}
+
+.vd-empty-sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+.vd-songs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vd-song {
+    display: grid;
+    grid-template-columns: 36px 56px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    background: var(--bg-secondary);
+    border: 1px solid transparent;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.vd-song:hover {
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.vd-song-top {
+    background: linear-gradient(90deg, rgba(211, 119, 29, 0.08), transparent 60%);
+    border-color: var(--border-color);
+}
+
+.vd-rank {
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.vd-art {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    background: var(--bg-tertiary);
+}
+
+.vd-art-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 24px;
+}
+
+.vd-song-info {
+    min-width: 0;
+}
+
+.vd-song-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vd-song-artist {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 2px;
+}
+
+.vd-song-meta {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-top: 4px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.vd-remix {
+    color: var(--gold);
+}
+
+.vd-vote {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vd-vote-btn {
+    width: 36px;
+    height: 36px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vd-vote-btn:hover:not(:disabled) {
+    color: var(--text-primary);
+    border-color: var(--tab-accent);
+}
+
+.vd-vote-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.vd-vote-up.active {
+    background: rgba(34, 197, 94, 0.18);
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.vd-vote-down.active {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.vd-score {
+    min-width: 42px;
+    text-align: center;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+}
+
+.vd-score.positive { color: var(--success); }
+.vd-score.negative { color: var(--error); }
+
+@media (max-width: 600px) {
+    .vd-song {
+        grid-template-columns: 28px 44px 1fr auto;
+        gap: 10px;
+        padding: 8px 10px;
+    }
+    .vd-art { width: 44px; height: 44px; }
+    .vd-tab-name { font-size: 22px; }
+    .vd-vote-btn { width: 32px; height: 32px; }
+}

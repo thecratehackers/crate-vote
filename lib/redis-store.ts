@@ -803,9 +803,9 @@ export async function getUserStatus(visitorId: string): Promise<{
 // ============ EXPORT ELIGIBILITY ============
 // Users must fully participate to export the playlist to Spotify/TIDAL
 // Requirements: add 5 songs + use at least 1 upvote + use at least 1 downvote
-export const EXPORT_MIN_SONGS = 5;  // Must add at least 5 songs
+export const EXPORT_MIN_SONGS = 1;  // Must add at least 1 song
 export const EXPORT_MIN_UPVOTES = 1;  // Must cast at least 1 upvote
-export const EXPORT_MIN_DOWNVOTES = 1;  // Must cast at least 1 downvote
+export const EXPORT_MIN_DOWNVOTES = 0;  // Downvotes no longer required to export
 
 export interface ExportEligibility {
     eligible: boolean;
@@ -843,11 +843,14 @@ export async function getExportEligibility(visitorId: string): Promise<ExportEli
 
         const eligible = reasons.length === 0;
 
-        // Calculate progress as average of all 3 requirements
-        const songProgress = Math.min(1, songsAdded / EXPORT_MIN_SONGS);
-        const upvoteProgress = Math.min(1, upvotesUsed / EXPORT_MIN_UPVOTES);
-        const downvoteProgress = Math.min(1, downvotesUsed / EXPORT_MIN_DOWNVOTES);
-        const progress = Math.round(((songProgress + upvoteProgress + downvoteProgress) / 3) * 100);
+        // Calculate progress as average of the active requirements (skip terms whose MIN is 0)
+        const terms: number[] = [];
+        if (EXPORT_MIN_SONGS > 0) terms.push(Math.min(1, songsAdded / EXPORT_MIN_SONGS));
+        if (EXPORT_MIN_UPVOTES > 0) terms.push(Math.min(1, upvotesUsed / EXPORT_MIN_UPVOTES));
+        if (EXPORT_MIN_DOWNVOTES > 0) terms.push(Math.min(1, downvotesUsed / EXPORT_MIN_DOWNVOTES));
+        const progress = terms.length === 0
+            ? 100
+            : Math.round((terms.reduce((a, b) => a + b, 0) / terms.length) * 100);
 
         return {
             eligible,

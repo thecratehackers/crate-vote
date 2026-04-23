@@ -15,6 +15,17 @@ export async function GET(request: Request) {
 
     try {
         const eligibility = await getExportEligibility(visitorId);
+        if (!eligibility.eligible) {
+            console.warn('[export-eligibility] denied', {
+                visitorId,
+                songsAdded: eligibility.songsAdded,
+                upvotesUsed: eligibility.upvotesUsed,
+                downvotesUsed: eligibility.downvotesUsed,
+                reasons: eligibility.reasons,
+            });
+        } else {
+            console.log('[export-eligibility] allowed', { visitorId });
+        }
         return NextResponse.json(eligibility);
     } catch (error) {
         console.error('Failed to check export eligibility:', error);

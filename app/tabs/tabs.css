@@ -1,0 +1,107 @@
+.tabs-browse-root {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+}
+
+.tabs-browse-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.tabs-browse-header h1 {
+    font-family: 'Rubik', sans-serif;
+    font-size: 36px;
+    color: var(--orange-primary);
+    margin-bottom: 8px;
+}
+
+.tabs-browse-header p {
+    color: var(--text-secondary);
+}
+
+.tabs-browse-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.tab-card {
+    --tab-accent: var(--orange-primary);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    padding: 22px;
+    border-radius: var(--radius-lg);
+    color: inherit;
+    text-decoration: none;
+    transition: all 0.15s;
+    position: relative;
+}
+
+.tab-card:hover {
+    border-color: var(--tab-accent);
+    background: var(--bg-tertiary);
+    transform: translateY(-2px);
+}
+
+.tab-card-main {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(211, 119, 29, 0.05) 100%);
+}
+
+.tab-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.tab-card-header h2 {
+    font-family: 'Rubik', sans-serif;
+    font-size: 22px;
+    color: var(--tab-accent);
+    margin: 0;
+}
+
+.tab-badge {
+    padding: 3px 8px;
+    background: var(--tab-accent);
+    color: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.tab-card-desc {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 18px;
+    line-height: 1.5;
+    flex: 1;
+}
+
+.tab-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.tab-card-show {
+    color: var(--success);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.tab-card-show-quiet {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.tab-card-arrow {
+    color: var(--tab-accent);
+    font-size: 18px;
+}
