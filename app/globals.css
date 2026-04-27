@@ -2749,18 +2749,23 @@ body::before {
   }
 }
 
-/* ── Join Overlay (glassmorphism over live page) ── */
+/* ── Join Overlay: hard Kartra gate over the app ── */
 .join-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(211, 119, 29, 0.18) 0%, transparent 42%),
+    rgba(0, 0, 0, 0.88);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 20px;
+  min-height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   animation: joinFadeIn 0.4s ease;
 }
 
@@ -2780,15 +2785,22 @@ body::before {
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(211, 119, 29, 0.35);
   border-radius: 20px;
-  padding: 36px 32px 28px;
-  max-width: 380px;
+  padding: 28px 24px 22px;
+  max-width: 420px;
   width: 100%;
   text-align: center;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
   box-shadow:
     0 8px 40px rgba(0, 0, 0, 0.5),
     0 0 60px rgba(211, 119, 29, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   animation: joinCardSlide 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.join-card .join-social-proof {
+  margin-bottom: 16px;
 }
 
 @keyframes joinCardSlide {
@@ -2822,7 +2834,7 @@ body::before {
 .join-subtitle {
   font-size: 0.85rem;
   color: var(--text-secondary);
-  margin: 0 0 24px;
+  margin: 0 0 18px;
   line-height: 1.4;
 }
 
@@ -2880,99 +2892,7 @@ body::before {
   cursor: not-allowed;
 }
 
-/* ── Onboarding Step Indicator ── */
-.onboarding-steps-indicator {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.step-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  transition: all 0.3s ease;
-}
-
-.step-dot.active {
-  background: var(--orange-primary);
-  box-shadow: 0 0 8px rgba(211, 119, 29, 0.5);
-  transform: scale(1.2);
-}
-
-/* ── Step 2: DJ Type Buttons ── */
-.step2-emoji,
-.step3-emoji {
-  font-size: 2.5rem;
-  margin-bottom: 8px;
-  animation: emojiFloat 2s ease-in-out infinite;
-}
-
-.step2-crate-icon {
-  width: 56px;
-  height: 56px;
-  display: block;
-  margin: 0 auto;
-  filter: drop-shadow(0 2px 8px rgba(211, 119, 29, 0.4));
-}
-
-@keyframes emojiFloat {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-.dj-type-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 20px 0 16px;
-}
-
-.dj-type-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 18px 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  color: var(--text-primary);
-}
-
-.dj-type-btn:hover {
-  background: rgba(211, 119, 29, 0.12);
-  border-color: var(--orange-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(211, 119, 29, 0.2);
-}
-
-.dj-type-btn .dj-type-icon {
-  font-size: 1.8rem;
-}
-
-.dj-type-btn .dj-type-label {
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.dj-type-btn .dj-type-hint {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-/* ── Step 3: Capture Section ── */
+/* ── Kartra Capture Section ── */
 .join-capture-section {
   display: flex;
   flex-direction: column;
@@ -2980,15 +2900,6 @@ body::before {
   margin-bottom: 12px;
 }
 
-.kartra-error {
-  color: var(--error);
-  font-size: 0.8rem;
-  margin: 0;
-  padding: 6px 10px;
-  background: rgba(239, 68, 68, 0.1);
-  border-radius: 8px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
 
 .join-privacy-note {
   font-size: 0.7rem;
@@ -3011,26 +2922,6 @@ body::before {
 
 .step-back-btn:hover {
   color: var(--text-primary);
-}
-
-/* ── Skip Onboarding Button ── */
-.skip-onboarding-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-family: 'Rubik', sans-serif;
-  cursor: pointer;
-  padding: 8px 16px;
-  margin-top: 8px;
-  transition: color 0.2s, opacity 0.2s;
-  opacity: 0.7;
-  letter-spacing: 0.3px;
-}
-
-.skip-onboarding-btn:hover {
-  color: var(--text-primary);
-  opacity: 1;
 }
 
 /* ── Rules Popover (from ℹ️ icon) ── */
@@ -3131,13 +3022,57 @@ body::before {
 }
 
 @media (max-width: 640px) {
+  .join-overlay {
+    align-items: flex-start;
+    padding: max(12px, env(safe-area-inset-top)) 10px max(12px, env(safe-area-inset-bottom));
+  }
+
   .join-card {
-    padding: 28px 20px 22px;
-    margin: 0 12px;
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+    padding: 22px 18px 18px;
+    margin: 0;
   }
 
   .join-title {
     font-size: 1.15rem;
+  }
+
+  .join-subtitle {
+    margin-bottom: 16px;
+  }
+
+  .join-logo {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 10px;
+  }
+
+}
+
+@media (max-height: 600px) {
+  .join-overlay {
+    align-items: flex-start;
+  }
+
+  .join-card {
+    padding-top: 18px;
+    padding-bottom: 16px;
+  }
+
+  .join-logo {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 8px;
+  }
+
+  .join-title {
+    font-size: 1.05rem;
+  }
+
+  .join-subtitle,
+  .join-social-proof {
+    margin-bottom: 10px;
   }
 }
 
@@ -12926,202 +12861,6 @@ input:disabled {
 
 .tool-btn.danger-subtle:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.15);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   🎧 DJ SIGNUP GATE — Professional DJ opt-in before participation
-   ═══════════════════════════════════════════════════════════════════════ */
-
-.dj-signup-gate {
-  max-width: 440px;
-  text-align: center;
-  animation: gateSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes gateSlideIn {
-  0% {
-    opacity: 0;
-    transform: translateY(30px) scale(0.95);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.dj-signup-gate h2 {
-  font-family: 'Rubik', sans-serif;
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin: 12px 0 8px;
-}
-
-.gate-subtitle {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  line-height: 1.5;
-  margin: 0 0 16px;
-  padding: 0 8px;
-}
-
-/* ── Event Info Badge ── */
-.gate-event-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background: rgba(249, 115, 22, 0.1);
-  border: 1px solid rgba(249, 115, 22, 0.25);
-  border-radius: 10px;
-  margin-bottom: 16px;
-}
-
-.gate-event-badge {
-  font-family: 'Rubik', sans-serif;
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--orange-primary);
-}
-
-.gate-event-time {
-  font-family: 'Rubik', sans-serif;
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-
-/* ── AddEvent styles removed (replaced by Kartra direct integration) ── */
-
-/* ── DJ Confirmation Checkbox ── */
-.gate-checkbox-label {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  background: rgba(249, 115, 22, 0.06);
-  border: 1px solid rgba(249, 115, 22, 0.15);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  margin-bottom: 16px;
-}
-
-.gate-checkbox-label:hover {
-  border-color: rgba(249, 115, 22, 0.35);
-  background: rgba(249, 115, 22, 0.1);
-}
-
-.gate-checkbox {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  border: 2px solid rgba(249, 115, 22, 0.4);
-  border-radius: 5px;
-  background: var(--bg-tertiary);
-  cursor: pointer;
-  position: relative;
-  margin-top: 2px;
-  transition: all 0.2s;
-}
-
-.gate-checkbox:checked {
-  background: var(--orange-primary);
-  border-color: var(--orange-primary);
-}
-
-.gate-checkbox:checked::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 900;
-}
-
-.gate-checkbox-label span {
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  line-height: 1.4;
-}
-
-/* ── Unlock Button ── */
-.gate-unlock-btn {
-  width: 100%;
-  padding: 14px 24px;
-  background: var(--accent-gradient);
-  color: white;
-  font-family: 'Rubik', sans-serif;
-  font-size: 1.05rem;
-  font-weight: 800;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.25s;
-  letter-spacing: 0.5px;
-}
-
-.gate-unlock-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-glow);
-}
-
-.gate-unlock-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.gate-fine-print {
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  margin: 12px 0 0;
-  opacity: 0.6;
-}
-
-/* ── Responsive ── */
-@media (max-width: 640px) {
-  .dj-signup-gate {
-    max-width: 100%;
-    margin: 0 12px;
-  }
-
-  .dj-signup-gate h2 {
-    font-size: 1.3rem;
-  }
-
-  .gate-event-info {
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 12px;
-  }
-
-  .gate-checkbox-label span {
-    font-size: 0.78rem;
-  }
-}
-
-/* P2-6: Onboarding scroll on short viewports (landscape phones, small phones) */
-@media (max-height: 600px) {
-  .dj-signup-gate {
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .dj-signup-gate h2 {
-    font-size: 1.1rem;
-    margin-bottom: 8px;
-  }
 }
 
 /* ── Join Social Proof (viewerCount on Step 1) ── */

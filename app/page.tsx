@@ -104,6 +104,7 @@ const getYouTubeEmbedSrc = (embedId: string): string => {
 };
 
 
+
 interface Song {
     id: string;
     spotifyUri: string;
@@ -476,13 +477,6 @@ export default function HomePage() {
     const [showRulesPopover, setShowRulesPopover] = useState(false);
     const [userLocation, setUserLocation] = useState<string | null>(null);  // User's location for tracking
 
-    // 🎯 Multi-step onboarding state (2 steps: Name → Email)
-    const [onboardingStep, setOnboardingStep] = useState<1 | 2>(1);
-    const [emailInput, setEmailInput] = useState('');
-    const [phoneInput, setPhoneInput] = useState('');
-    const [isSubmittingKartra, setIsSubmittingKartra] = useState(false);
-    const [kartraError, setKartraError] = useState<string | null>(null);
-
     // 📊 SESSION RECAP - End-of-session summary + returning user memory
     interface SessionRecap {
         date: string;
@@ -584,12 +578,6 @@ export default function HomePage() {
 
         return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmtLocal(targetET)}/${fmtLocal(endET)}&details=${details}&recur=${recur}&ctz=America/New_York`;
     }, []);
-
-    // 📬 WAITING SCREEN RSVP - Mailing list signup for idle visitors
-    const [waitingEmail, setWaitingEmail] = useState('');
-    const [waitingRsvpStatus, setWaitingRsvpStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
-    const [waitingRsvpError, setWaitingRsvpError] = useState<string | null>(null);
-    const [waitingRsvpAlreadyDone, setWaitingRsvpAlreadyDone] = useState(false);
 
     // 🎓 FIRST-TIME COACH MARKS - Guide new users
     const [showCoachMark, setShowCoachMark] = useState<'search' | 'vote' | null>(null);
@@ -772,12 +760,6 @@ export default function HomePage() {
                 setShowUsernameModal(true);
             }
 
-            // Check if user already signed up for mailing list
-            const rsvpDone = persistGet('crate-rsvp-done');
-            if (rsvpDone === 'true') {
-                setWaitingRsvpAlreadyDone(true);
-            }
-
             // 📊 Load last session recap for welcome-back state
             try {
                 const savedSession = persistGet('crate-last-session');
@@ -813,88 +795,18 @@ export default function HomePage() {
         return words.some(word => BLOCKED_WORDS.has(word));
     };
 
-    // Save username with loading feedback
-    // Step 1 → Step 2: Validate DJ name and advance to email capture
-    const handleStep1Next = () => {
+    // Simple username-only entry. No RSVP, no Kartra, no email — just a display name.
+    const handleOnboardingComplete = async () => {
         const name = usernameInput.trim();
         if (name.length === 0) {
             setMessage({ type: 'error', text: 'Please enter a name' });
             return;
         }
         if (containsBadWord(name)) {
-            setMessage({ type: 'error', text: 'Please choose an appropriate username' });
-            return;
-        }
-        setOnboardingStep(2);
-    };
-
-    // (Step 2 "Are you a DJ?" removed — isProfessionalDJ was never used in the codebase)
-
-    // Step 3: Submit to Kartra and complete onboarding
-    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-    const handleOnboardingComplete = async () => {
-        const name = usernameInput.trim();
-        const email = emailInput.trim();
-
-        if (!email || !isValidEmail(email)) {
-            setKartraError('Enter a valid email address');
+            setMessage({ type: 'error', text: 'Please choose an appropriate name' });
             return;
         }
 
-        setIsSubmittingKartra(true);
-        setKartraError(null);
-
-        // Fire Kartra lead creation (non-blocking to login)
-        try {
-            await fetch('/api/kartra', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email,
-                    phone: phoneInput.trim() || undefined,
-                    firstName: name,
-                }),
-            });
-        } catch (err) {
-            // Don't block onboarding if Kartra fails — just log it
-            console.warn('Kartra submission failed (non-blocking):', err);
-        }
-
-        // Now complete the actual login (same logic as before)
-        setIsSavingUsername(true);
-        await new Promise(resolve => setTimeout(resolve, 200));
-        setUsername(name);
-        persistSet('crate-username', name);
-        if (avatarInput) {
-            persistSet('crate-avatar', avatarInput);
-            setUserAvatar(avatarInput);
-        }
-        persistSet('crate-color', colorInput);
-        setUserColor(colorInput);
-        setIsSavingUsername(false);
-        setIsSubmittingKartra(false);
-        setShowUsernameModal(false);
-        setOnboardingStep(1); // Reset for next time
-        setMessage({ type: 'success', text: `Welcome, ${name}! You're in. 🎧` });
-
-        // Mark RSVP as done to suppress duplicate email capture on waiting screen
-        setWaitingRsvpAlreadyDone(true);
-        persistSet('crate-rsvp-done', 'true');
-
-        // Sync all state to cookie for Twitch resilience
-        persistSyncToCookie();
-
-        // Show first-time coach mark after a short delay
-        const coachDone = persistGet('crate-coach-done');
-        if (!coachDone) {
-            setTimeout(() => setShowCoachMark('search'), 1500);
-        }
-    };
-
-    // Skip Step 3: Let users in without email capture
-    const handleSkipOnboarding = async () => {
-        const name = usernameInput.trim();
         setIsSavingUsername(true);
         await new Promise(resolve => setTimeout(resolve, 200));
         setUsername(name);
@@ -907,13 +819,10 @@ export default function HomePage() {
         setUserColor(colorInput);
         setIsSavingUsername(false);
         setShowUsernameModal(false);
-        setOnboardingStep(1);
         setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
 
-        // Sync all state to cookie for Twitch resilience
         persistSyncToCookie();
 
-        // Show first-time coach mark after a short delay
         const coachDone = persistGet('crate-coach-done');
         if (!coachDone) {
             setTimeout(() => setShowCoachMark('search'), 1500);
@@ -2314,105 +2223,35 @@ export default function HomePage() {
     return (
         <div className="stream-layout">
 
-            {/* 🔒 JOIN OVERLAY — Multi-step onboarding with Kartra integration */}
+            {/* 🔒 JOIN OVERLAY — Kartra owns the only signup widget */}
             {showUsernameModal && !username && (
                 <div className="join-overlay">
                     <div className="join-card">
-                        {/* Step indicator */}
-                        <div className="onboarding-steps-indicator">
-                            <span className={`step-dot ${onboardingStep >= 1 ? 'active' : ''}`} />
-                            <span className={`step-dot ${onboardingStep >= 2 ? 'active' : ''}`} />
+                        <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
+                        <h2 className="join-title">Pick a name to get started</h2>
+                        <div className="join-name-section">
+                            <input
+                                type="text"
+                                className="join-name-input"
+                                placeholder="Your name"
+                                value={usernameInput}
+                                onChange={(e) => setUsernameInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleOnboardingComplete()}
+                                autoFocus
+                                maxLength={20}
+                                disabled={isSavingUsername}
+                            />
+                            <button
+                                className="join-go-btn"
+                                onClick={handleOnboardingComplete}
+                                disabled={!usernameInput.trim() || isSavingUsername}
+                            >
+                                {isSavingUsername ? 'Entering…' : 'Enter'}
+                            </button>
                         </div>
-
-                        {/* ── STEP 1: DJ Name ── */}
-                        {onboardingStep === 1 && (
-                            <>
-                                <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
-                                <h2 className="join-title">Join the Live Playlist</h2>
-                                <p className="join-subtitle">
-                                    Search songs. Vote your favorites up. Build the playlist together.
-                                </p>
-                                {viewerCount > 0 && (
-                                    <p className="join-social-proof">
-                                        🟢 {viewerCount} {viewerCount === 1 ? 'person' : 'people'} here now
-                                    </p>
-                                )}
-                                <div className="join-name-section">
-                                    <input
-                                        type="text"
-                                        className="join-name-input"
-                                        placeholder="Your display name"
-                                        value={usernameInput}
-                                        onChange={(e) => setUsernameInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleStep1Next()}
-                                        autoFocus
-                                        maxLength={20}
-                                    />
-                                    <button
-                                        className="join-go-btn"
-                                        onClick={handleStep1Next}
-                                        disabled={!usernameInput.trim()}
-                                    >
-                                        Next →
-                                    </button>
-                                </div>
-                            </>
-                        )}
-
-                        {/* Step 2 ("Are you a DJ?") removed — unused flag, adds friction */}
-
-                        {/* ── STEP 2: Email + Phone (Kartra capture) ── */}
-                        {onboardingStep === 2 && (
-                            <>
-                                <div className="step3-emoji">📡</div>
-                                <h2 className="join-title">Get Notified When We Go Live</h2>
-                                <p className="join-subtitle">
-                                    One email before each live event. That's it.
-                                </p>
-                                <div className="join-capture-section">
-                                    <input
-                                        type="email"
-                                        className={`join-name-input ${emailInput && !isValidEmail(emailInput) ? 'input-invalid' : ''}`}
-                                        placeholder="you@email.com"
-                                        value={emailInput}
-                                        onChange={(e) => { setEmailInput(e.target.value); setKartraError(null); }}
-                                        onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
-                                        autoFocus
-                                    />
-                                    {emailInput && !isValidEmail(emailInput) && (
-                                        <p className="inline-validation-hint">Enter a valid email</p>
-                                    )}
-                                    <input
-                                        type="tel"
-                                        className="join-name-input"
-                                        placeholder="Phone (optional)"
-                                        value={phoneInput}
-                                        onChange={(e) => setPhoneInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && handleOnboardingComplete()}
-                                    />
-                                    {kartraError && (
-                                        <p className="kartra-error">{kartraError}</p>
-                                    )}
-                                    <button
-                                        className="join-go-btn"
-                                        onClick={handleOnboardingComplete}
-                                        disabled={!isValidEmail(emailInput) || isSubmittingKartra}
-                                    >
-                                        {isSubmittingKartra ? 'Joining...' : 'Join & Enter →'}
-                                    </button>
-                                </div>
-                                <p className="join-privacy-note">
-                                    🔒 Unsubscribe anytime. We never share your info.
-                                </p>
-                                <button className="step-back-btn" onClick={() => setOnboardingStep(1)}>
-                                    ← Back
-                                </button>
-                            </>
-                        )}
                     </div>
                 </div>
-            )
-            }
+            )}
 
             {/* 🔒 PROFILE EDIT OVERLAY — simple name edit for existing users */}
             {
@@ -3709,81 +3548,6 @@ export default function HomePage() {
                                 </>
                             )}
 
-                            {/* 📬 Mailing List RSVP — only shown when session is NOT active AND user hasn't already signed up */}
-                            {!timerRunning && !waitingRsvpAlreadyDone && (
-                                <div className="waiting-rsvp">
-                                    {waitingRsvpStatus === 'success' ? (
-                                        <div className="waiting-rsvp-success">
-                                            <span className="waiting-rsvp-check">✅</span> You're on the list! We'll notify you before the next event.
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <p className="waiting-rsvp-label">Get notified when we go live</p>
-                                            <form className="waiting-rsvp-form" onSubmit={async (e) => {
-                                                e.preventDefault();
-                                                const email = waitingEmail.trim();
-                                                if (!email || !isValidEmail(email)) {
-                                                    setWaitingRsvpError('Enter a valid email address');
-                                                    return;
-                                                }
-                                                setWaitingRsvpStatus('submitting');
-                                                setWaitingRsvpError(null);
-                                                try {
-                                                    const res = await fetch('/api/kartra', {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ email, firstName: username || 'Visitor' }),
-                                                    });
-                                                    const data = await res.json();
-                                                    if (data.success) {
-                                                        setWaitingRsvpStatus('success');
-                                                        setWaitingRsvpAlreadyDone(true);
-                                                        persistSet('crate-rsvp-done', 'true');
-                                                    } else {
-                                                        if (data.error?.includes('already')) {
-                                                            setWaitingRsvpStatus('success');
-                                                            setWaitingRsvpAlreadyDone(true);
-                                                            persistSet('crate-rsvp-done', 'true');
-                                                        } else {
-                                                            setWaitingRsvpStatus('error');
-                                                            setWaitingRsvpError('Something went wrong — try again');
-                                                        }
-                                                    }
-                                                } catch (_) {
-                                                    setWaitingRsvpStatus('error');
-                                                    setWaitingRsvpError('Connection issue — try again');
-                                                }
-                                            }}>
-                                                <input
-                                                    type="email"
-                                                    className="waiting-rsvp-input"
-                                                    placeholder="your@email.com"
-                                                    value={waitingEmail}
-                                                    onChange={(e) => { setWaitingEmail(e.target.value); setWaitingRsvpError(null); }}
-                                                    disabled={waitingRsvpStatus === 'submitting'}
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    className="waiting-rsvp-btn"
-                                                    disabled={waitingRsvpStatus === 'submitting' || !waitingEmail.trim()}
-                                                >
-                                                    {waitingRsvpStatus === 'submitting' ? 'Submitting...' : 'Notify Me'}
-                                                </button>
-                                            </form>
-                                            {waitingRsvpError && (
-                                                <p className="waiting-rsvp-error">{waitingRsvpError}</p>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* ✅ Already on the list — subtle confirmation */}
-                            {!timerRunning && waitingRsvpAlreadyDone && (
-                                <div className="waiting-rsvp-already">
-                                    ✅ You're on the list — we'll email you before the next event.
-                                </div>
-                            )}
                         </div>
                     ) : (
                         sortedSongs.map((song, index) => {

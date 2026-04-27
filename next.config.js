@@ -9,24 +9,6 @@ const nextConfig = {
             },
         ],
     },
-    // Allow embedding in iframes (for Kartra and other platforms)
-    async headers() {
-        return [
-            {
-                source: '/:path*',
-                headers: [
-                    {
-                        key: 'X-Frame-Options',
-                        value: 'ALLOWALL', // Allow embedding from anywhere
-                    },
-                    {
-                        key: 'Content-Security-Policy',
-                        value: "frame-ancestors 'self' https://*.kartra.com https://kartra.com https://*.cratehackathon.com *;",
-                    },
-                ],
-            },
-        ];
-    },
 };
 
 module.exports = nextConfig;

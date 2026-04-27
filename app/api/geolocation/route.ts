@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 // IP-based geolocation using free ip-api.com service
 // Returns location data for the requesting user
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
     try {
         // Get client IP from headers (Vercel/Cloudflare pass this)
