@@ -1,0 +1,546 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ARTIST VERSUS COMPONENT STYLES
+   Audience-facing split-screen for the admin-hosted artist-vs-artist segment.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.artist-versus-banner {
+    background: linear-gradient(135deg, #1a0a1a 0%, #2a0a2a 50%, #1a0a1a 100%);
+    border: 2px solid #d946ef;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 30px rgba(217, 70, 239, 0.4);
+    position: relative;
+    overflow: hidden;
+    animation: av-pulse-glow 2.5s infinite;
+}
+
+@keyframes av-pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 20px rgba(217, 70, 239, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 50px rgba(217, 70, 239, 0.6);
+    }
+}
+
+/* ============ Header ============ */
+.av-header {
+    text-align: center;
+    margin-bottom: 16px;
+    position: relative;
+}
+
+.av-player-banner {
+    display: inline-block;
+    background: #d946ef;
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    box-shadow: 0 0 12px rgba(217, 70, 239, 0.5);
+}
+
+.av-title {
+    font-size: 1.5rem;
+    color: #f0abfc;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    text-shadow: 0 0 12px rgba(240, 171, 252, 0.6);
+}
+
+.av-round-counter {
+    font-size: 0.9rem;
+    color: #fff;
+    margin-top: 4px;
+    font-family: monospace;
+    letter-spacing: 2px;
+}
+
+.av-bomb-status {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+}
+
+.av-bomb-status.armed {
+    background: #b91c1c;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(185, 28, 28, 0.6);
+    animation: av-bomb-pulse 1.5s infinite;
+}
+
+.av-bomb-status.used {
+    background: #444;
+    color: #888;
+}
+
+@keyframes av-bomb-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* ============ Arena ============ */
+.av-arena {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.av-vs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.av-vs span {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #d946ef;
+    text-shadow: 0 0 16px rgba(217, 70, 239, 0.7);
+    letter-spacing: 2px;
+}
+
+/* ============ Contestant cards ============ */
+.av-contestant {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(217, 70, 239, 0.3);
+    border-radius: 12px;
+    padding: 16px 12px;
+    text-align: center;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.av-contestant.winner {
+    background: rgba(74, 222, 128, 0.18);
+    border-color: #4ade80;
+    box-shadow: 0 0 24px rgba(74, 222, 128, 0.5);
+}
+
+.av-contestant.loser {
+    opacity: 0.4;
+    filter: grayscale(0.6);
+}
+
+.av-contestant.nuked {
+    background: rgba(185, 28, 28, 0.25);
+    border-color: #ef4444;
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.7);
+    animation: av-nuked-shake 0.5s;
+}
+
+.av-contestant.survivor {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #888;
+}
+
+@keyframes av-nuked-shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    20% {
+        transform: translateX(-6px);
+    }
+
+    40% {
+        transform: translateX(6px);
+    }
+
+    60% {
+        transform: translateX(-4px);
+    }
+
+    80% {
+        transform: translateX(4px);
+    }
+}
+
+.av-album-art {
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    object-fit: cover;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.av-contestant.nuked .av-album-art {
+    filter: grayscale(0.8) brightness(0.5);
+}
+
+.av-artist-name {
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.av-sample-song {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-style: italic;
+    margin-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.av-song-count {
+    font-size: 0.7rem;
+    color: #f0abfc;
+    letter-spacing: 1px;
+}
+
+/* ============ Badges ============ */
+.av-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.av-badge.winner-badge {
+    background: #4ade80;
+    color: #000;
+}
+
+.av-badge.loser-badge {
+    background: #666;
+    color: #fff;
+}
+
+.av-badge.nuked-badge {
+    background: #ef4444;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+}
+
+.av-badge.survivor-badge {
+    background: #888;
+    color: #fff;
+}
+
+/* ============ Round strip ============ */
+.av-round-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.av-round-pip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.av-round-pip.current {
+    border-color: #d946ef;
+    background: rgba(217, 70, 239, 0.15);
+    box-shadow: 0 0 12px rgba(217, 70, 239, 0.4);
+}
+
+.av-round-pip.resolved {
+    background: rgba(74, 222, 128, 0.1);
+    border-color: rgba(74, 222, 128, 0.4);
+}
+
+.av-round-pip.resolved.bomb {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.av-round-pip.pending {
+    opacity: 0.4;
+}
+
+.av-round-pip-num {
+    font-size: 0.75rem;
+    color: #f0abfc;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.av-round-pip-label {
+    font-size: 0.85rem;
+    color: #fff;
+    font-weight: 600;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============ Instructions / status line ============ */
+.av-instructions {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 1px;
+}
+
+.av-instructions.resolved {
+    color: #4ade80;
+    font-weight: 600;
+}
+
+.av-instructions.resolved.nuked {
+    color: #ef4444;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* ============ Explosion overlay ============ */
+.av-explosion {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, #fef08a 0%, #f97316 30%, #b91c1c 60%, transparent 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    animation: av-explosion-fade 2.5s forwards;
+    z-index: 10;
+}
+
+@keyframes av-explosion-fade {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+
+    20% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+
+    80% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(1);
+    }
+}
+
+.av-explosion-flash {
+    font-size: 4rem;
+    font-weight: 900;
+    color: #fff;
+    text-shadow:
+        0 0 20px #fff,
+        0 0 40px #f97316,
+        0 0 60px #b91c1c;
+    letter-spacing: 8px;
+    animation: av-explosion-shake 0.15s infinite;
+}
+
+.av-explosion-detail {
+    margin-top: 12px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+    letter-spacing: 2px;
+}
+
+@keyframes av-explosion-shake {
+
+    0%,
+    100% {
+        transform: translate(0);
+    }
+
+    25% {
+        transform: translate(-3px, 2px);
+    }
+
+    50% {
+        transform: translate(3px, -2px);
+    }
+
+    75% {
+        transform: translate(-2px, -3px);
+    }
+}
+
+/* ============ Damage Report ============ */
+.av-damage-report {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.av-damage-header {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #f0abfc;
+    margin-bottom: 16px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.av-damage-section {
+    margin-bottom: 16px;
+}
+
+.av-damage-section.nuked-section {
+    background: rgba(185, 28, 28, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.av-damage-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #d946ef;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.nuked-section .av-damage-section-title {
+    color: #ef4444;
+}
+
+.av-damage-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.av-damage-row:last-child {
+    border-bottom: none;
+}
+
+.av-damage-row.nuked-row {
+    color: #fca5a5;
+}
+
+.av-damage-round {
+    font-size: 0.75rem;
+    color: #f0abfc;
+    font-weight: 700;
+    background: rgba(217, 70, 239, 0.2);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.av-damage-name {
+    font-size: 0.95rem;
+    color: #fff;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.av-damage-impact {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+    text-align: right;
+}
+
+.av-damage-empty {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+    padding: 20px;
+}
+
+/* ============ Mobile responsive ============ */
+@media (max-width: 640px) {
+    .artist-versus-banner {
+        padding: 14px;
+    }
+
+    .av-arena {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .av-vs {
+        order: -1;
+    }
+
+    .av-album-art {
+        width: 80px;
+        height: 80px;
+    }
+
+    .av-title {
+        font-size: 1.2rem;
+        letter-spacing: 2px;
+    }
+
+    .av-bomb-status {
+        font-size: 0.6rem;
+        padding: 3px 6px;
+    }
+
+    .av-explosion-flash {
+        font-size: 2.5rem;
+        letter-spacing: 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .av-album-art {
+        width: 64px;
+        height: 64px;
+    }
+
+    .av-artist-name {
+        font-size: 0.95rem;
+    }
+
+    .av-round-pip-label {
+        font-size: 0.7rem;
+    }
+}

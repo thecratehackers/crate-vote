@@ -100,6 +100,10 @@ const VERSUS_VOTES_A_KEY = 'hackathon:versusVotesA';  // Set of visitorIds who v
 const VERSUS_VOTES_B_KEY = 'hackathon:versusVotesB';  // Set of visitorIds who voted for Song B
 const ELIMINATED_SONGS_KEY = 'hackathon:eliminatedSongs';  // Set of Spotify IDs eliminated - cannot be re-added
 
+// ARTIST VERSUS KEYS - Admin-hosted artist-vs-artist game show segment
+const ARTIST_VERSUS_KEY = 'hackathon:artistVersus';  // Main session state (3 rounds, player name, bomb status)
+const ELIMINATED_ARTISTS_KEY = 'hackathon:eliminatedArtists';  // Set of normalized artist names that were nuked - cannot be re-added
+
 // ATOMIC VOTE KEYS - Using Redis Sets for concurrent vote safety
 // Format: hackathon:song:{songId}:upvotes and hackathon:song:{songId}:downvotes
 function getSongUpvotesKey(songId: string): string {
@@ -420,6 +424,12 @@ export async function addSong(
         const isEliminated = await isSongEliminated(song.id);
         if (isEliminated) {
             return { success: false, error: 'This song was eliminated in a Versus Battle and cannot be re-added this session.' };
+        }
+
+        // Check if the artist was nuked in Artist Versus (cannot be re-added this session)
+        const isArtistNuked = await isArtistEliminated(song.artist);
+        if (isArtistNuked) {
+            return { success: false, error: `${song.artist} was nuked in Artist Versus and cannot be added this session.` };
         }
 
         // Check playlist size limit
@@ -1337,6 +1347,10 @@ export async function resetSession(): Promise<void> {
         redis.del(VERSUS_VOTES_A_KEY),
         redis.del(VERSUS_VOTES_B_KEY),
         redis.del(ELIMINATED_SONGS_KEY),
+
+        // Artist Versus
+        redis.del(ARTIST_VERSUS_KEY),
+        redis.del(ELIMINATED_ARTISTS_KEY),
 
         // Admin heartbeats (reset admin presence tracking)
         redis.del(ADMIN_HEARTBEAT_KEY),
@@ -3167,5 +3181,470 @@ export async function getNowPlayingBombCount(): Promise<{ bombCount: number; thr
     } catch (error) {
         console.error('Failed to get bomb count:', error);
         return { bombCount: 0, threshold: BOMB_THRESHOLD };
+    }
+}
+
+// ============ ARTIST VERSUS ============
+// Admin-hosted game-show segment. One audience player, 3 rounds of artist-vs-artist.
+// Picks apply +1/-1 to all songs by each artist. Bomb permanently nukes the losing
+// artist (deletes all their songs and blocks re-adds for the session).
+
+// Normalize artist name for matching, dedup, and elim-set membership.
+// Lowercase + trim — Spotify artist names are usually clean but case-sensitive.
+function normalizeArtistName(s: string): string {
+    return (s || '').trim().toLowerCase();
+}
+
+// Check if an artist has been nuked in Artist Versus (cannot be re-added this session)
+export async function isArtistEliminated(artistName: string): Promise<boolean> {
+    try {
+        const key = normalizeArtistName(artistName);
+        if (!key) return false;
+        const result = await redis.sismember(ELIMINATED_ARTISTS_KEY, key);
+        return result === 1;
+    } catch (error) {
+        console.error('Failed to check eliminated artist:', error);
+        return false;
+    }
+}
+
+// Get the full list of nuked artist names (normalized) for filtering
+async function getEliminatedArtists(): Promise<Set<string>> {
+    try {
+        const members = await redis.smembers(ELIMINATED_ARTISTS_KEY);
+        return new Set(Array.isArray(members) ? members : []);
+    } catch (error) {
+        console.error('Failed to load eliminated artists:', error);
+        return new Set();
+    }
+}
+
+// ============ ARTIST VERSUS TYPES ============
+
+interface ArtistVersusContestant {
+    name: string;        // Display name (original casing)
+    albumArt: string;    // Cover art for the showcase song
+    sampleSongName: string;  // The track we're using as the visual hook
+    songCount: number;   // How many songs by this artist are currently in the playlist
+}
+
+interface ArtistVersusRound {
+    roundNumber: 1 | 2 | 3;
+    artistA: ArtistVersusContestant;
+    artistB: ArtistVersusContestant;
+    outcome: 'pick' | 'bomb' | null;
+    winner: 'A' | 'B' | null;       // For 'pick' outcomes: who got the +1
+    nukedArtist: 'A' | 'B' | null;  // For 'bomb' outcomes: who got nuked
+    nukedSongIds?: string[];        // IDs of songs deleted by the bomb
+    nukedArtistName?: string;       // Display name of nuked artist (for damage report after deletion)
+    completedAt?: number;
+}
+
+type ArtistVersusPhase =
+    | 'lobby'           // Pre-game, awaiting first round
+    | 'round'           // Active round, waiting on player pick/bomb
+    | 'awaitingNext'    // Round resolved, waiting for admin to advance
+    | 'damageReport';   // All 3 rounds done, showing summary
+
+interface ArtistVersusState {
+    active: boolean;
+    phase: ArtistVersusPhase;
+    currentRound: 0 | 1 | 2 | 3;  // 0 = lobby, 1-3 = active round number
+    rounds: ArtistVersusRound[];
+    bombUsed: boolean;
+    playerName: string | null;
+    startedAt: number;
+}
+
+// API-facing alias — same shape as internal state, exported for client consumers
+export type ArtistVersusStatus = ArtistVersusState;
+
+// ============ ARTIST POOL HELPERS ============
+
+// Build a map of normalized-artist-name -> { displayName, songs[] } from current playlist.
+// Each entry's `songs` is sorted by score desc so we know the "flagship" track.
+async function getArtistPool(): Promise<Map<string, {
+    displayName: string;
+    songs: (Song & { score: number })[];
+}>> {
+    const songs = await getSortedSongs();  // Already sorted by score desc within positive group
+    const pool = new Map<string, { displayName: string; songs: (Song & { score: number })[] }>();
+
+    for (const song of songs) {
+        const key = normalizeArtistName(song.artist);
+        if (!key) continue;
+        const existing = pool.get(key);
+        if (existing) {
+            existing.songs.push(song);
+        } else {
+            pool.set(key, { displayName: song.artist, songs: [song] });
+        }
+    }
+
+    return pool;
+}
+
+// Get the set of normalized artist names already used in this session
+function getUsedArtistKeys(state: ArtistVersusState): Set<string> {
+    const used = new Set<string>();
+    for (const round of state.rounds) {
+        used.add(normalizeArtistName(round.artistA.name));
+        used.add(normalizeArtistName(round.artistB.name));
+    }
+    return used;
+}
+
+// Build a contestant card from an artist's flagship song
+function buildContestant(displayName: string, songs: (Song & { score: number })[]): ArtistVersusContestant {
+    const flagship = songs[0];  // Already sorted by score desc
+    return {
+        name: displayName,
+        albumArt: flagship.albumArt,
+        sampleSongName: flagship.name,
+        songCount: songs.length,
+    };
+}
+
+// Pick a random pair of artists for a round.
+// Filters: not in usedArtists, not in eliminated set, not the now-playing artist, not in top-3 artists.
+// Prefers artists whose flagship song has popularity >= 50; falls back to full pool if <2 qualify.
+async function pickArtistPair(
+    usedArtists: Set<string>
+): Promise<{ artistA: ArtistVersusContestant; artistB: ArtistVersusContestant } | null> {
+    const pool = await getArtistPool();
+    const eliminated = await getEliminatedArtists();
+    const nowPlaying = await getNowPlaying();
+    const nowPlayingArtistKey = nowPlaying ? normalizeArtistName(nowPlaying.artistName) : '';
+
+    // Compute top-3 artist keys from sorted songs (the artists of the 3 highest-scoring songs)
+    const sortedSongs = await getSortedSongs();
+    const top3ArtistKeys = new Set(
+        sortedSongs.slice(0, 3).map(s => normalizeArtistName(s.artist))
+    );
+
+    // Build candidate list — every artist key in the pool that passes the filters
+    const candidates: Array<{ key: string; displayName: string; songs: (Song & { score: number })[] }> = [];
+    Array.from(pool.entries()).forEach(([key, entry]) => {
+        if (usedArtists.has(key)) return;
+        if (eliminated.has(key)) return;
+        if (key === nowPlayingArtistKey) return;
+        if (top3ArtistKeys.has(key)) return;
+        candidates.push({ key, ...entry });
+    });
+
+    // Prefer popular artists (flagship song popularity >= 50)
+    const popular = candidates.filter(c => (c.songs[0].popularity ?? 0) >= 50);
+    const finalPool = popular.length >= 2 ? popular : candidates;
+
+    if (finalPool.length < 2) {
+        return null;
+    }
+
+    // Shuffle and take 2
+    const shuffled = [...finalPool].sort(() => Math.random() - 0.5);
+    const a = shuffled[0];
+    const b = shuffled[1];
+
+    return {
+        artistA: buildContestant(a.displayName, a.songs),
+        artistB: buildContestant(b.displayName, b.songs),
+    };
+}
+
+// ============ ARTIST VERSUS CRUD ============
+
+// Get current state (used by both admin + audience polls)
+export async function getArtistVersusStatus(): Promise<ArtistVersusStatus> {
+    try {
+        const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (!state) {
+            return {
+                active: false,
+                phase: 'lobby',
+                currentRound: 0,
+                rounds: [],
+                bombUsed: false,
+                playerName: null,
+                startedAt: 0,
+            };
+        }
+        return state;
+    } catch (error) {
+        console.error('Failed to get artist versus status:', error);
+        return {
+            active: false,
+            phase: 'lobby',
+            currentRound: 0,
+            rounds: [],
+            bombUsed: false,
+            playerName: null,
+            startedAt: 0,
+        };
+    }
+}
+
+// Start a new Artist Versus session (round 1)
+export async function startArtistVersus(playerName?: string): Promise<{
+    success: boolean;
+    error?: string;
+    state?: ArtistVersusState;
+}> {
+    try {
+        const existing = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (existing && existing.active && existing.phase !== 'damageReport') {
+            return { success: false, error: 'An Artist Versus session is already active. End it first.' };
+        }
+
+        const pair = await pickArtistPair(new Set());
+        if (!pair) {
+            return {
+                success: false,
+                error: 'Need at least 2 eligible artists in the playlist (excluding now-playing and top 3). Add more songs first.',
+            };
+        }
+
+        const round1: ArtistVersusRound = {
+            roundNumber: 1,
+            artistA: pair.artistA,
+            artistB: pair.artistB,
+            outcome: null,
+            winner: null,
+            nukedArtist: null,
+        };
+
+        const state: ArtistVersusState = {
+            active: true,
+            phase: 'round',
+            currentRound: 1,
+            rounds: [round1],
+            bombUsed: false,
+            playerName: playerName?.trim() || null,
+            startedAt: Date.now(),
+        };
+
+        await redis.set(ARTIST_VERSUS_KEY, state);
+
+        console.log(`🎤 ARTIST VERSUS: Started by ${state.playerName || 'anonymous player'} — R1: ${pair.artistA.name} vs ${pair.artistB.name}`);
+
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to start artist versus:', error);
+        return { success: false, error: 'Could not start Artist Versus. Please try again.' };
+    }
+}
+
+// Apply +1 / -1 to all songs by each artist using synthetic vote IDs (idempotent via Redis sets)
+async function applyPickVotes(round: number, winnerKey: string, loserKey: string): Promise<void> {
+    const pool = await getArtistPool();
+    const winnerSongs = pool.get(winnerKey)?.songs || [];
+    const loserSongs = pool.get(loserKey)?.songs || [];
+
+    const upvoteId = `versus:r${round}:up:${winnerKey}`;
+    const downvoteId = `versus:r${round}:down:${loserKey}`;
+
+    const ops: Promise<unknown>[] = [];
+    for (const song of winnerSongs) {
+        ops.push(redis.sadd(getSongUpvotesKey(song.id), upvoteId));
+    }
+    for (const song of loserSongs) {
+        ops.push(redis.sadd(getSongDownvotesKey(song.id), downvoteId));
+    }
+    await Promise.all(ops);
+    invalidateSongsCache();
+}
+
+// Player picks A or B (admin taps for them on the host tablet)
+export async function pickArtistVersus(choice: 'A' | 'B'): Promise<{
+    success: boolean;
+    error?: string;
+    state?: ArtistVersusState;
+}> {
+    try {
+        const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (!state || !state.active) {
+            return { success: false, error: 'No active Artist Versus session.' };
+        }
+        if (state.phase !== 'round') {
+            return { success: false, error: 'Not currently in a voting round.' };
+        }
+
+        const currentRound = state.rounds[state.currentRound - 1];
+        if (!currentRound || currentRound.outcome !== null) {
+            return { success: false, error: 'This round is already resolved.' };
+        }
+
+        const winnerName = choice === 'A' ? currentRound.artistA.name : currentRound.artistB.name;
+        const loserName = choice === 'A' ? currentRound.artistB.name : currentRound.artistA.name;
+        const winnerKey = normalizeArtistName(winnerName);
+        const loserKey = normalizeArtistName(loserName);
+
+        await applyPickVotes(state.currentRound, winnerKey, loserKey);
+
+        currentRound.outcome = 'pick';
+        currentRound.winner = choice;
+        currentRound.completedAt = Date.now();
+
+        // After round 3 → damage report; otherwise wait for admin to advance
+        state.phase = state.currentRound === 3 ? 'damageReport' : 'awaitingNext';
+
+        await redis.set(ARTIST_VERSUS_KEY, state);
+
+        console.log(`🎤 ARTIST VERSUS R${state.currentRound}: PICK — ${winnerName} over ${loserName}`);
+
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to record artist versus pick:', error);
+        return { success: false, error: 'Could not record pick. Please try again.' };
+    }
+}
+
+// PERMANENT NUKE — deletes all songs by losing artist + blocks re-adds
+export async function bombArtistVersus(target: 'A' | 'B'): Promise<{
+    success: boolean;
+    error?: string;
+    state?: ArtistVersusState;
+    nukedSongCount?: number;
+}> {
+    try {
+        const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (!state || !state.active) {
+            return { success: false, error: 'No active Artist Versus session.' };
+        }
+        if (state.phase !== 'round') {
+            return { success: false, error: 'Not currently in a voting round.' };
+        }
+        if (state.bombUsed) {
+            return { success: false, error: 'The bomb has already been used in this session.' };
+        }
+
+        const currentRound = state.rounds[state.currentRound - 1];
+        if (!currentRound || currentRound.outcome !== null) {
+            return { success: false, error: 'This round is already resolved.' };
+        }
+
+        const targetName = target === 'A' ? currentRound.artistA.name : currentRound.artistB.name;
+        const targetKey = normalizeArtistName(targetName);
+
+        // Find all songs by the bombed artist in the current playlist
+        const allSongs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
+        const songsToNuke = Object.values(allSongs).filter(
+            s => normalizeArtistName(s.artist) === targetKey
+        );
+        const nukedSongIds = songsToNuke.map(s => s.id);
+
+        // Delete each song + its vote sets (mirror adminDeleteSong)
+        const deleteOps: Promise<unknown>[] = [];
+        for (const song of songsToNuke) {
+            deleteOps.push(adminDeleteSong(song.id));
+        }
+        deleteOps.push(redis.sadd(ELIMINATED_ARTISTS_KEY, targetKey));
+        await Promise.all(deleteOps);
+        invalidateSongsCache();
+
+        currentRound.outcome = 'bomb';
+        currentRound.nukedArtist = target;
+        currentRound.nukedSongIds = nukedSongIds;
+        currentRound.nukedArtistName = targetName;
+        currentRound.completedAt = Date.now();
+
+        state.bombUsed = true;
+        state.phase = state.currentRound === 3 ? 'damageReport' : 'awaitingNext';
+
+        await redis.set(ARTIST_VERSUS_KEY, state);
+
+        console.log(`💥 ARTIST VERSUS R${state.currentRound}: NUKE — "${targetName}" wiped (${nukedSongIds.length} songs deleted)`);
+
+        return { success: true, state, nukedSongCount: nukedSongIds.length };
+    } catch (error) {
+        console.error('Failed to bomb artist versus:', error);
+        return { success: false, error: 'Could not deploy bomb. Please try again.' };
+    }
+}
+
+// Advance to the next round (admin-paced)
+export async function advanceArtistVersusRound(): Promise<{
+    success: boolean;
+    error?: string;
+    state?: ArtistVersusState;
+}> {
+    try {
+        const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (!state || !state.active) {
+            return { success: false, error: 'No active Artist Versus session.' };
+        }
+        if (state.phase !== 'awaitingNext') {
+            return { success: false, error: 'Current round is not yet complete.' };
+        }
+        if (state.currentRound >= 3) {
+            return { success: false, error: 'All 3 rounds complete. End the session.' };
+        }
+
+        const usedArtists = getUsedArtistKeys(state);
+        const pair = await pickArtistPair(usedArtists);
+        if (!pair) {
+            return {
+                success: false,
+                error: 'Not enough eligible artists left for another round. End the session.',
+            };
+        }
+
+        const nextRoundNumber = (state.currentRound + 1) as 1 | 2 | 3;
+        const nextRound: ArtistVersusRound = {
+            roundNumber: nextRoundNumber,
+            artistA: pair.artistA,
+            artistB: pair.artistB,
+            outcome: null,
+            winner: null,
+            nukedArtist: null,
+        };
+
+        state.rounds.push(nextRound);
+        state.currentRound = nextRoundNumber;
+        state.phase = 'round';
+
+        await redis.set(ARTIST_VERSUS_KEY, state);
+
+        console.log(`🎤 ARTIST VERSUS R${nextRoundNumber}: ${pair.artistA.name} vs ${pair.artistB.name}`);
+
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to advance artist versus round:', error);
+        return { success: false, error: 'Could not advance round. Please try again.' };
+    }
+}
+
+// End the session and trigger the damage report (admin-triggered after round 3)
+export async function endArtistVersus(): Promise<{
+    success: boolean;
+    error?: string;
+    state?: ArtistVersusState;
+}> {
+    try {
+        const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (!state || !state.active) {
+            return { success: false, error: 'No active Artist Versus session.' };
+        }
+
+        state.phase = 'damageReport';
+        await redis.set(ARTIST_VERSUS_KEY, state);
+
+        console.log(`🎤 ARTIST VERSUS: Session ended. Player=${state.playerName || 'anon'}, BombUsed=${state.bombUsed}`);
+
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to end artist versus:', error);
+        return { success: false, error: 'Could not end session. Please try again.' };
+    }
+}
+
+// Cancel/clear the session state. Does NOT un-nuke any artists (the elim set persists).
+export async function cancelArtistVersus(): Promise<{ success: boolean }> {
+    try {
+        await redis.del(ARTIST_VERSUS_KEY);
+        console.log('🎤 ARTIST VERSUS: Cancelled by admin');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to cancel artist versus:', error);
+        return { success: false };
     }
 }

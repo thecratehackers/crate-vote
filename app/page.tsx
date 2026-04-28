@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS, BROADCAST } from '@/lib/config';
 import { PlaylistSkeleton } from '@/components/Skeleton';
 import VersusBattle from '@/components/VersusBattle';
+import ArtistVersus, { type ArtistVersusState as ArtistVersusComponentState } from '@/components/ArtistVersus';
 import VideoPreview from '@/components/VideoPreview';
 import JukeboxPlayer from '@/components/JukeboxPlayer';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -371,6 +372,18 @@ export default function HomePage() {
     const [versusBattle, setVersusBattle] = useState<VersusBattleState>({ active: false });
     const [battleCountdown, setBattleCountdown] = useState(0);
     const [isVotingInBattle, setIsVotingInBattle] = useState(false);
+
+    // 🎤 Artist Versus state (admin-hosted segment, audience watches)
+    const initialArtistVersusState: ArtistVersusComponentState = {
+        active: false,
+        phase: 'lobby',
+        currentRound: 0,
+        rounds: [],
+        bombUsed: false,
+        playerName: null,
+        startedAt: 0,
+    };
+    const [artistVersus, setArtistVersus] = useState<ArtistVersusComponentState>(initialArtistVersusState);
 
     // 🎬 Video Preview state
     interface VideoPreviewState {
@@ -1244,6 +1257,27 @@ export default function HomePage() {
             clearInterval(interval);
         };
     }, [visitorId, fetchPlaylist]);
+
+    // 🎤 ARTIST VERSUS - poll public state every 1s so the audience screen stays live
+    useEffect(() => {
+        let cancelled = false;
+        const fetchArtistVersus = async () => {
+            try {
+                const res = await fetch('/api/artist-versus');
+                if (!res.ok) return;
+                const data: ArtistVersusComponentState = await res.json();
+                if (!cancelled) setArtistVersus(data);
+            } catch (error) {
+                // Non-blocking — keep last known state on error
+            }
+        };
+        fetchArtistVersus();
+        const interval = setInterval(fetchArtistVersus, 1000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, []);
 
 
 
@@ -3437,6 +3471,15 @@ export default function HomePage() {
                             onVote={handleBattleVote}
                             isVoting={isVotingInBattle}
                         />
+                    </ErrorBoundary>
+                )
+            }
+
+            {/* 🎤 ARTIST VERSUS - admin-hosted segment, audience watches */}
+            {
+                artistVersus.active && (
+                    <ErrorBoundary fallback={<div className="battle-error">🎤 Artist Versus error - refreshing...</div>}>
+                        <ArtistVersus state={artistVersus} />
                     </ErrorBoundary>
                 )
             }

@@ -304,6 +304,48 @@ export default function AdminPage() {
     const [battleCountdown, setBattleCountdown] = useState(0);
     const isResolvingBattle = useRef(false);  // Prevent multiple auto-resolves
 
+    // Artist Versus state (admin-hosted game-show segment)
+    interface ArtistVersusContestantLocal {
+        name: string;
+        albumArt: string;
+        sampleSongName: string;
+        songCount: number;
+    }
+    interface ArtistVersusRoundLocal {
+        roundNumber: 1 | 2 | 3;
+        artistA: ArtistVersusContestantLocal;
+        artistB: ArtistVersusContestantLocal;
+        outcome: 'pick' | 'bomb' | null;
+        winner: 'A' | 'B' | null;
+        nukedArtist: 'A' | 'B' | null;
+        nukedSongIds?: string[];
+        nukedArtistName?: string;
+        completedAt?: number;
+    }
+    interface ArtistVersusStateLocal {
+        active: boolean;
+        phase: 'lobby' | 'round' | 'awaitingNext' | 'damageReport';
+        currentRound: 0 | 1 | 2 | 3;
+        rounds: ArtistVersusRoundLocal[];
+        bombUsed: boolean;
+        playerName: string | null;
+        startedAt: number;
+    }
+    const initialArtistVersus: ArtistVersusStateLocal = {
+        active: false,
+        phase: 'lobby',
+        currentRound: 0,
+        rounds: [],
+        bombUsed: false,
+        playerName: null,
+        startedAt: 0,
+    };
+    const [artistVersus, setArtistVersus] = useState<ArtistVersusStateLocal>(initialArtistVersus);
+    const [showArtistVersusLobby, setShowArtistVersusLobby] = useState(false);
+    const [artistVersusPlayerInput, setArtistVersusPlayerInput] = useState('');
+    const [isArtistVersusBusy, setIsArtistVersusBusy] = useState(false);
+    const [bombArmedSide, setBombArmedSide] = useState<'A' | 'B' | null>(null);  // Two-tap arm-and-fire
+
     // 📺 SHOW CLOCK - ESPN-style segment ticker
     interface ShowSegmentLocal {
         id: string;
@@ -1421,6 +1463,122 @@ export default function AdminPage() {
         }
     };
 
+    // ============ ARTIST VERSUS HANDLERS ============
+
+    const fetchArtistVersus = useCallback(async () => {
+        if (!isAuthenticated) return;
+        try {
+            const res = await adminFetch('/api/admin/artist-versus');
+            if (!res.ok) return;
+            const data = await res.json();
+            setArtistVersus(data);
+        } catch (error) {
+            console.error('Failed to fetch artist versus:', error);
+        }
+    }, [isAuthenticated, adminPassword, adminId]);
+
+    // Poll artist versus state every 1s when authenticated
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        fetchArtistVersus();
+        const interval = setInterval(fetchArtistVersus, 1000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated, fetchArtistVersus]);
+
+    // Reset bomb-armed state when round changes
+    useEffect(() => {
+        setBombArmedSide(null);
+    }, [artistVersus.currentRound, artistVersus.phase]);
+
+    const artistVersusAction = async (
+        body: Record<string, unknown>,
+        successMsg?: string
+    ): Promise<boolean> => {
+        setIsArtistVersusBusy(true);
+        try {
+            const res = await adminFetch('/api/admin/artist-versus', {
+                method: 'POST',
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setMessage({ type: 'error', text: data.error || 'Artist Versus action failed' });
+                return false;
+            }
+            if (data.state) setArtistVersus(data.state);
+            if (successMsg) setMessage({ type: 'success', text: successMsg });
+            return true;
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Artist Versus action failed - network error' });
+            return false;
+        } finally {
+            setIsArtistVersusBusy(false);
+        }
+    };
+
+    const handleStartArtistVersus = async () => {
+        const playerName = artistVersusPlayerInput.trim();
+        const ok = await artistVersusAction(
+            { action: 'start', playerName: playerName || undefined },
+            playerName ? `🎤 ${playerName} is up!` : '🎤 Artist Versus started!'
+        );
+        if (ok) {
+            setShowArtistVersusLobby(false);
+            setArtistVersusPlayerInput('');
+        }
+    };
+
+    const handleArtistVersusPick = async (choice: 'A' | 'B') => {
+        if (isArtistVersusBusy || artistVersus.phase !== 'round') return;
+        const round = artistVersus.rounds[artistVersus.currentRound - 1];
+        if (!round) return;
+        const winnerName = choice === 'A' ? round.artistA.name : round.artistB.name;
+        await artistVersusAction(
+            { action: 'pick', choice },
+            `Pick: ${winnerName}`
+        );
+    };
+
+    const handleArtistVersusBombArm = (side: 'A' | 'B') => {
+        if (isArtistVersusBusy || artistVersus.bombUsed || artistVersus.phase !== 'round') return;
+        setBombArmedSide(side);
+    };
+
+    const handleArtistVersusBombFire = async (side: 'A' | 'B') => {
+        if (isArtistVersusBusy || artistVersus.bombUsed || artistVersus.phase !== 'round') return;
+        if (bombArmedSide !== side) return;
+        const round = artistVersus.rounds[artistVersus.currentRound - 1];
+        if (!round) return;
+        const targetName = side === 'A' ? round.artistA.name : round.artistB.name;
+        const ok = await artistVersusAction(
+            { action: 'bomb', target: side },
+            `BOOM. ${targetName} nuked.`
+        );
+        if (ok) {
+            setBombArmedSide(null);
+            // Refresh playlist since songs were just deleted
+            fetchPlaylist();
+        }
+    };
+
+    const handleArtistVersusNext = async () => {
+        await artistVersusAction({ action: 'next' });
+    };
+
+    const handleArtistVersusEnd = async () => {
+        await artistVersusAction({ action: 'end' }, 'Damage report shown.');
+    };
+
+    const handleArtistVersusCancel = async () => {
+        const confirmed = window.confirm('Cancel Artist Versus? Note: Cancelling does NOT un-nuke any bombed artists.');
+        if (!confirmed) return;
+        const ok = await artistVersusAction({ action: 'cancel' }, 'Artist Versus cancelled.');
+        if (ok) {
+            setArtistVersus(initialArtistVersus);
+            setBombArmedSide(null);
+        }
+    };
+
     // ============ SHOW CLOCK HANDLERS ============
 
     const fetchShowClock = useCallback(async () => {
@@ -2396,6 +2554,190 @@ export default function AdminPage() {
                                             )}
                                         </div>
                                     )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 🎤 ARTIST VERSUS - Admin-hosted artist-vs-artist game-show segment */}
+                        <div className="artist-versus-section">
+                            {!artistVersus.active && !showArtistVersusLobby && (
+                                <button
+                                    className="tool-btn artist-versus-launcher"
+                                    onClick={() => setShowArtistVersusLobby(true)}
+                                >
+                                    <span className="tool-icon">🎤</span>
+                                    <span className="tool-name">Artist Versus</span>
+                                </button>
+                            )}
+
+                            {!artistVersus.active && showArtistVersusLobby && (
+                                <div className="artist-versus-lobby">
+                                    <div className="av-lobby-title">🎤 Artist Versus — Pick Your Player</div>
+                                    <div className="av-lobby-hint">Grab someone from the crowd. Type their first name (optional, looks great on stream).</div>
+                                    <input
+                                        type="text"
+                                        className="av-lobby-input"
+                                        value={artistVersusPlayerInput}
+                                        onChange={(e) => setArtistVersusPlayerInput(e.target.value)}
+                                        placeholder="Player first name"
+                                        maxLength={30}
+                                        autoFocus
+                                    />
+                                    <div className="av-lobby-actions">
+                                        <button
+                                            className="tool-btn av-lobby-start"
+                                            onClick={handleStartArtistVersus}
+                                            disabled={isArtistVersusBusy}
+                                        >
+                                            <span className="tool-icon">▶️</span>
+                                            <span className="tool-name">{isArtistVersusBusy ? 'Starting...' : 'Start Round 1'}</span>
+                                        </button>
+                                        <button
+                                            className="tool-btn danger-subtle"
+                                            onClick={() => { setShowArtistVersusLobby(false); setArtistVersusPlayerInput(''); }}
+                                            disabled={isArtistVersusBusy}
+                                        >
+                                            <span className="tool-icon">✕</span>
+                                            <span className="tool-name">Cancel</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {artistVersus.active && (
+                                <div className="artist-versus-host">
+                                    <div className="av-host-header">
+                                        <div className="av-host-title">
+                                            🎤 ARTIST VERSUS
+                                            {artistVersus.playerName && <span className="av-host-player"> — {artistVersus.playerName}</span>}
+                                        </div>
+                                        <div className="av-host-meta">
+                                            <span className="av-host-round">
+                                                {artistVersus.phase === 'damageReport'
+                                                    ? 'COMPLETE'
+                                                    : `R${artistVersus.currentRound}/3`}
+                                            </span>
+                                            <span className={`av-host-bomb ${artistVersus.bombUsed ? 'used' : 'armed'}`}>
+                                                💣 {artistVersus.bombUsed ? 'USED' : 'READY'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Active round — pick / bomb controls */}
+                                    {artistVersus.phase === 'round' && artistVersus.rounds[artistVersus.currentRound - 1] && (() => {
+                                        const round = artistVersus.rounds[artistVersus.currentRound - 1];
+                                        return (
+                                            <div className="av-host-arena">
+                                                {(['A', 'B'] as const).map(side => {
+                                                    const contestant = side === 'A' ? round.artistA : round.artistB;
+                                                    const isArmed = bombArmedSide === side;
+                                                    return (
+                                                        <div key={side} className={`av-host-side ${isArmed ? 'armed' : ''}`}>
+                                                            <button
+                                                                className="av-host-pick-btn"
+                                                                onClick={() => handleArtistVersusPick(side)}
+                                                                disabled={isArtistVersusBusy}
+                                                            >
+                                                                <img src={contestant.albumArt} alt="" className="av-host-art" />
+                                                                <div className="av-host-name">{contestant.name}</div>
+                                                                <div className="av-host-sub">"{contestant.sampleSongName}"</div>
+                                                                <div className="av-host-sub-count">{contestant.songCount} songs</div>
+                                                            </button>
+                                                            {!isArmed ? (
+                                                                <button
+                                                                    className="av-host-bomb-btn arm"
+                                                                    onClick={() => handleArtistVersusBombArm(side)}
+                                                                    disabled={isArtistVersusBusy || artistVersus.bombUsed}
+                                                                    title={artistVersus.bombUsed ? 'Bomb already used' : 'Arm nuke'}
+                                                                >
+                                                                    💣 ARM NUKE
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    className="av-host-bomb-btn fire"
+                                                                    onClick={() => handleArtistVersusBombFire(side)}
+                                                                    disabled={isArtistVersusBusy}
+                                                                >
+                                                                    🔥 FIRE — NUKES {contestant.name.toUpperCase()}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Awaiting next round */}
+                                    {artistVersus.phase === 'awaitingNext' && (
+                                        <div className="av-host-between">
+                                            <div className="av-host-result">
+                                                Round {artistVersus.currentRound} resolved.
+                                                {(() => {
+                                                    const r = artistVersus.rounds[artistVersus.currentRound - 1];
+                                                    if (!r) return null;
+                                                    if (r.outcome === 'pick') {
+                                                        const w = r.winner === 'A' ? r.artistA.name : r.artistB.name;
+                                                        const l = r.winner === 'A' ? r.artistB.name : r.artistA.name;
+                                                        return ` ${w} over ${l}.`;
+                                                    }
+                                                    if (r.outcome === 'bomb') {
+                                                        return ` ${r.nukedArtistName} NUKED (${r.nukedSongIds?.length || 0} songs wiped).`;
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+                                            <button
+                                                className="tool-btn av-host-next"
+                                                onClick={handleArtistVersusNext}
+                                                disabled={isArtistVersusBusy}
+                                            >
+                                                <span className="tool-icon">⏭️</span>
+                                                <span className="tool-name">Next Round</span>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Damage report after round 3 (or admin-ended) */}
+                                    {artistVersus.phase === 'damageReport' && (
+                                        <div className="av-host-damage">
+                                            <div className="av-host-damage-title">DAMAGE REPORT</div>
+                                            {artistVersus.rounds.map(r => (
+                                                <div key={r.roundNumber} className={`av-host-damage-row ${r.outcome === 'bomb' ? 'nuked' : ''}`}>
+                                                    <span>R{r.roundNumber}</span>
+                                                    <span>
+                                                        {r.outcome === 'pick'
+                                                            ? `${r.winner === 'A' ? r.artistA.name : r.artistB.name} over ${r.winner === 'A' ? r.artistB.name : r.artistA.name}`
+                                                            : r.outcome === 'bomb'
+                                                                ? `NUKED ${r.nukedArtistName} (${r.nukedSongIds?.length || 0} songs wiped)`
+                                                                : 'incomplete'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Action buttons - end / cancel */}
+                                    <div className="av-host-actions">
+                                        {artistVersus.phase === 'awaitingNext' && artistVersus.currentRound === 3 && (
+                                            <button
+                                                className="tool-btn av-host-end"
+                                                onClick={handleArtistVersusEnd}
+                                                disabled={isArtistVersusBusy}
+                                            >
+                                                <span className="tool-icon">🏁</span>
+                                                <span className="tool-name">Show Damage Report</span>
+                                            </button>
+                                        )}
+                                        <button
+                                            className="tool-btn danger-subtle"
+                                            onClick={handleArtistVersusCancel}
+                                            disabled={isArtistVersusBusy}
+                                        >
+                                            <span className="tool-icon">✕</span>
+                                            <span className="tool-name">{artistVersus.phase === 'damageReport' ? 'Close' : 'Cancel'}</span>
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
