@@ -15211,3 +15211,50 @@ input:disabled {
     padding: 3px 8px;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   🔒 KARTRA MULTI-STEP ONBOARDING — restored Apr 28, 2026
+   Step indicator dots, animated emoji, inline Kartra error pill
+   ════════════════════════════════════════════════════════════════════════ */
+
+.onboarding-steps-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+}
+
+.step-dot.active {
+  background: var(--orange-primary);
+  box-shadow: 0 0 8px rgba(211, 119, 29, 0.5);
+  transform: scale(1.2);
+}
+
+.step3-emoji {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+  animation: emojiFloat 2s ease-in-out infinite;
+}
+
+@keyframes emojiFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.kartra-error {
+  color: var(--error, #ef4444);
+  font-size: 0.8rem;
+  margin: 0;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}

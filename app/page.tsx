@@ -477,6 +477,13 @@ export default function HomePage() {
     const [showRulesPopover, setShowRulesPopover] = useState(false);
     const [userLocation, setUserLocation] = useState<string | null>(null);  // User's location for tracking
 
+    // 🎯 Multi-step onboarding state (2 steps: Name → Email/Phone → Kartra)
+    const [onboardingStep, setOnboardingStep] = useState<1 | 2>(1);
+    const [emailInput, setEmailInput] = useState('');
+    const [phoneInput, setPhoneInput] = useState('');
+    const [isSubmittingKartra, setIsSubmittingKartra] = useState(false);
+    const [kartraError, setKartraError] = useState<string | null>(null);
+
     // 📊 SESSION RECAP - End-of-session summary + returning user memory
     interface SessionRecap {
         date: string;
@@ -795,8 +802,8 @@ export default function HomePage() {
         return words.some(word => BLOCKED_WORDS.has(word));
     };
 
-    // Simple username-only entry. No RSVP, no Kartra, no email — just a display name.
-    const handleOnboardingComplete = async () => {
+    // Step 1 → Step 2: Validate display name and advance to email/phone capture
+    const handleStep1Next = () => {
         const name = usernameInput.trim();
         if (name.length === 0) {
             setMessage({ type: 'error', text: 'Please enter a name' });
@@ -805,6 +812,46 @@ export default function HomePage() {
         if (containsBadWord(name)) {
             setMessage({ type: 'error', text: 'Please choose an appropriate name' });
             return;
+        }
+        setOnboardingStep(2);
+    };
+
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    // Phone is REQUIRED. Accept anything with at least 7 digits (loose intl-friendly).
+    const isValidPhone = (phone: string) => (phone.match(/\d/g) || []).length >= 7;
+
+    // Step 2 submit: Push lead to Kartra (email + phone REQUIRED), then enter the jukebox.
+    // First name from Step 1 becomes the hackathon username (no separate name modal).
+    const handleOnboardingComplete = async () => {
+        const name = usernameInput.trim();
+        const email = emailInput.trim();
+        const phone = phoneInput.trim();
+
+        if (!email || !isValidEmail(email)) {
+            setKartraError('Enter a valid email address');
+            return;
+        }
+        if (!phone || !isValidPhone(phone)) {
+            setKartraError('Enter a valid phone number');
+            return;
+        }
+
+        setIsSubmittingKartra(true);
+        setKartraError(null);
+
+        try {
+            await fetch('/api/kartra', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    phone,
+                    firstName: name,
+                }),
+            });
+        } catch (err) {
+            // Don't block onboarding if Kartra fails — just log it
+            console.warn('Kartra submission failed (non-blocking):', err);
         }
 
         setIsSavingUsername(true);
@@ -818,8 +865,13 @@ export default function HomePage() {
         persistSet('crate-color', colorInput);
         setUserColor(colorInput);
         setIsSavingUsername(false);
+        setIsSubmittingKartra(false);
         setShowUsernameModal(false);
-        setMessage({ type: 'success', text: `Welcome, ${name}! 🎧` });
+        setOnboardingStep(1);
+        setMessage({ type: 'success', text: `Welcome, ${name}! You're in. 🎧` });
+
+        // Mark RSVP done so returning visitors skip the Kartra gate forever
+        persistSet('crate-rsvp-done', 'true');
 
         persistSyncToCookie();
 
@@ -2223,32 +2275,97 @@ export default function HomePage() {
     return (
         <div className="stream-layout">
 
-            {/* 🔒 JOIN OVERLAY — Kartra owns the only signup widget */}
+            {/* 🔒 JOIN OVERLAY — Multi-step onboarding with Kartra hackathon RSVP */}
             {showUsernameModal && !username && (
                 <div className="join-overlay">
                     <div className="join-card">
-                        <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
-                        <h2 className="join-title">Pick a name to get started</h2>
-                        <div className="join-name-section">
-                            <input
-                                type="text"
-                                className="join-name-input"
-                                placeholder="Your name"
-                                value={usernameInput}
-                                onChange={(e) => setUsernameInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleOnboardingComplete()}
-                                autoFocus
-                                maxLength={20}
-                                disabled={isSavingUsername}
-                            />
-                            <button
-                                className="join-go-btn"
-                                onClick={handleOnboardingComplete}
-                                disabled={!usernameInput.trim() || isSavingUsername}
-                            >
-                                {isSavingUsername ? 'Entering…' : 'Enter'}
-                            </button>
+                        {/* Step indicator */}
+                        <div className="onboarding-steps-indicator">
+                            <span className={`step-dot ${onboardingStep >= 1 ? 'active' : ''}`} />
+                            <span className={`step-dot ${onboardingStep >= 2 ? 'active' : ''}`} />
                         </div>
+
+                        {/* ── STEP 1: First Name ── */}
+                        {onboardingStep === 1 && (
+                            <>
+                                <img src="/logo.png" alt="Crate Hackers" className="join-logo" />
+                                <h2 className="join-title">Join the Live Playlist</h2>
+                                <p className="join-subtitle">
+                                    Search songs. Vote your favorites up. Build the playlist together.
+                                </p>
+                                <div className="join-name-section">
+                                    <input
+                                        type="text"
+                                        className="join-name-input"
+                                        placeholder="Your first name"
+                                        value={usernameInput}
+                                        onChange={(e) => setUsernameInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && usernameInput.trim() && handleStep1Next()}
+                                        autoFocus
+                                        maxLength={20}
+                                    />
+                                    <button
+                                        className="join-go-btn"
+                                        onClick={handleStep1Next}
+                                        disabled={!usernameInput.trim()}
+                                    >
+                                        Next →
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {/* ── STEP 2: Email + Phone (Kartra hackathon RSVP) ── */}
+                        {onboardingStep === 2 && (
+                            <>
+                                <div className="step3-emoji">📡</div>
+                                <h2 className="join-title">RSVP for the Hackathon</h2>
+                                <p className="join-subtitle">
+                                    Get notified before each live event. Email + phone required.
+                                </p>
+                                <div className="join-capture-section">
+                                    <input
+                                        type="email"
+                                        className={`join-name-input ${emailInput && !isValidEmail(emailInput) ? 'input-invalid' : ''}`}
+                                        placeholder="you@email.com"
+                                        value={emailInput}
+                                        onChange={(e) => { setEmailInput(e.target.value); setKartraError(null); }}
+                                        onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && isValidPhone(phoneInput) && handleOnboardingComplete()}
+                                        autoFocus
+                                    />
+                                    {emailInput && !isValidEmail(emailInput) && (
+                                        <p className="inline-validation-hint">Enter a valid email</p>
+                                    )}
+                                    <input
+                                        type="tel"
+                                        className={`join-name-input ${phoneInput && !isValidPhone(phoneInput) ? 'input-invalid' : ''}`}
+                                        placeholder="Phone number"
+                                        value={phoneInput}
+                                        onChange={(e) => { setPhoneInput(e.target.value); setKartraError(null); }}
+                                        onKeyDown={(e) => e.key === 'Enter' && isValidEmail(emailInput) && isValidPhone(phoneInput) && handleOnboardingComplete()}
+                                    />
+                                    {phoneInput && !isValidPhone(phoneInput) && (
+                                        <p className="inline-validation-hint">Enter a valid phone number</p>
+                                    )}
+                                    {kartraError && (
+                                        <p className="kartra-error">{kartraError}</p>
+                                    )}
+                                    <button
+                                        className="join-go-btn"
+                                        onClick={handleOnboardingComplete}
+                                        disabled={!isValidEmail(emailInput) || !isValidPhone(phoneInput) || isSubmittingKartra}
+                                    >
+                                        {isSubmittingKartra ? 'Joining…' : 'RSVP & Enter →'}
+                                    </button>
+                                </div>
+                                <p className="join-privacy-note">
+                                    🔒 Unsubscribe anytime. We never share your info.
+                                </p>
+                                <button className="step-back-btn" onClick={() => setOnboardingStep(1)}>
+                                    ← Back
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
