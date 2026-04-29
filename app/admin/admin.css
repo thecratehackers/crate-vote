@@ -529,6 +529,73 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+/* Preview play button — circular overlay anchored to the album art corner */
+.av-host-art-wrap {
+    position: relative;
+}
+
+.av-host-preview-btn {
+    position: absolute;
+    /* Anchor near the album art's bottom-right corner.
+       Album art is 90x90 centered in the card, with ~8px bottom margin. */
+    top: 70px;
+    left: 50%;
+    transform: translateX(20px);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: #1DB954;
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.av-host-preview-btn:hover:not(.no-preview) {
+    transform: translateX(20px) scale(1.1);
+}
+
+.av-host-preview-btn.playing {
+    background: #d946ef;
+    animation: av-preview-pulse 0.9s infinite;
+}
+
+.av-host-preview-btn.no-preview {
+    background: #555;
+    border-color: #777;
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+@keyframes av-preview-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 8px rgba(217, 70, 239, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 0 18px rgba(217, 70, 239, 0.9);
+    }
+}
+
+@media (max-width: 640px) {
+    .av-host-preview-btn {
+        top: 50px;
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+    }
+}
+
 .av-host-name {
     font-weight: 800;
     font-size: 0.95rem;

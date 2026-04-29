@@ -3226,6 +3226,7 @@ interface ArtistVersusContestant {
     albumArt: string;    // Cover art for the showcase song
     sampleSongName: string;  // The track we're using as the visual hook
     songCount: number;   // How many songs by this artist are currently in the playlist
+    previewUrl: string | null;  // Spotify 30s preview MP3 URL (often null - many tracks have no preview)
 }
 
 interface ArtistVersusRound {
@@ -3294,14 +3295,17 @@ function getUsedArtistKeys(state: ArtistVersusState): Set<string> {
     return used;
 }
 
-// Build a contestant card from an artist's flagship song
+// Build a contestant card from an artist's flagship song.
+// Picks the first song WITH a preview URL if any exist (so the host always
+// has something to play); falls back to the highest-scoring song otherwise.
 function buildContestant(displayName: string, songs: (Song & { score: number })[]): ArtistVersusContestant {
-    const flagship = songs[0];  // Already sorted by score desc
+    const flagship = songs.find(s => !!s.previewUrl) ?? songs[0];
     return {
         name: displayName,
         albumArt: flagship.albumArt,
         sampleSongName: flagship.name,
         songCount: songs.length,
+        previewUrl: flagship.previewUrl ?? null,
     };
 }
 

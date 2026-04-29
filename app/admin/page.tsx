@@ -310,6 +310,7 @@ export default function AdminPage() {
         albumArt: string;
         sampleSongName: string;
         songCount: number;
+        previewUrl?: string | null;
     }
     interface ArtistVersusRoundLocal {
         roundNumber: 1 | 2 | 3;
@@ -345,6 +346,10 @@ export default function AdminPage() {
     const [artistVersusPlayerInput, setArtistVersusPlayerInput] = useState('');
     const [isArtistVersusBusy, setIsArtistVersusBusy] = useState(false);
     const [bombArmedSide, setBombArmedSide] = useState<'A' | 'B' | null>(null);  // Two-tap arm-and-fire
+    const [previewingSide, setPreviewingSide] = useState<'A' | 'B' | null>(null);  // Which side's preview is currently playing
+    const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+    const previewStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const PREVIEW_DURATION_MS = 7000;  // 7s — middle of the 5-10s ask
 
     // 📺 SHOW CLOCK - ESPN-style segment ticker
     interface ShowSegmentLocal {
@@ -1490,6 +1495,66 @@ export default function AdminPage() {
         setBombArmedSide(null);
     }, [artistVersus.currentRound, artistVersus.phase]);
 
+    // ============ ARTIST VERSUS PREVIEW PLAYER ============
+    // Stops the currently playing preview (if any) and clears the auto-stop timer.
+    const stopArtistVersusPreview = useCallback(() => {
+        if (previewStopTimeoutRef.current) {
+            clearTimeout(previewStopTimeoutRef.current);
+            previewStopTimeoutRef.current = null;
+        }
+        if (previewAudioRef.current) {
+            try {
+                previewAudioRef.current.pause();
+                previewAudioRef.current.src = '';
+            } catch (e) { /* ignore */ }
+            previewAudioRef.current = null;
+        }
+        setPreviewingSide(null);
+    }, []);
+
+    // Play a 7-second snippet of the contestant's flagship Spotify preview.
+    // If the preview URL is null (Spotify often omits these), shows a toast.
+    // Tapping the same side again toggles it off.
+    const handleArtistVersusPreview = useCallback((side: 'A' | 'B', previewUrl: string | null | undefined) => {
+        if (previewingSide === side) {
+            stopArtistVersusPreview();
+            return;
+        }
+        if (!previewUrl) {
+            setMessage({ type: 'error', text: 'No Spotify preview available for this artist.' });
+            return;
+        }
+        stopArtistVersusPreview();
+        try {
+            const audio = new Audio(previewUrl);
+            audio.volume = 0.85;
+            previewAudioRef.current = audio;
+            setPreviewingSide(side);
+            audio.play().catch(err => {
+                console.error('Preview playback failed:', err);
+                setMessage({ type: 'error', text: 'Could not play preview. Tap again.' });
+                stopArtistVersusPreview();
+            });
+            previewStopTimeoutRef.current = setTimeout(() => {
+                stopArtistVersusPreview();
+            }, PREVIEW_DURATION_MS);
+            audio.addEventListener('ended', stopArtistVersusPreview);
+        } catch (e) {
+            console.error('Preview audio init failed:', e);
+            stopArtistVersusPreview();
+        }
+    }, [previewingSide, stopArtistVersusPreview]);
+
+    // Auto-stop preview when the round changes, phase changes, or the panel cancels
+    useEffect(() => {
+        stopArtistVersusPreview();
+    }, [artistVersus.currentRound, artistVersus.phase, artistVersus.active, stopArtistVersusPreview]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => stopArtistVersusPreview();
+    }, [stopArtistVersusPreview]);
+
     const artistVersusAction = async (
         body: Record<string, unknown>,
         successMsg?: string
@@ -2631,18 +2696,31 @@ export default function AdminPage() {
                                                 {(['A', 'B'] as const).map(side => {
                                                     const contestant = side === 'A' ? round.artistA : round.artistB;
                                                     const isArmed = bombArmedSide === side;
+                                                    const isPreviewing = previewingSide === side;
+                                                    const hasPreview = !!contestant.previewUrl;
                                                     return (
                                                         <div key={side} className={`av-host-side ${isArmed ? 'armed' : ''}`}>
-                                                            <button
-                                                                className="av-host-pick-btn"
-                                                                onClick={() => handleArtistVersusPick(side)}
-                                                                disabled={isArtistVersusBusy}
-                                                            >
-                                                                <img src={contestant.albumArt} alt="" className="av-host-art" />
-                                                                <div className="av-host-name">{contestant.name}</div>
-                                                                <div className="av-host-sub">"{contestant.sampleSongName}"</div>
-                                                                <div className="av-host-sub-count">{contestant.songCount} songs</div>
-                                                            </button>
+                                                            <div className="av-host-art-wrap">
+                                                                <button
+                                                                    className="av-host-pick-btn"
+                                                                    onClick={() => handleArtistVersusPick(side)}
+                                                                    disabled={isArtistVersusBusy}
+                                                                >
+                                                                    <img src={contestant.albumArt} alt="" className="av-host-art" />
+                                                                    <div className="av-host-name">{contestant.name}</div>
+                                                                    <div className="av-host-sub">"{contestant.sampleSongName}"</div>
+                                                                    <div className="av-host-sub-count">{contestant.songCount} songs</div>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className={`av-host-preview-btn ${isPreviewing ? 'playing' : ''} ${!hasPreview ? 'no-preview' : ''}`}
+                                                                    onClick={(e) => { e.stopPropagation(); handleArtistVersusPreview(side, contestant.previewUrl); }}
+                                                                    title={hasPreview ? (isPreviewing ? 'Stop preview' : 'Play 7-second preview') : 'No Spotify preview available'}
+                                                                    aria-label={hasPreview ? (isPreviewing ? `Stop ${contestant.name} preview` : `Preview ${contestant.name}`) : 'No preview available'}
+                                                                >
+                                                                    {isPreviewing ? '⏸' : hasPreview ? '▶' : '🔇'}
+                                                                </button>
+                                                            </div>
                                                             {!isArmed ? (
                                                                 <button
                                                                     className="av-host-bomb-btn arm"
