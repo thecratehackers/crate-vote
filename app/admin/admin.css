@@ -568,6 +568,25 @@
     animation: av-preview-pulse 0.9s infinite;
 }
 
+.av-host-preview-btn.loading {
+    background: #555;
+    color: #fff;
+    animation: av-preview-loading-pulse 1.2s infinite;
+    cursor: wait;
+}
+
+@keyframes av-preview-loading-pulse {
+
+    0%,
+    100% {
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
 .av-host-preview-btn.no-preview {
     background: #555;
     border-color: #777;

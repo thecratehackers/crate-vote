@@ -350,6 +350,13 @@ export default function AdminPage() {
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
     const previewStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const PREVIEW_DURATION_MS = 7000;  // 7s — middle of the 5-10s ask
+    // Per-round cache of resolved preview URLs. Populated eagerly when a round
+    // starts (Spotify URL if available, else iTunes lookup). The click handler
+    // reads from this cache so audio.play() can run synchronously and preserve
+    // the browser's user-gesture permission (Safari/Chrome autoplay policy).
+    // 'loading' = still resolving, null = no preview found anywhere.
+    type PreviewCacheEntry = string | 'loading' | null;
+    const [previewUrlCache, setPreviewUrlCache] = useState<{ A: PreviewCacheEntry; B: PreviewCacheEntry }>({ A: 'loading', B: 'loading' });
 
     // 📺 SHOW CLOCK - ESPN-style segment ticker
     interface ShowSegmentLocal {
@@ -1512,82 +1519,89 @@ export default function AdminPage() {
         setPreviewingSide(null);
     }, []);
 
-    // Internal: actually start audio playback from a URL. Returns true on
-    // successful start, false if the browser rejected playback (autoplay,
-    // CORS, 404, expired URL, etc.). Caller decides what to do on failure
-    // (try a fallback or show an error).
-    const startPreviewAudio = useCallback(async (side: 'A' | 'B', url: string): Promise<boolean> => {
-        try {
-            const audio = new Audio(url);
-            audio.volume = 0.85;
-            previewAudioRef.current = audio;
-            setPreviewingSide(side);
-            try {
-                await audio.play();
-            } catch (err) {
-                console.warn('Preview playback rejected for', url, err);
-                stopArtistVersusPreview();
-                return false;
-            }
-            previewStopTimeoutRef.current = setTimeout(() => {
-                stopArtistVersusPreview();
-            }, PREVIEW_DURATION_MS);
-            audio.addEventListener('ended', stopArtistVersusPreview);
-            return true;
-        } catch (e) {
-            console.warn('Preview audio init failed:', e);
-            stopArtistVersusPreview();
-            return false;
-        }
-    }, [stopArtistVersusPreview]);
+    // Eagerly resolve a working preview URL for both contestants when the
+    // round starts. Tries Spotify first (no API call), then falls back to
+    // iTunes lookup. Caches the result so the click handler can play
+    // synchronously (critical for browser autoplay policies — Safari/Chrome
+    // require audio.play() in the same task as the user click).
+    useEffect(() => {
+        if (!artistVersus.active || artistVersus.phase !== 'round') return;
+        const round = artistVersus.rounds[artistVersus.currentRound - 1];
+        if (!round) return;
 
-    // Play a 7-second snippet of the contestant's flagship track.
-    // Cascade: 1) Spotify previewUrl (instant, no API call when it works)
-    //          2) iTunes search via /api/preview-lookup (very reliable fallback)
-    //          3) error toast
-    // Tapping the same side again toggles it off.
-    const handleArtistVersusPreview = useCallback(async (
-        side: 'A' | 'B',
-        spotifyPreviewUrl: string | null | undefined,
-        artistName: string,
-        songName: string
-    ) => {
+        let cancelled = false;
+        setPreviewUrlCache({ A: 'loading', B: 'loading' });
+
+        const resolvePreview = async (
+            contestant: ArtistVersusContestantLocal
+        ): Promise<string | null> => {
+            if (contestant.previewUrl) return contestant.previewUrl;
+            try {
+                const res = await fetch('/api/preview-lookup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        artist: contestant.name,
+                        songName: contestant.sampleSongName,
+                    }),
+                });
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data.previewUrl || null;
+            } catch (e) {
+                console.warn('Preview lookup failed for', contestant.name, e);
+                return null;
+            }
+        };
+
+        resolvePreview(round.artistA).then(url => {
+            if (!cancelled) setPreviewUrlCache(prev => ({ ...prev, A: url }));
+        });
+        resolvePreview(round.artistB).then(url => {
+            if (!cancelled) setPreviewUrlCache(prev => ({ ...prev, B: url }));
+        });
+
+        return () => { cancelled = true; };
+    }, [artistVersus.active, artistVersus.phase, artistVersus.currentRound, artistVersus.rounds]);
+
+    // Click handler — fully SYNCHRONOUS up through audio.play() so the
+    // browser keeps the user-gesture permission and doesn't block playback.
+    const handleArtistVersusPreview = useCallback((side: 'A' | 'B') => {
         if (previewingSide === side) {
             stopArtistVersusPreview();
             return;
         }
         stopArtistVersusPreview();
 
-        // 1) Try Spotify previewUrl first (instant — no network call needed)
-        if (spotifyPreviewUrl) {
-            const ok = await startPreviewAudio(side, spotifyPreviewUrl);
-            if (ok) return;
+        const cached = previewUrlCache[side];
+        if (cached === 'loading') {
+            setMessage({ type: 'error', text: 'Preview still loading — tap again in a sec.' });
+            return;
+        }
+        if (!cached) {
+            setMessage({ type: 'error', text: 'No preview available for this artist.' });
+            return;
         }
 
-        // 2) Fall back to iTunes lookup
-        setPreviewingSide(side);  // Optimistic — show "loading" via the playing state
         try {
-            const res = await fetch('/api/preview-lookup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ artist: artistName, songName }),
+            const audio = new Audio(cached);
+            audio.volume = 0.85;
+            previewAudioRef.current = audio;
+            setPreviewingSide(side);
+            audio.play().catch(err => {
+                console.warn('Preview playback rejected:', err);
+                stopArtistVersusPreview();
+                setMessage({ type: 'error', text: 'Browser blocked playback. Try again.' });
             });
-            const data = await res.json();
-            if (!res.ok || !data.previewUrl) {
-                setPreviewingSide(null);
-                setMessage({ type: 'error', text: `No preview found for ${artistName}.` });
-                return;
-            }
-            const ok = await startPreviewAudio(side, data.previewUrl);
-            if (!ok) {
-                setMessage({ type: 'error', text: 'Preview blocked by browser. Tap again.' });
-            }
-        } catch (err) {
-            console.error('Preview lookup failed:', err);
-            setPreviewingSide(null);
-            setMessage({ type: 'error', text: 'Preview lookup failed.' });
+            previewStopTimeoutRef.current = setTimeout(() => {
+                stopArtistVersusPreview();
+            }, PREVIEW_DURATION_MS);
+            audio.addEventListener('ended', stopArtistVersusPreview);
+        } catch (e) {
+            console.warn('Preview init failed:', e);
+            stopArtistVersusPreview();
         }
-    }, [previewingSide, stopArtistVersusPreview, startPreviewAudio]);
+    }, [previewingSide, stopArtistVersusPreview, previewUrlCache]);
 
     // Auto-stop preview when the round changes, phase changes, or the panel cancels
     useEffect(() => {
@@ -2741,6 +2755,9 @@ export default function AdminPage() {
                                                     const contestant = side === 'A' ? round.artistA : round.artistB;
                                                     const isArmed = bombArmedSide === side;
                                                     const isPreviewing = previewingSide === side;
+                                                    const cached = previewUrlCache[side];
+                                                    const isLoadingPreview = cached === 'loading';
+                                                    const noPreview = cached === null;
                                                     return (
                                                         <div key={side} className={`av-host-side ${isArmed ? 'armed' : ''}`}>
                                                             <div className="av-host-art-wrap">
@@ -2756,20 +2773,20 @@ export default function AdminPage() {
                                                                 </button>
                                                                 <button
                                                                     type="button"
-                                                                    className={`av-host-preview-btn ${isPreviewing ? 'playing' : ''}`}
+                                                                    className={`av-host-preview-btn ${isPreviewing ? 'playing' : ''} ${isLoadingPreview ? 'loading' : ''} ${noPreview ? 'no-preview' : ''}`}
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        handleArtistVersusPreview(
-                                                                            side,
-                                                                            contestant.previewUrl,
-                                                                            contestant.name,
-                                                                            contestant.sampleSongName
-                                                                        );
+                                                                        handleArtistVersusPreview(side);
                                                                     }}
-                                                                    title={isPreviewing ? 'Stop preview' : 'Play 7-second preview'}
+                                                                    disabled={noPreview}
+                                                                    title={
+                                                                        noPreview ? 'No preview available' :
+                                                                        isLoadingPreview ? 'Loading preview...' :
+                                                                        isPreviewing ? 'Stop preview' : 'Play 7-second preview'
+                                                                    }
                                                                     aria-label={isPreviewing ? `Stop ${contestant.name} preview` : `Preview ${contestant.name}`}
                                                                 >
-                                                                    {isPreviewing ? '⏸' : '▶'}
+                                                                    {isPreviewing ? '⏸' : isLoadingPreview ? '…' : noPreview ? '🔇' : '▶'}
                                                                 </button>
                                                             </div>
                                                             {!isArmed ? (
