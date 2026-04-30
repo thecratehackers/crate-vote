@@ -1512,38 +1512,82 @@ export default function AdminPage() {
         setPreviewingSide(null);
     }, []);
 
-    // Play a 7-second snippet of the contestant's flagship Spotify preview.
-    // If the preview URL is null (Spotify often omits these), shows a toast.
-    // Tapping the same side again toggles it off.
-    const handleArtistVersusPreview = useCallback((side: 'A' | 'B', previewUrl: string | null | undefined) => {
-        if (previewingSide === side) {
-            stopArtistVersusPreview();
-            return;
-        }
-        if (!previewUrl) {
-            setMessage({ type: 'error', text: 'No Spotify preview available for this artist.' });
-            return;
-        }
-        stopArtistVersusPreview();
+    // Internal: actually start audio playback from a URL. Returns true on
+    // successful start, false if the browser rejected playback (autoplay,
+    // CORS, 404, expired URL, etc.). Caller decides what to do on failure
+    // (try a fallback or show an error).
+    const startPreviewAudio = useCallback(async (side: 'A' | 'B', url: string): Promise<boolean> => {
         try {
-            const audio = new Audio(previewUrl);
+            const audio = new Audio(url);
             audio.volume = 0.85;
             previewAudioRef.current = audio;
             setPreviewingSide(side);
-            audio.play().catch(err => {
-                console.error('Preview playback failed:', err);
-                setMessage({ type: 'error', text: 'Could not play preview. Tap again.' });
+            try {
+                await audio.play();
+            } catch (err) {
+                console.warn('Preview playback rejected for', url, err);
                 stopArtistVersusPreview();
-            });
+                return false;
+            }
             previewStopTimeoutRef.current = setTimeout(() => {
                 stopArtistVersusPreview();
             }, PREVIEW_DURATION_MS);
             audio.addEventListener('ended', stopArtistVersusPreview);
+            return true;
         } catch (e) {
-            console.error('Preview audio init failed:', e);
+            console.warn('Preview audio init failed:', e);
             stopArtistVersusPreview();
+            return false;
         }
-    }, [previewingSide, stopArtistVersusPreview]);
+    }, [stopArtistVersusPreview]);
+
+    // Play a 7-second snippet of the contestant's flagship track.
+    // Cascade: 1) Spotify previewUrl (instant, no API call when it works)
+    //          2) iTunes search via /api/preview-lookup (very reliable fallback)
+    //          3) error toast
+    // Tapping the same side again toggles it off.
+    const handleArtistVersusPreview = useCallback(async (
+        side: 'A' | 'B',
+        spotifyPreviewUrl: string | null | undefined,
+        artistName: string,
+        songName: string
+    ) => {
+        if (previewingSide === side) {
+            stopArtistVersusPreview();
+            return;
+        }
+        stopArtistVersusPreview();
+
+        // 1) Try Spotify previewUrl first (instant — no network call needed)
+        if (spotifyPreviewUrl) {
+            const ok = await startPreviewAudio(side, spotifyPreviewUrl);
+            if (ok) return;
+        }
+
+        // 2) Fall back to iTunes lookup
+        setPreviewingSide(side);  // Optimistic — show "loading" via the playing state
+        try {
+            const res = await fetch('/api/preview-lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ artist: artistName, songName }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.previewUrl) {
+                setPreviewingSide(null);
+                setMessage({ type: 'error', text: `No preview found for ${artistName}.` });
+                return;
+            }
+            const ok = await startPreviewAudio(side, data.previewUrl);
+            if (!ok) {
+                setMessage({ type: 'error', text: 'Preview blocked by browser. Tap again.' });
+            }
+        } catch (err) {
+            console.error('Preview lookup failed:', err);
+            setPreviewingSide(null);
+            setMessage({ type: 'error', text: 'Preview lookup failed.' });
+        }
+    }, [previewingSide, stopArtistVersusPreview, startPreviewAudio]);
 
     // Auto-stop preview when the round changes, phase changes, or the panel cancels
     useEffect(() => {
@@ -2697,7 +2741,6 @@ export default function AdminPage() {
                                                     const contestant = side === 'A' ? round.artistA : round.artistB;
                                                     const isArmed = bombArmedSide === side;
                                                     const isPreviewing = previewingSide === side;
-                                                    const hasPreview = !!contestant.previewUrl;
                                                     return (
                                                         <div key={side} className={`av-host-side ${isArmed ? 'armed' : ''}`}>
                                                             <div className="av-host-art-wrap">
@@ -2713,12 +2756,20 @@ export default function AdminPage() {
                                                                 </button>
                                                                 <button
                                                                     type="button"
-                                                                    className={`av-host-preview-btn ${isPreviewing ? 'playing' : ''} ${!hasPreview ? 'no-preview' : ''}`}
-                                                                    onClick={(e) => { e.stopPropagation(); handleArtistVersusPreview(side, contestant.previewUrl); }}
-                                                                    title={hasPreview ? (isPreviewing ? 'Stop preview' : 'Play 7-second preview') : 'No Spotify preview available'}
-                                                                    aria-label={hasPreview ? (isPreviewing ? `Stop ${contestant.name} preview` : `Preview ${contestant.name}`) : 'No preview available'}
+                                                                    className={`av-host-preview-btn ${isPreviewing ? 'playing' : ''}`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleArtistVersusPreview(
+                                                                            side,
+                                                                            contestant.previewUrl,
+                                                                            contestant.name,
+                                                                            contestant.sampleSongName
+                                                                        );
+                                                                    }}
+                                                                    title={isPreviewing ? 'Stop preview' : 'Play 7-second preview'}
+                                                                    aria-label={isPreviewing ? `Stop ${contestant.name} preview` : `Preview ${contestant.name}`}
                                                                 >
-                                                                    {isPreviewing ? '⏸' : hasPreview ? '▶' : '🔇'}
+                                                                    {isPreviewing ? '⏸' : '▶'}
                                                                 </button>
                                                             </div>
                                                             {!isArmed ? (
