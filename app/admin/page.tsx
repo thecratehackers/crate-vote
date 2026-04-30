@@ -1524,11 +1524,22 @@ export default function AdminPage() {
     // iTunes lookup. Caches the result so the click handler can play
     // synchronously (critical for browser autoplay policies — Safari/Chrome
     // require audio.play() in the same task as the user click).
+    //
+    // Track which round we've already prefetched so the polling cycle (which
+    // refreshes artistVersus state every 1s with a new rounds[] reference)
+    // doesn't re-trigger the prefetch and reset the cache mid-tap.
+    const prefetchedRoundRef = useRef<number>(0);
     useEffect(() => {
-        if (!artistVersus.active || artistVersus.phase !== 'round') return;
+        if (!artistVersus.active || artistVersus.phase !== 'round') {
+            prefetchedRoundRef.current = 0;
+            return;
+        }
+        if (prefetchedRoundRef.current === artistVersus.currentRound) return;
+
         const round = artistVersus.rounds[artistVersus.currentRound - 1];
         if (!round) return;
 
+        prefetchedRoundRef.current = artistVersus.currentRound;
         let cancelled = false;
         setPreviewUrlCache({ A: 'loading', B: 'loading' });
 
