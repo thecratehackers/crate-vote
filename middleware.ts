@@ -33,7 +33,7 @@ export function middleware(request: NextRequest) {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://app.kartra.com",
         "font-src 'self' https://fonts.gstatic.com https://d2uolguxr56s4e.cloudfront.net",
         "img-src 'self' data: https: blob:",
-        "media-src 'self' https://www.youtube.com https://player.twitch.tv https://*.twitchcdn.net",
+        "media-src 'self' https://www.youtube.com https://player.twitch.tv https://*.twitchcdn.net https://p.scdn.co https://*.scdn.co https://audio-ssl.itunes.apple.com https://*.itunes.apple.com",
         "frame-src 'self' https://www.youtube.com https://open.spotify.com https://player.twitch.tv https://www.twitch.tv https://embed.twitch.tv https://app.kartra.com https://crateoftheweek.com https://www.crateoftheweek.com",
         "frame-ancestors 'self' https://cratehackathon.com https://www.cratehackathon.com https://*.cratehackathon.com https://crateoftheweek.com https://www.crateoftheweek.com https://*.kartra.com https://kartra.com",
         "connect-src 'self' https://api.spotify.com https://*.upstash.io https://api.qrserver.com https://api.twitch.tv https://gql.twitch.tv https://*.twitchcdn.net https://app.kartra.com https://vitals.vercel-insights.com",
