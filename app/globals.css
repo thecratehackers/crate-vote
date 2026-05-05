@@ -8781,6 +8781,23 @@ body::before {
   cursor: not-allowed;
 }
 
+/* 🛡️ TOP 3 PROTECTED — locked from The Purge. Looks like a calm gold badge,
+   not a kill button. Same footprint so the layout doesn't shift. */
+.chaos-delete-btn.locked {
+  background: linear-gradient(135deg, #fde047 0%, #ca8a04 100%);
+  border-color: #fef3c7;
+  color: #422006;
+  cursor: not-allowed;
+  animation: none;
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.5);
+  pointer-events: auto;
+}
+
+.chaos-delete-btn.locked:hover {
+  transform: none;
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.7);
+}
+
 @keyframes deleteBtnPulse {
 
   0%,
