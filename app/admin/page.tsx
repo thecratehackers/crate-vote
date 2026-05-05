@@ -1636,14 +1636,14 @@ export default function AdminPage() {
             });
             const data = await res.json();
             if (!res.ok) {
-                setMessage({ type: 'error', text: data.error || 'Artist Versus action failed' });
+                setMessage({ type: 'error', text: data.error || '1s and 0s action failed' });
                 return false;
             }
             if (data.state) setArtistVersus(data.state);
             if (successMsg) setMessage({ type: 'success', text: successMsg });
             return true;
         } catch (error) {
-            setMessage({ type: 'error', text: 'Artist Versus action failed - network error' });
+            setMessage({ type: 'error', text: '1s and 0s action failed - network error' });
             return false;
         } finally {
             setIsArtistVersusBusy(false);
@@ -1654,7 +1654,7 @@ export default function AdminPage() {
         const playerName = artistVersusPlayerInput.trim();
         const ok = await artistVersusAction(
             { action: 'start', playerName: playerName || undefined },
-            playerName ? `🎤 ${playerName} is up!` : '🎤 Artist Versus started!'
+            playerName ? `🎲 ${playerName} is up!` : '🎲 1s and 0s started!'
         );
         if (ok) {
             setShowArtistVersusLobby(false);
@@ -1704,9 +1704,9 @@ export default function AdminPage() {
     };
 
     const handleArtistVersusCancel = async () => {
-        const confirmed = window.confirm('Cancel Artist Versus? Note: Cancelling does NOT un-nuke any bombed artists.');
+        const confirmed = window.confirm('Cancel 1s and 0s? Note: Cancelling does NOT un-nuke any bombed artists.');
         if (!confirmed) return;
-        const ok = await artistVersusAction({ action: 'cancel' }, 'Artist Versus cancelled.');
+        const ok = await artistVersusAction({ action: 'cancel' }, '1s and 0s cancelled.');
         if (ok) {
             setArtistVersus(initialArtistVersus);
             setBombArmedSide(null);
@@ -2692,21 +2692,21 @@ export default function AdminPage() {
                             )}
                         </div>
 
-                        {/* 🎤 ARTIST VERSUS - Admin-hosted artist-vs-artist game-show segment */}
+                        {/* 🎲 1s AND 0s - Admin-hosted artist-vs-artist game-show segment */}
                         <div className="artist-versus-section">
                             {!artistVersus.active && !showArtistVersusLobby && (
                                 <button
                                     className="tool-btn artist-versus-launcher"
                                     onClick={() => setShowArtistVersusLobby(true)}
                                 >
-                                    <span className="tool-icon">🎤</span>
-                                    <span className="tool-name">Artist Versus</span>
+                                    <span className="tool-icon">🎲</span>
+                                    <span className="tool-name">1s and 0s</span>
                                 </button>
                             )}
 
                             {!artistVersus.active && showArtistVersusLobby && (
                                 <div className="artist-versus-lobby">
-                                    <div className="av-lobby-title">🎤 Artist Versus — Pick Your Player</div>
+                                    <div className="av-lobby-title">🎲 1s and 0s — Pick Your Player</div>
                                     <div className="av-lobby-hint">Grab someone from the crowd. Type their first name (optional, looks great on stream).</div>
                                     <input
                                         type="text"
@@ -2742,7 +2742,7 @@ export default function AdminPage() {
                                 <div className="artist-versus-host">
                                     <div className="av-host-header">
                                         <div className="av-host-title">
-                                            🎤 ARTIST VERSUS
+                                            🎲 1s and 0s
                                             {artistVersus.playerName && <span className="av-host-player"> — {artistVersus.playerName}</span>}
                                         </div>
                                         <div className="av-host-meta">

@@ -59,7 +59,9 @@ export default function ArtistVersus({ state }: ArtistVersusProps) {
     if (!state.active) return null;
 
     const isDamageReport = state.phase === 'damageReport';
-    const playerLabel = state.playerName ? `${state.playerName.toUpperCase()} IS UP` : 'AUDIENCE PLAYER';
+    const playerLabel = state.playerName
+        ? `${state.playerName.toUpperCase()}${isDamageReport ? ' PLAYED' : ' IS PICKING'}`
+        : (isDamageReport ? 'AUDIENCE PLAYED' : 'AUDIENCE PLAYER');
 
     return (
         <div className="artist-versus-banner">
@@ -67,7 +69,7 @@ export default function ArtistVersus({ state }: ArtistVersusProps) {
             <div className="av-header">
                 <div className="av-player-banner">{playerLabel}</div>
                 <h2 className="av-title">
-                    {isDamageReport ? 'DAMAGE REPORT' : 'ARTIST VERSUS'}
+                    {isDamageReport ? 'damage report' : '1s and 0s'}
                 </h2>
                 {!isDamageReport && currentRound && (
                     <div className="av-round-counter">ROUND {currentRound.roundNumber} OF 3</div>

@@ -426,10 +426,10 @@ export async function addSong(
             return { success: false, error: 'This song was eliminated in a Versus Battle and cannot be re-added this session.' };
         }
 
-        // Check if the artist was nuked in Artist Versus (cannot be re-added this session)
+        // Check if the artist was nuked in 1s and 0s (cannot be re-added this session)
         const isArtistNuked = await isArtistEliminated(song.artist);
         if (isArtistNuked) {
-            return { success: false, error: `${song.artist} was nuked in Artist Versus and cannot be added this session.` };
+            return { success: false, error: `${song.artist} was nuked in 1s and 0s and cannot be added this session.` };
         }
 
         // Check playlist size limit
@@ -1196,6 +1196,10 @@ export async function canUserDeleteInWindow(visitorId: string): Promise<{ canDel
     return { canDelete: true };
 }
 
+// Top N songs are explicitly protected from The Purge.
+// They can still be voted down, but the kill button cannot touch them.
+const PURGE_PROTECTED_TOP_N = 3;
+
 // User uses their delete during window
 export async function useWindowDelete(visitorId: string, songId: string): Promise<{ success: boolean; error?: string }> {
     // Verify window is still active and user hasn't used their delete
@@ -1210,6 +1214,20 @@ export async function useWindowDelete(visitorId: string, songId: string): Promis
         if (songId === battleStatus.songA.id || songId === battleStatus.songB.id) {
             return { success: false, error: 'This song is in an active Versus Battle! Wait for the battle to end.' };
         }
+    }
+
+    // 🛡️ TOP 3 PROTECTION — songs that have made it to the top three are LOCKED.
+    // The Purge can only blow out songs from the bottom. Top 3 cannot be purged
+    // under any circumstance (they can still be voted down out of the top 3).
+    const sortedSongs = await getSortedSongs();
+    const protectedIds = new Set(
+        sortedSongs.slice(0, PURGE_PROTECTED_TOP_N).map(s => s.id)
+    );
+    if (protectedIds.has(songId)) {
+        return {
+            success: false,
+            error: '🛡️ Top 3 songs are locked. Vote it down to drop it from the top 3 first.',
+        };
     }
 
     // Mark user as having used their delete
@@ -3396,7 +3414,7 @@ export async function startArtistVersus(playerName?: string): Promise<{
     try {
         const existing = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
         if (existing && existing.active && existing.phase !== 'damageReport') {
-            return { success: false, error: 'An Artist Versus session is already active. End it first.' };
+            return { success: false, error: 'A 1s and 0s session is already active. End it first.' };
         }
 
         const pair = await pickArtistPair(new Set());
@@ -3433,7 +3451,7 @@ export async function startArtistVersus(playerName?: string): Promise<{
         return { success: true, state };
     } catch (error) {
         console.error('Failed to start artist versus:', error);
-        return { success: false, error: 'Could not start Artist Versus. Please try again.' };
+        return { success: false, error: 'Could not start 1s and 0s. Please try again.' };
     }
 }
 
@@ -3466,7 +3484,7 @@ export async function pickArtistVersus(choice: 'A' | 'B'): Promise<{
     try {
         const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
         if (!state || !state.active) {
-            return { success: false, error: 'No active Artist Versus session.' };
+            return { success: false, error: 'No active 1s and 0s session.' };
         }
         if (state.phase !== 'round') {
             return { success: false, error: 'Not currently in a voting round.' };
@@ -3512,7 +3530,7 @@ export async function bombArtistVersus(target: 'A' | 'B'): Promise<{
     try {
         const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
         if (!state || !state.active) {
-            return { success: false, error: 'No active Artist Versus session.' };
+            return { success: false, error: 'No active 1s and 0s session.' };
         }
         if (state.phase !== 'round') {
             return { success: false, error: 'Not currently in a voting round.' };
@@ -3574,7 +3592,7 @@ export async function advanceArtistVersusRound(): Promise<{
     try {
         const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
         if (!state || !state.active) {
-            return { success: false, error: 'No active Artist Versus session.' };
+            return { success: false, error: 'No active 1s and 0s session.' };
         }
         if (state.phase !== 'awaitingNext') {
             return { success: false, error: 'Current round is not yet complete.' };
@@ -3626,7 +3644,7 @@ export async function endArtistVersus(): Promise<{
     try {
         const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
         if (!state || !state.active) {
-            return { success: false, error: 'No active Artist Versus session.' };
+            return { success: false, error: 'No active 1s and 0s session.' };
         }
 
         state.phase = 'damageReport';

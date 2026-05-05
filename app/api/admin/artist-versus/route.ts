@@ -88,14 +88,14 @@ export async function POST(request: NextRequest) {
 
             case 'cancel': {
                 await cancelArtistVersus();
-                return NextResponse.json({ success: true, message: 'Artist Versus cancelled' });
+                return NextResponse.json({ success: true, message: '1s and 0s cancelled' });
             }
 
             default:
-                return NextResponse.json({ error: 'Unknown artist versus action.' }, { status: 400 });
+                return NextResponse.json({ error: 'Unknown 1s and 0s action.' }, { status: 400 });
         }
     } catch (error) {
-        console.error('Admin artist versus error:', error);
-        return NextResponse.json({ error: 'Could not complete artist versus action. Please try again.' }, { status: 500 });
+        console.error('Admin 1s and 0s error:', error);
+        return NextResponse.json({ error: 'Could not complete 1s and 0s action. Please try again.' }, { status: 500 });
     }
 }

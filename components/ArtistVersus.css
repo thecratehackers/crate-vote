@@ -52,9 +52,9 @@
     font-size: 1.5rem;
     color: #f0abfc;
     margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 3px;
+    letter-spacing: 2px;
     text-shadow: 0 0 12px rgba(240, 171, 252, 0.6);
+    font-weight: 700;
 }
 
 .av-round-counter {

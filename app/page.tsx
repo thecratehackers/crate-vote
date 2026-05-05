@@ -3478,7 +3478,7 @@ export default function HomePage() {
             {/* 🎤 ARTIST VERSUS - admin-hosted segment, audience watches */}
             {
                 artistVersus.active && (
-                    <ErrorBoundary fallback={<div className="battle-error">🎤 Artist Versus error - refreshing...</div>}>
+                    <ErrorBoundary fallback={<div className="battle-error">🎲 1s and 0s error - refreshing...</div>}>
                         <ArtistVersus state={artistVersus} />
                     </ErrorBoundary>
                 )
@@ -3793,24 +3793,36 @@ export default function HomePage() {
 
                                     {/* 💀 THE PURGE - Only visible during purge window */}
                                     {deleteWindow.active && deleteWindow.canDelete && (
-                                        <button
-                                            className={`chaos-delete-btn ${purgeArmedSongId === song.id ? 'armed' : ''}`}
-                                            onClick={() => {
-                                                if (purgeArmedSongId === song.id) {
-                                                    handleWindowDelete(song.id);
-                                                    setPurgeArmedSongId(null);
-                                                    if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
-                                                } else {
-                                                    setPurgeArmedSongId(song.id);
-                                                    if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
-                                                    purgeArmTimeout.current = setTimeout(() => setPurgeArmedSongId(null), 3000);
-                                                }
-                                            }}
-                                            disabled={isDeleting}
-                                            title={purgeArmedSongId === song.id ? 'Tap again to confirm' : 'Delete this song'}
-                                        >
-                                            {purgeArmedSongId === song.id ? '⚠️ Confirm?' : '💀'}
-                                        </button>
+                                        index < 3 ? (
+                                            // 🛡️ TOP 3 PROTECTED — locked from The Purge.
+                                            // Can still be voted down, just can't be killed.
+                                            <span
+                                                className="chaos-delete-btn locked"
+                                                title="Top 3 are protected from The Purge. Vote it down to unlock."
+                                                aria-label={`${song.name} is locked — top 3 are protected from The Purge`}
+                                            >
+                                                🛡️
+                                            </span>
+                                        ) : (
+                                            <button
+                                                className={`chaos-delete-btn ${purgeArmedSongId === song.id ? 'armed' : ''}`}
+                                                onClick={() => {
+                                                    if (purgeArmedSongId === song.id) {
+                                                        handleWindowDelete(song.id);
+                                                        setPurgeArmedSongId(null);
+                                                        if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
+                                                    } else {
+                                                        setPurgeArmedSongId(song.id);
+                                                        if (purgeArmTimeout.current) clearTimeout(purgeArmTimeout.current);
+                                                        purgeArmTimeout.current = setTimeout(() => setPurgeArmedSongId(null), 3000);
+                                                    }
+                                                }}
+                                                disabled={isDeleting}
+                                                title={purgeArmedSongId === song.id ? 'Tap again to confirm' : 'Delete this song'}
+                                            >
+                                                {purgeArmedSongId === song.id ? '⚠️ Confirm?' : '💀'}
+                                            </button>
+                                        )
                                     )}
                                 </div>
                             );
