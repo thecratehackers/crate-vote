@@ -88,6 +88,154 @@
     color: #888;
 }
 
+.av-audio-consent {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(217, 70, 239, 0.22), rgba(0, 0, 0, 0.42));
+    border: 2px solid rgba(240, 171, 252, 0.42);
+    border-radius: 14px;
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 0.95rem;
+    box-shadow: 0 0 18px rgba(217, 70, 239, 0.22);
+}
+
+.av-audio-consent.enabled {
+    border-color: rgba(74, 222, 128, 0.35);
+    background: rgba(74, 222, 128, 0.08);
+}
+
+.av-audio-consent strong {
+    display: block;
+    color: #fff;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.av-audio-consent span {
+    display: block;
+    margin-top: 2px;
+}
+
+.av-audio-consent button {
+    min-height: 52px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 999px;
+    background: #f0abfc;
+    color: #1a0a1a;
+    font-size: 0.95rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 0 18px rgba(240, 171, 252, 0.48);
+}
+
+.av-twitch-rules {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.av-rule-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.av-rule-card.left {
+    border-color: rgba(74, 222, 128, 0.48);
+    background: rgba(74, 222, 128, 0.1);
+}
+
+.av-rule-card.right {
+    border-color: rgba(96, 165, 250, 0.48);
+    background: rgba(96, 165, 250, 0.1);
+}
+
+.av-rule-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.18);
+}
+
+.av-rule-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.av-rule-logo b {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.82);
+    border: 2px solid rgba(255, 255, 255, 0.86);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.av-rule-card strong,
+.av-rule-card > div > span {
+    display: block;
+}
+
+.av-rule-card strong {
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+}
+
+.av-rule-card > div > span {
+    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.82rem;
+}
+
+.av-rule-vs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+    color: #f0abfc;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-align: center;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+}
+
 @keyframes av-bomb-pulse {
 
     0%,
@@ -132,6 +280,40 @@
     text-align: center;
     transition: all 0.3s;
     position: relative;
+}
+
+.av-chat-vote-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.36);
+}
+
+.av-chat-vote-badge span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    color: #111827;
+    font-size: 1.1rem;
+    font-weight: 900;
+}
+
+.av-chat-vote-badge small {
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 1px;
 }
 
 .av-contestant.winner {
@@ -522,6 +704,21 @@
     .av-bomb-status {
         font-size: 0.6rem;
         padding: 3px 6px;
+    }
+
+    .av-audio-consent {
+        align-items: stretch;
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .av-twitch-rules {
+        grid-template-columns: 1fr;
+    }
+
+    .av-rule-vs {
+        writing-mode: horizontal-tb;
+        padding: 0;
     }
 
     .av-explosion-flash {

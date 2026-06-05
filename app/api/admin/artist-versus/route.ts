@@ -4,6 +4,8 @@ import {
     startArtistVersus,
     pickArtistVersus,
     bombArtistVersus,
+    cueArtistVersusPreview,
+    stopArtistVersusPreviewCue,
     advanceArtistVersusRound,
     endArtistVersus,
     cancelArtistVersus,
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { action, choice, target, playerName } = body;
+        const { action, choice, target, playerName, side, durationMs } = body;
 
         switch (action) {
             case 'start': {
@@ -68,6 +70,25 @@ export async function POST(request: NextRequest) {
                     state: result.state,
                     nukedSongCount: result.nukedSongCount,
                 });
+            }
+
+            case 'preview': {
+                if (side !== 'A' && side !== 'B') {
+                    return NextResponse.json({ error: 'Preview requires side "A" or "B".' }, { status: 400 });
+                }
+                const result = await cueArtistVersusPreview(side, typeof durationMs === 'number' ? durationMs : undefined);
+                if (!result.success) {
+                    return NextResponse.json({ error: result.error }, { status: 400 });
+                }
+                return NextResponse.json({ success: true, state: result.state });
+            }
+
+            case 'stopPreview': {
+                const result = await stopArtistVersusPreviewCue();
+                if (!result.success) {
+                    return NextResponse.json({ error: result.error }, { status: 400 });
+                }
+                return NextResponse.json({ success: true, state: result.state });
             }
 
             case 'next': {

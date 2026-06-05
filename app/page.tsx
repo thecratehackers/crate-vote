@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS, BROADCAST } from '@/lib/config';
 import { PlaylistSkeleton } from '@/components/Skeleton';
@@ -12,6 +12,157 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { SoundEffects } from '@/lib/sounds';
 import { persistGet, persistSet, persistHydrate, persistSyncToCookie } from '@/lib/persist';
+
+interface PrizeDropTemplate {
+    id: string;
+    title: string;
+    prizeName: string;
+    icon: string;
+    imageUrl: string;
+    claimUrl: string;
+    promoCode: string;
+    winnerSubtitle: string;
+    viewerMessage: string;
+    claimInstructions: string;
+}
+
+interface PrizeDropFinalist {
+    visitorId: string;
+    name: string;
+}
+
+interface PrizeDropEvent {
+    winnerVisitorId: string | null;
+    winnerName: string | null;
+    timestamp: number;
+    revealMode: 'instant' | 'spin' | 'final_three';
+    finalists: PrizeDropFinalist[];
+    template: PrizeDropTemplate;
+}
+
+interface CrateCrackCard {
+    id: string;
+    title: string;
+    hint: string;
+}
+
+interface CrateCrackStatus {
+    active: boolean;
+    roundId: string | null;
+    gameType: 'request_evader' | 'crate_man' | 'missile_wedding' | 'bpm_sort';
+    startedAt: number | null;
+    endTime: number | null;
+    remaining: number;
+    durationSeconds: number;
+    prompt: string;
+    cards: CrateCrackCard[];
+    defaultRewardLabel: string;
+    rareRewardsArmed: boolean;
+}
+
+interface CrateCrackReward {
+    type: string;
+    label: string;
+    code: string;
+    claimUrl: string;
+}
+
+interface RequestEnemy {
+    id: string;
+    label: string;
+    x: number;
+    y: number;
+    speed: number;
+}
+
+interface RequestPowerup {
+    id: string;
+    type: 'horn' | 'shield' | 'sample';
+    label: string;
+    x: number;
+    y: number;
+}
+
+interface CrateManPoint {
+    x: number;
+    y: number;
+}
+
+interface WeddingThreat {
+    id: string;
+    label: string;
+    x: number;
+    y: number;
+    speed: number;
+    color: string;
+}
+
+const REQUEST_ENEMY_LABELS = [
+    'Bad Bunny?',
+    'Free Bird!',
+    'Slow song!',
+    'One more!',
+    'My phone next!',
+    'Play Drake!',
+    'Birthday shoutout!',
+    'Can I DJ?',
+    'Play my SoundCloud!',
+    'Something we know!',
+    'Skynyrd?',
+    'Plug in my phone!',
+];
+const REQUEST_POWERUPS: RequestPowerup[] = [
+    { id: 'horn', type: 'horn', label: 'Echo Horn', x: 18, y: 28 },
+    { id: 'shield', type: 'shield', label: 'Record Shield', x: 76, y: 34 },
+    { id: 'sample', type: 'sample', label: 'Airhorn Sample', x: 50, y: 54 },
+];
+
+const CRATE_MAN_WIDTH = 13;
+const CRATE_MAN_HEIGHT = 9;
+const CRATE_MAN_WALLS = new Set([
+    '2-1', '3-1', '5-1', '7-1', '9-1', '10-1',
+    '1-3', '3-3', '4-3', '6-3', '8-3', '9-3', '11-3',
+    '3-5', '5-5', '6-5', '7-5', '9-5',
+    '2-7', '3-7', '5-7', '7-7', '9-7', '10-7',
+]);
+const CRATE_MAN_START = { x: 6, y: 7 };
+const CRATE_MAN_LAWYER_STARTS = [{ x: 1, y: 1 }, { x: 11, y: 1 }, { x: 6, y: 4 }];
+const CRATE_MAN_WHITE_LABELS = [{ x: 1, y: 7 }, { x: 11, y: 7 }, { x: 6, y: 1 }];
+const WEDDING_THREAT_LABELS = [
+    'Best Man Speech',
+    'Cake Cutting',
+    'Drunk Uncle',
+    'Bouquet Toss',
+    'Photo Request',
+    'Last Call Lights',
+    'Coordinator Panic',
+    'Dinner Bell',
+];
+const WEDDING_THREAT_COLORS = ['#ff4f9a', '#ffe600', '#00c4ff', '#ff7a00', '#b8ff8f'];
+
+function pointKey(point: CrateManPoint): string {
+    return `${point.x}-${point.y}`;
+}
+
+function isCrateManWall(point: CrateManPoint): boolean {
+    return CRATE_MAN_WALLS.has(pointKey(point));
+}
+
+function createCrateManRecords(): CrateManPoint[] {
+    const blocked = new Set([
+        pointKey(CRATE_MAN_START),
+        ...CRATE_MAN_LAWYER_STARTS.map(pointKey),
+        ...CRATE_MAN_WHITE_LABELS.map(pointKey),
+    ]);
+    const records: CrateManPoint[] = [];
+    for (let y = 0; y < CRATE_MAN_HEIGHT; y++) {
+        for (let x = 0; x < CRATE_MAN_WIDTH; x++) {
+            const point = { x, y };
+            if (!isCrateManWall(point) && !blocked.has(pointKey(point))) records.push(point);
+        }
+    }
+    return records;
+}
 
 // Network resilience - fetch with timeout
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response> => {
@@ -121,6 +272,8 @@ interface Song {
     addedByLocation?: string;  // Location annotation (e.g., "Austin, TX" or "🇬🇧 London, UK")
     remixTag?: string;  // Optional freeform remix/bootleg/edit label (e.g., "Purple Disco Machine Edit")
     addedAt: number;
+    upvotes?: string[];
+    downvotes?: string[];
     score: number;
     // Audio features for DJs
     popularity: number;
@@ -227,6 +380,60 @@ export default function HomePage() {
     const [purgeArmedSongId, setPurgeArmedSongId] = useState<string | null>(null);
     const purgeArmTimeout = useRef<NodeJS.Timeout | null>(null);
 
+    // The Queue game state - host-triggered zero-vote review window
+    const [queueWindow, setQueueWindow] = useState<{ active: boolean; endTime: number | null; remaining: number }>({
+        active: false, endTime: null, remaining: 0
+    });
+    const [queueWindowRemaining, setQueueWindowRemaining] = useState(0);
+
+    // Crate Games side quest state
+    const [crateCrack, setCrateCrack] = useState<CrateCrackStatus>({
+        active: false,
+        roundId: null,
+        gameType: 'request_evader',
+        startedAt: null,
+        endTime: null,
+        remaining: 0,
+        durationSeconds: 60,
+        prompt: '',
+        cards: [],
+        defaultRewardLabel: '14 Free Days',
+        rareRewardsArmed: false,
+    });
+    const [crateCrackRemaining, setCrateCrackRemaining] = useState(0);
+    const [crateCrackOrder, setCrateCrackOrder] = useState<CrateCrackCard[]>([]);
+    const [crateCrackReward, setCrateCrackReward] = useState<CrateCrackReward | null>(null);
+    const [crateCrackMessage, setCrateCrackMessage] = useState('');
+    const [isSubmittingCrateCrack, setIsSubmittingCrateCrack] = useState(false);
+    const lastCrateCrackRoundId = useRef<string | null>(null);
+    const [requestPlayer, setRequestPlayer] = useState({ x: 50, y: 78 });
+    const requestPlayerRef = useRef(requestPlayer);
+    const [requestEnemies, setRequestEnemies] = useState<RequestEnemy[]>([]);
+    const [requestPowerups, setRequestPowerups] = useState<RequestPowerup[]>(REQUEST_POWERUPS);
+    const [requestEvaderState, setRequestEvaderState] = useState<'ready' | 'intro' | 'playing' | 'hit' | 'survived'>('ready');
+    const [requestEvaderIntroCount, setRequestEvaderIntroCount] = useState(3);
+    const [echoHornReady, setEchoHornReady] = useState(false);
+    const [shieldUntil, setShieldUntil] = useState(0);
+    const shieldUntilRef = useRef(0);
+    const evaderKeys = useRef<Set<string>>(new Set());
+    const evaderSubmittedRef = useRef(false);
+    const evaderPointerActive = useRef(false);
+    const [crateManPlayer, setCrateManPlayer] = useState<CrateManPoint>(CRATE_MAN_START);
+    const crateManPlayerRef = useRef(CRATE_MAN_START);
+    const [crateManRecords, setCrateManRecords] = useState<CrateManPoint[]>([]);
+    const [crateManLawyers, setCrateManLawyers] = useState<CrateManPoint[]>(CRATE_MAN_LAWYER_STARTS);
+    const [crateManWhiteLabels, setCrateManWhiteLabels] = useState<CrateManPoint[]>(CRATE_MAN_WHITE_LABELS);
+    const [crateManState, setCrateManState] = useState<'ready' | 'playing' | 'caught' | 'cleared'>('ready');
+    const [crateManInvincibleUntil, setCrateManInvincibleUntil] = useState(0);
+    const crateManInvincibleRef = useRef(0);
+    const crateManSubmittedRef = useRef(false);
+    const [weddingThreats, setWeddingThreats] = useState<WeddingThreat[]>([]);
+    const [weddingBlasts, setWeddingBlasts] = useState<{ id: string; x: number; y: number }[]>([]);
+    const [danceFloorEnergy, setDanceFloorEnergy] = useState(100);
+    const [weddingDefenseState, setWeddingDefenseState] = useState<'ready' | 'playing' | 'crashed' | 'saved'>('ready');
+    const weddingSubmittedRef = useRef(false);
+    const weddingThreatIdRef = useRef(0);
+
     // 🎚️ SESSION PERMISSIONS - Admin can toggle voting/adding
     const [permissions, setPermissions] = useState<{ canVote: boolean; canAddSongs: boolean }>({
         canVote: true,
@@ -235,9 +442,11 @@ export default function HomePage() {
 
     // 🎰 MEGA-ANNOUNCEMENT STATE - Vegas-style full-screen overlays
     const [showPurgeSplash, setShowPurgeSplash] = useState(false);
+    const [showQueueSplash, setShowQueueSplash] = useState(false);
     const [showKarmaRainSplash, setShowKarmaRainSplash] = useState(false);
     const [showWipeSplash, setShowWipeSplash] = useState(false);
     const [previousPurgeActive, setPreviousPurgeActive] = useState(false);
+    const [previousQueueActive, setPreviousQueueActive] = useState(false);
     const [previousSongCount, setPreviousSongCount] = useState<number | null>(null);
 
     // 🏆 WINNER ANNOUNCEMENT - When user's song is #1 at round end
@@ -249,6 +458,7 @@ export default function HomePage() {
     const [showPrizeDrop, setShowPrizeDrop] = useState(false);
     const [prizeDropIsWinner, setPrizeDropIsWinner] = useState(false);
     const [prizeDropWinnerName, setPrizeDropWinnerName] = useState<string>('');
+    const [prizeDropEvent, setPrizeDropEvent] = useState<PrizeDropEvent | null>(null);
     const [lastPrizeDropTimestamp, setLastPrizeDropTimestamp] = useState(0);
 
     // 👑 LEADERBOARD KING - MVP at session end
@@ -382,6 +592,7 @@ export default function HomePage() {
         bombUsed: false,
         playerName: null,
         startedAt: 0,
+        audioCue: null,
     };
     const [artistVersus, setArtistVersus] = useState<ArtistVersusComponentState>(initialArtistVersusState);
 
@@ -472,6 +683,41 @@ export default function HomePage() {
         lastSortedRef.current = sorted;
         return sorted;
     }, [songs, isUserInteracting]);
+
+    const getTotalVotes = useCallback((song: Song) => {
+        const upvotes = Array.isArray(song.upvotes) ? song.upvotes.length : 0;
+        const downvotes = Array.isArray(song.downvotes) ? song.downvotes.length : 0;
+
+        return upvotes + downvotes;
+    }, []);
+
+    const formatTimeSinceAdded = useCallback((addedAt: number) => {
+        const elapsedMs = Math.max(0, Date.now() - addedAt);
+        const minutes = Math.floor(elapsedMs / 60000);
+
+        if (minutes < 1) return 'just added';
+        if (minutes < 60) return `${minutes}m ago`;
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ${minutes % 60}m ago`;
+
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+    }, []);
+
+    const songRankById = useMemo(() => {
+        return new Map(sortedSongs.map((song, index) => [song.id, index + 1]));
+    }, [sortedSongs]);
+
+    const queueSongs = useMemo(() => {
+        if (sortedSongs.length === 0) return [];
+
+        return sortedSongs
+            .filter(song => getTotalVotes(song) === 0)
+            .sort((a, b) => a.addedAt - b.addedAt);
+    }, [getTotalVotes, sortedSongs]);
+
+    const queueSongIdSet = useMemo(() => new Set(queueSongs.map(song => song.id)), [queueSongs]);
 
     // Pre-selected avatar emojis - music/DJ themed, clean and minimal
     const AVATAR_OPTIONS = ['🎧', '🎛️', '🎚️', '💿', '💽', '🔊', '📡', '📱', '📻', '🖥️'];
@@ -1026,6 +1272,65 @@ export default function HomePage() {
                     setDeleteWindowRemaining(data.deleteWindow.remaining);
                 }
             }
+            if (data.queueWindow) {
+                setQueueWindow(data.queueWindow);
+                if (data.queueWindow.active && data.queueWindow.remaining > 0) {
+                    setQueueWindowRemaining(data.queueWindow.remaining);
+                }
+            }
+            if (data.crateCrack) {
+                setCrateCrack(data.crateCrack);
+                if (data.crateCrack.active && data.crateCrack.remaining > 0) {
+                    setCrateCrackRemaining(data.crateCrack.remaining);
+                    if (data.crateCrack.roundId && data.crateCrack.roundId !== lastCrateCrackRoundId.current) {
+                        lastCrateCrackRoundId.current = data.crateCrack.roundId;
+                        setCrateCrackOrder(data.crateCrack.cards || []);
+                        setCrateCrackReward(null);
+                        setCrateCrackMessage('');
+                        evaderSubmittedRef.current = false;
+                        if (data.crateCrack.gameType === 'request_evader') {
+                            setRequestPlayer({ x: 50, y: 58 });
+                            setRequestEnemies(REQUEST_ENEMY_LABELS.slice(0, 7).map((label, index) => ({
+                                id: `request-${index}`,
+                                label,
+                                x: 8 + index * 13,
+                                y: 10 + (index % 3) * 11,
+                                speed: 0.42 + index * 0.045,
+                            })));
+                            setRequestPowerups(REQUEST_POWERUPS);
+                            setRequestEvaderState('intro');
+                            setRequestEvaderIntroCount(3);
+                            setEchoHornReady(false);
+                            setShieldUntil(0);
+                            shieldUntilRef.current = 0;
+                            evaderKeys.current.clear();
+                            SoundEffects.battleStart();
+                        }
+                        if (data.crateCrack.gameType === 'crate_man') {
+                            setCrateManPlayer(CRATE_MAN_START);
+                            crateManPlayerRef.current = CRATE_MAN_START;
+                            setCrateManRecords(createCrateManRecords());
+                            setCrateManLawyers(CRATE_MAN_LAWYER_STARTS);
+                            setCrateManWhiteLabels(CRATE_MAN_WHITE_LABELS);
+                            setCrateManState('playing');
+                            setCrateManInvincibleUntil(0);
+                            crateManInvincibleRef.current = 0;
+                            crateManSubmittedRef.current = false;
+                            SoundEffects.battleStart();
+                        }
+                        if (data.crateCrack.gameType === 'missile_wedding') {
+                            setWeddingThreats([]);
+                            setWeddingBlasts([]);
+                            setDanceFloorEnergy(100);
+                            setWeddingDefenseState('playing');
+                            weddingSubmittedRef.current = false;
+                            weddingThreatIdRef.current = 0;
+                            SoundEffects.battleStart();
+                        }
+                        SoundEffects.karmaRain();
+                    }
+                }
+            }
 
             // 🎚️ Sync session permissions
             if (data.permissions) {
@@ -1098,15 +1403,16 @@ export default function HomePage() {
                 const isWinner = data.prizeDrop.winnerVisitorId === visitorId;
                 setPrizeDropIsWinner(isWinner);
                 setPrizeDropWinnerName(data.prizeDrop.winnerName || 'Someone');
+                setPrizeDropEvent(data.prizeDrop);
                 setShowPrizeDrop(true);
                 if (isWinner) {
                     SoundEffects.victory();
-                    // Auto-dismiss winner view after 20s (long enough to read & click claim link)
-                    setTimeout(() => setShowPrizeDrop(false), 20000);
+                    // Auto-dismiss winner view after the reveal has time to finish.
+                    setTimeout(() => setShowPrizeDrop(false), data.prizeDrop.revealMode === 'instant' ? 20000 : 24000);
                 } else {
                     SoundEffects.karmaRain();
-                    // Auto-dismiss viewer announcement after 8s
-                    setTimeout(() => setShowPrizeDrop(false), 8000);
+                    // Auto-dismiss viewer announcement after the game-show reveal.
+                    setTimeout(() => setShowPrizeDrop(false), data.prizeDrop.revealMode === 'instant' ? 8000 : 12000);
                 }
             }
 
@@ -1544,6 +1850,167 @@ export default function HomePage() {
         return () => clearInterval(interval);
     }, [deleteWindow.active, deleteWindow.endTime, fetchPlaylist]);
 
+    // 📡 THE QUEUE COUNTDOWN - local countdown for zero-vote review game
+    useEffect(() => {
+        if (!queueWindow.active || !queueWindow.endTime) {
+            setQueueWindowRemaining(0);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, queueWindow.endTime! - Date.now());
+            setQueueWindowRemaining(remaining);
+
+            if (remaining <= 0) {
+                setQueueWindow(prev => ({ ...prev, active: false }));
+                fetchPlaylist();
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [queueWindow.active, queueWindow.endTime, fetchPlaylist]);
+
+    useEffect(() => {
+        if (!crateCrack.active || !crateCrack.endTime) {
+            setCrateCrackRemaining(0);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, crateCrack.endTime! - Date.now());
+            setCrateCrackRemaining(remaining);
+
+            if (remaining <= 1000 && crateCrack.gameType === 'request_evader' && requestEvaderState === 'playing' && !evaderSubmittedRef.current) {
+                evaderSubmittedRef.current = true;
+                setRequestEvaderState('survived');
+                setCrateCrackMessage('Requests dodged. Promo incoming.');
+                handleSubmitCrateCrack('evade');
+            }
+            if (remaining <= 1000 && crateCrack.gameType === 'missile_wedding' && weddingDefenseState === 'playing' && danceFloorEnergy > 0 && !weddingSubmittedRef.current) {
+                weddingSubmittedRef.current = true;
+                setWeddingDefenseState('saved');
+                setCrateCrackMessage('Dance floor protected. Promo incoming.');
+                handleSubmitCrateCrack('missile_wedding');
+            }
+            if (remaining <= 0) {
+                fetchPlaylist();
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [crateCrack.active, crateCrack.endTime, crateCrack.gameType, requestEvaderState, weddingDefenseState, danceFloorEnergy, fetchPlaylist]);
+
+    useEffect(() => {
+        crateManPlayerRef.current = crateManPlayer;
+    }, [crateManPlayer]);
+
+    useEffect(() => {
+        crateManInvincibleRef.current = crateManInvincibleUntil;
+    }, [crateManInvincibleUntil]);
+
+    useEffect(() => {
+        requestPlayerRef.current = requestPlayer;
+    }, [requestPlayer]);
+
+    useEffect(() => {
+        if (!crateCrack.active || crateCrack.gameType !== 'request_evader' || requestEvaderState !== 'intro') return;
+
+        setRequestEvaderIntroCount(3);
+        const countdown = setInterval(() => {
+            setRequestEvaderIntroCount(prev => {
+                if (prev <= 1) {
+                    clearInterval(countdown);
+                    setRequestEvaderState('playing');
+                    SoundEffects.hypeBurst();
+                    return 0;
+                }
+                SoundEffects.reaction();
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(countdown);
+    }, [crateCrack.active, crateCrack.gameType, requestEvaderState]);
+
+    useEffect(() => {
+        shieldUntilRef.current = shieldUntil;
+    }, [shieldUntil]);
+
+    useEffect(() => {
+        if (!crateCrack.active || crateCrack.gameType !== 'request_evader' || requestEvaderState !== 'playing') return;
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', ' '].includes(event.key)) {
+                event.preventDefault();
+            }
+            evaderKeys.current.add(event.key.toLowerCase());
+            if (event.key === ' ') {
+                triggerEchoHorn();
+            }
+        };
+        const onKeyUp = (event: KeyboardEvent) => {
+            evaderKeys.current.delete(event.key.toLowerCase());
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+        };
+    }, [crateCrack.active, crateCrack.gameType, requestEvaderState]);
+
+    useEffect(() => {
+        if (!crateCrack.active || crateCrack.gameType !== 'request_evader' || requestEvaderState !== 'playing') return;
+
+        const interval = setInterval(() => {
+            const keys = evaderKeys.current;
+            const dx = (keys.has('arrowright') || keys.has('d') ? 1 : 0) - (keys.has('arrowleft') || keys.has('a') ? 1 : 0);
+            const dy = (keys.has('arrowdown') || keys.has('s') ? 1 : 0) - (keys.has('arrowup') || keys.has('w') ? 1 : 0);
+            const speed = shieldUntilRef.current > Date.now() ? 2.4 : 1.9;
+
+            setRequestPlayer(prev => ({
+                x: Math.max(7, Math.min(93, prev.x + dx * speed)),
+                y: Math.max(12, Math.min(84, prev.y + dy * speed)),
+            }));
+
+            const player = requestPlayerRef.current;
+            setRequestEnemies(prev => prev.map(enemy => {
+                const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+                const next = {
+                    ...enemy,
+                    x: Math.max(4, Math.min(96, enemy.x + Math.cos(angle) * enemy.speed)),
+                    y: Math.max(8, Math.min(88, enemy.y + Math.sin(angle) * enemy.speed)),
+                };
+                const distance = Math.hypot(next.x - player.x, next.y - player.y);
+                if (distance < 7 && shieldUntilRef.current <= Date.now()) {
+                    setRequestEvaderState('hit');
+                    setCrateCrackMessage(`${enemy.label} got through. No promo this round.`);
+                    SoundEffects.error();
+                }
+                return next;
+            }));
+
+            setRequestPowerups(prev => prev.filter(powerup => {
+                const distance = Math.hypot(powerup.x - player.x, powerup.y - player.y);
+                if (distance > 7) return true;
+                if (powerup.type === 'horn' || powerup.type === 'sample') {
+                    setEchoHornReady(true);
+                    setCrateCrackMessage(`${powerup.label} ready. Hit ECHO HORN.`);
+                    SoundEffects.hypeBurst();
+                }
+                if (powerup.type === 'shield') {
+                    setShieldUntil(Date.now() + 5000);
+                    setCrateCrackMessage('Record shield active.');
+                    SoundEffects.achievementUnlock();
+                }
+                return false;
+            }));
+        }, 70);
+
+        return () => clearInterval(interval);
+    }, [crateCrack.active, crateCrack.gameType, requestEvaderState]);
+
     // 🎰 PURGE SPLASH - Show full-screen announcement when Purge first activates
     useEffect(() => {
         if (deleteWindow.active && !previousPurgeActive) {
@@ -1556,6 +2023,15 @@ export default function HomePage() {
         }
         setPreviousPurgeActive(deleteWindow.active);
     }, [deleteWindow.active, previousPurgeActive]);
+
+    // 📡 THE QUEUE SPLASH - Show full-screen announcement when Queue review starts
+    useEffect(() => {
+        if (queueWindow.active && !previousQueueActive) {
+            setShowQueueSplash(true);
+            setTimeout(() => setShowQueueSplash(false), 3000);
+        }
+        setPreviousQueueActive(queueWindow.active);
+    }, [queueWindow.active, previousQueueActive]);
 
     // 🌧️ KARMA RAIN SPLASH - Enhanced full-screen celebration
     useEffect(() => {
@@ -1577,6 +2053,265 @@ export default function HomePage() {
         }
         setPreviousSongCount(songs.length);
     }, [songs.length, previousSongCount]);
+
+    const moveCrateCrackCard = (fromIndex: number, direction: -1 | 1) => {
+        const toIndex = fromIndex + direction;
+        if (toIndex < 0 || toIndex >= crateCrackOrder.length) return;
+
+        setCrateCrackOrder(prev => {
+            const next = [...prev];
+            const [card] = next.splice(fromIndex, 1);
+            next.splice(toIndex, 0, card);
+            return next;
+        });
+    };
+
+    const triggerEchoHorn = () => {
+        if (!echoHornReady || requestEvaderState !== 'playing') return;
+        const player = requestPlayerRef.current;
+        setRequestEnemies(prev => prev.map(enemy => {
+            const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+            return {
+                ...enemy,
+                x: Math.max(4, Math.min(96, enemy.x + Math.cos(angle) * 18)),
+                y: Math.max(8, Math.min(88, enemy.y + Math.sin(angle) * 18)),
+            };
+        }));
+        setEchoHornReady(false);
+        setCrateCrackMessage('Echo horn fired. Requests pushed back.');
+        SoundEffects.battleStart();
+        setTimeout(() => SoundEffects.hypeBurst(), 90);
+    };
+
+    const moveRequestPlayer = (dx: number, dy: number) => {
+        setRequestPlayer(prev => ({
+            x: Math.max(7, Math.min(93, prev.x + dx * 4)),
+            y: Math.max(12, Math.min(84, prev.y + dy * 4)),
+        }));
+    };
+
+    const moveRequestPlayerToPointer = (clientX: number, clientY: number, element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        const x = ((clientX - rect.left) / rect.width) * 100;
+        const y = ((clientY - rect.top) / rect.height) * 100;
+
+        setRequestPlayer({
+            x: Math.max(7, Math.min(93, x)),
+            y: Math.max(12, Math.min(84, y)),
+        });
+    };
+
+    const submitCrateManWin = () => {
+        if (crateManSubmittedRef.current) return;
+        crateManSubmittedRef.current = true;
+        setCrateManState('cleared');
+        setCrateCrackMessage('Crate cleared. Promo incoming.');
+        handleSubmitCrateCrack('crate_man');
+    };
+
+    const moveCrateMan = (dx: number, dy: number) => {
+        if (crateManState !== 'playing') return;
+        const next = {
+            x: Math.max(0, Math.min(CRATE_MAN_WIDTH - 1, crateManPlayerRef.current.x + dx)),
+            y: Math.max(0, Math.min(CRATE_MAN_HEIGHT - 1, crateManPlayerRef.current.y + dy)),
+        };
+        if (isCrateManWall(next)) return;
+
+        crateManPlayerRef.current = next;
+        setCrateManPlayer(next);
+
+        setCrateManRecords(prev => {
+            const remaining = prev.filter(record => pointKey(record) !== pointKey(next));
+            if (remaining.length < prev.length) {
+                SoundEffects.reaction();
+            }
+            if (remaining.length === 0 && prev.length > 0) {
+                submitCrateManWin();
+            }
+            return remaining;
+        });
+
+        setCrateManWhiteLabels(prev => {
+            const hit = prev.some(label => pointKey(label) === pointKey(next));
+            if (hit) {
+                setCrateManInvincibleUntil(Date.now() + 6000);
+                setCrateCrackMessage('White Label active. Lawyers are scared.');
+                SoundEffects.achievementUnlock();
+            }
+            return prev.filter(label => pointKey(label) !== pointKey(next));
+        });
+
+        const lawyerHit = crateManLawyers.some(lawyer => pointKey(lawyer) === pointKey(next));
+        if (lawyerHit && crateManInvincibleRef.current <= Date.now()) {
+            setCrateManState('caught');
+            setCrateCrackMessage('Copyright lawyer got you. No promo this round.');
+            SoundEffects.error();
+        }
+    };
+
+    const fireWeddingDefense = (x: number, y: number) => {
+        if (weddingDefenseState !== 'playing') return;
+
+        const blastId = `blast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        setWeddingBlasts(prev => [...prev.slice(-5), { id: blastId, x, y }]);
+        setTimeout(() => {
+            setWeddingBlasts(prev => prev.filter(blast => blast.id !== blastId));
+        }, 420);
+
+        setWeddingThreats(prev => {
+            const hit = prev.find(threat => Math.hypot(threat.x - x, threat.y - y) < 13);
+            if (hit) {
+                SoundEffects.hypeBurst();
+                return prev.filter(threat => threat.id !== hit.id);
+            }
+            SoundEffects.reaction();
+            return prev;
+        });
+    };
+
+    useEffect(() => {
+        if (!crateCrack.active || crateCrack.gameType !== 'crate_man' || crateManState !== 'playing') return;
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            const key = event.key.toLowerCase();
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(key)) {
+                event.preventDefault();
+            }
+            if (key === 'arrowup' || key === 'w') moveCrateMan(0, -1);
+            if (key === 'arrowdown' || key === 's') moveCrateMan(0, 1);
+            if (key === 'arrowleft' || key === 'a') moveCrateMan(-1, 0);
+            if (key === 'arrowright' || key === 'd') moveCrateMan(1, 0);
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [crateCrack.active, crateCrack.gameType, crateManState]);
+
+    useEffect(() => {
+        if (!crateCrack.active || crateCrack.gameType !== 'missile_wedding' || weddingDefenseState !== 'playing') return;
+
+        const spawnInterval = setInterval(() => {
+            const id = weddingThreatIdRef.current++;
+            const label = WEDDING_THREAT_LABELS[id % WEDDING_THREAT_LABELS.length];
+            setWeddingThreats(prev => [
+                ...prev.slice(-9),
+                {
+                    id: `wedding-threat-${id}`,
+                    label,
+                    x: 8 + ((id * 17) % 84),
+                    y: -6,
+                    speed: 1.2 + (id % 4) * 0.24,
+                    color: WEDDING_THREAT_COLORS[id % WEDDING_THREAT_COLORS.length],
+                },
+            ]);
+        }, 900);
+
+        const moveInterval = setInterval(() => {
+            setWeddingThreats(prev => {
+                const nextThreats: WeddingThreat[] = [];
+                let damage = 0;
+                prev.forEach(threat => {
+                    const next = { ...threat, y: threat.y + threat.speed };
+                    if (next.y >= 86) {
+                        damage += 12;
+                    } else {
+                        nextThreats.push(next);
+                    }
+                });
+                if (damage > 0) {
+                    setDanceFloorEnergy(energy => {
+                        const nextEnergy = Math.max(0, energy - damage);
+                        if (nextEnergy === 0) {
+                            setWeddingDefenseState('crashed');
+                            setCrateCrackMessage('The dance floor got interrupted. No promo this round.');
+                            SoundEffects.error();
+                        } else {
+                            SoundEffects.downvote();
+                        }
+                        return nextEnergy;
+                    });
+                }
+                return nextThreats;
+            });
+        }, 120);
+
+        return () => {
+            clearInterval(spawnInterval);
+            clearInterval(moveInterval);
+        };
+    }, [crateCrack.active, crateCrack.gameType, weddingDefenseState]);
+
+    useEffect(() => {
+        if (!crateCrack.active || crateCrack.gameType !== 'crate_man' || crateManState !== 'playing') return;
+
+        const interval = setInterval(() => {
+            const player = crateManPlayerRef.current;
+            setCrateManLawyers(prev => prev.map((lawyer, index) => {
+                const options = [
+                    { x: lawyer.x + Math.sign(player.x - lawyer.x), y: lawyer.y },
+                    { x: lawyer.x, y: lawyer.y + Math.sign(player.y - lawyer.y) },
+                    { x: lawyer.x - Math.sign(player.x - lawyer.x), y: lawyer.y },
+                    { x: lawyer.x, y: lawyer.y - Math.sign(player.y - lawyer.y) },
+                ].filter(point =>
+                    point.x >= 0 &&
+                    point.x < CRATE_MAN_WIDTH &&
+                    point.y >= 0 &&
+                    point.y < CRATE_MAN_HEIGHT &&
+                    !isCrateManWall(point)
+                );
+                const next = options[index % 2] || options[0] || lawyer;
+                if (pointKey(next) === pointKey(player)) {
+                    if (crateManInvincibleRef.current > Date.now()) {
+                        SoundEffects.hypeBurst();
+                        return CRATE_MAN_LAWYER_STARTS[index] || lawyer;
+                    }
+                    setCrateManState('caught');
+                    setCrateCrackMessage('Copyright lawyer got you. No promo this round.');
+                    SoundEffects.error();
+                }
+                return next;
+            }));
+        }, 650);
+
+        return () => clearInterval(interval);
+    }, [crateCrack.active, crateCrack.gameType, crateManState]);
+
+    const handleSubmitCrateCrack = async (action?: 'evade' | 'crate_man' | 'missile_wedding') => {
+        if (!crateCrack.active || isSubmittingCrateCrack || crateCrackReward) return;
+
+        setIsSubmittingCrateCrack(true);
+        if (action !== 'evade') setCrateCrackMessage('');
+
+        try {
+            const res = await fetchWithRetry('/api/crate-crack/result', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(visitorId ? { 'x-visitor-id': visitorId } : {}),
+                },
+                body: JSON.stringify(
+                    action === 'evade' || action === 'crate_man'
+                        ? { action }
+                        : { orderedIds: crateCrackOrder.map(card => card.id) }
+                ),
+            });
+            const data = await res.json();
+
+            if (res.ok && data.completed && data.reward) {
+                setCrateCrackReward(data.reward);
+                setCrateCrackMessage(action === 'evade' ? 'You dodged every request. Promo ready.' : 'Correct. Your promo is ready.');
+                SoundEffects.victory();
+            } else if (res.ok) {
+                setCrateCrackMessage(`Close, but not cracked. Score: ${data.score || 0}/${crateCrackOrder.length}`);
+            } else {
+                setCrateCrackMessage(data.error || 'Could not submit Crate Games.');
+            }
+        } catch (error) {
+            setCrateCrackMessage('Network hiccup. Try one more time.');
+        } finally {
+            setIsSubmittingCrateCrack(false);
+        }
+    };
 
     // 🗑️ Handle window delete (chaos mode delete)
     const handleWindowDelete = async (songId: string) => {
@@ -2273,6 +3008,12 @@ export default function HomePage() {
     // Admins bypass all gates (lock, ban, session, permissions)
     const isSessionActive = timerRunning && timerRemaining > 0;
     const canParticipate = isAdminOnFrontPage || (!isBanned && !isLocked && !!username && isSessionActive);
+    const activeShowSegment = showClock?.isRunning ? showClock.segments[showClock.activeSegmentIndex] : null;
+    const nextShowSegment = showClock?.isRunning ? showClock.segments[showClock.activeSegmentIndex + 1] : null;
+    const showClockProgress = activeShowSegment?.durationMs
+        ? Math.min(100, Math.max(0, ((activeShowSegment.durationMs - showClockRemaining) / activeShowSegment.durationMs) * 100))
+        : 0;
+    const showClockDisplayTime = `${Math.floor(showClockRemaining / 60000)}:${String(Math.floor((showClockRemaining % 60000) / 1000)).padStart(2, '0')}`;
 
     // Loading state - show skeleton UI
     if (isLoading || !visitorId) {
@@ -2497,6 +3238,307 @@ export default function HomePage() {
                 )
             }
 
+            {/* 🎰 MEGA-ANNOUNCEMENT: THE QUEUE SPLASH */}
+            {
+                showQueueSplash && (
+                    <div className="mega-announcement queue">
+                        <div className="queue-particles">
+                            {[...Array(14)].map((_, i) => (
+                                <span
+                                    key={i}
+                                    className="queue-particle"
+                                    style={{
+                                        left: `${10 + Math.random() * 80}%`,
+                                        top: `${10 + Math.random() * 80}%`,
+                                        animationDelay: `${Math.random() * 2}s`,
+                                    }}
+                                >
+                                    {['[?]', '01', 'DATA', 'SCAN'][i % 4]}
+                                </span>
+                            ))}
+                        </div>
+                        <span className="mega-icon">📡</span>
+                        <h1 className="mega-title">THE QUEUE</h1>
+                        <p className="mega-subtitle">Zero-vote packets need ears. Check every unreviewed song.</p>
+                        <div className="mega-countdown">{Math.ceil(queueWindowRemaining / 1000)}s</div>
+                    </div>
+                )
+            }
+
+            {/* CRATE GAMES SIDE QUEST */}
+            {
+                ((crateCrack.active && crateCrackRemaining > 0) || crateCrackReward) && (
+                    <div className="crate-crack-overlay">
+                        <div className="matrix-rain" aria-hidden="true">
+                            {Array.from({ length: 18 }).map((_, index) => (
+                                <span
+                                    key={index}
+                                    style={{
+                                        '--rain-left': `${index * 5.8}%`,
+                                        '--rain-delay': `${(index % 6) * -0.8}s`,
+                                        '--rain-speed': `${5 + (index % 5)}s`,
+                                    } as CSSProperties}
+                                >
+                                    10110100101101001011010010110100101101001011010010110100
+                                </span>
+                            ))}
+                        </div>
+                        <div className="crate-crack-game">
+                            <div className="crate-crack-topline">
+                                <span>Side Quest</span>
+                                <strong>{crateCrackReward ? 'Prize Ready' : `${Math.ceil(crateCrackRemaining / 1000)}s`}</strong>
+                            </div>
+                            <h1>Crate Games</h1>
+                            <p>{crateCrack.prompt || 'Sort the crate before the clock dies.'}</p>
+
+                            {crateCrackReward ? (
+                                <div className="crate-crack-reward">
+                                    <span>Game cleared.</span>
+                                    <h2>{crateCrackReward.label}</h2>
+                                    {crateCrackReward.code && (
+                                        <p className="promo-code">Code: <strong>{crateCrackReward.code}</strong></p>
+                                    )}
+                                    <a href={crateCrackReward.claimUrl} target="_blank" rel="noopener noreferrer" className="claim-prize-btn">
+                                        Redeem Prize
+                                    </a>
+                                    <button className="crate-games-return-btn" onClick={() => setCrateCrackReward(null)}>
+                                        Return To Voting
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    {crateCrack.gameType === 'missile_wedding' ? (
+                                        <div className={`wedding-command-game ${weddingDefenseState}`}>
+                                            <div className="wedding-command-hud">
+                                                <span>Dance Floor Energy</span>
+                                                <strong>{danceFloorEnergy}%</strong>
+                                                <em>{weddingDefenseState === 'crashed' ? 'Reception derailed' : 'Tap threats to intercept'}</em>
+                                            </div>
+                                            <div
+                                                className="wedding-command-field"
+                                                onPointerDown={(event) => {
+                                                    const rect = event.currentTarget.getBoundingClientRect();
+                                                    fireWeddingDefense(
+                                                        ((event.clientX - rect.left) / rect.width) * 100,
+                                                        ((event.clientY - rect.top) / rect.height) * 100
+                                                    );
+                                                }}
+                                            >
+                                                <div className="wedding-stars" />
+                                                <div className="dance-floor-base">
+                                                    <span>Dance Floor</span>
+                                                    <strong>{danceFloorEnergy}%</strong>
+                                                </div>
+                                                {weddingThreats.map(threat => (
+                                                    <button
+                                                        key={threat.id}
+                                                        className="wedding-threat"
+                                                        style={{ left: `${threat.x}%`, top: `${threat.y}%`, '--threat-color': threat.color } as CSSProperties}
+                                                        onPointerDown={(event) => {
+                                                            event.stopPropagation();
+                                                            fireWeddingDefense(threat.x, threat.y);
+                                                        }}
+                                                    >
+                                                        <span>{threat.label}</span>
+                                                    </button>
+                                                ))}
+                                                {weddingBlasts.map(blast => (
+                                                    <span
+                                                        key={blast.id}
+                                                        className="wedding-blast"
+                                                        style={{ left: `${blast.x}%`, top: `${blast.y}%` }}
+                                                    />
+                                                ))}
+                                                {weddingDefenseState === 'crashed' && (
+                                                    <div className="wedding-command-endcard">
+                                                        <strong>Energy killed.</strong>
+                                                        <span>The timeline got speeches, cake, and drunk uncle all at once.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <p className="wedding-command-help">Tap speeches, cake cutting, drunk uncle, and other reception threats before they hit the dance floor.</p>
+                                        </div>
+                                    ) : crateCrack.gameType === 'crate_man' ? (
+                                        <div className={`crate-man-game ${crateManState}`}>
+                                            <div className="crate-man-hud">
+                                                <span>Records Left</span>
+                                                <strong>{crateManRecords.length}</strong>
+                                                <em>{crateManInvincibleUntil > Date.now() ? 'White Label Active' : 'Avoid Lawyers'}</em>
+                                            </div>
+                                            <div className="crate-man-maze">
+                                                {Array.from({ length: CRATE_MAN_WIDTH * CRATE_MAN_HEIGHT }).map((_, cellIndex) => {
+                                                    const point = { x: cellIndex % CRATE_MAN_WIDTH, y: Math.floor(cellIndex / CRATE_MAN_WIDTH) };
+                                                    const key = pointKey(point);
+                                                    const wall = isCrateManWall(point);
+                                                    const hasRecord = crateManRecords.some(record => pointKey(record) === key);
+                                                    const hasWhiteLabel = crateManWhiteLabels.some(label => pointKey(label) === key);
+                                                    const lawyerIndex = crateManLawyers.findIndex(lawyer => pointKey(lawyer) === key);
+                                                    const isPlayer = pointKey(crateManPlayer) === key;
+                                                    return (
+                                                        <button
+                                                            key={key}
+                                                            className={`crate-man-cell ${wall ? 'wall' : ''} ${hasRecord ? 'has-record' : ''} ${hasWhiteLabel ? 'has-white-label' : ''}`}
+                                                            onClick={() => {
+                                                                const dx = point.x - crateManPlayer.x;
+                                                                const dy = point.y - crateManPlayer.y;
+                                                                if (Math.abs(dx) + Math.abs(dy) === 1) moveCrateMan(dx, dy);
+                                                            }}
+                                                            disabled={wall || crateManState !== 'playing'}
+                                                            aria-label={`Crate-Man cell ${key}`}
+                                                        >
+                                                            {hasRecord && <span className="crate-man-record" />}
+                                                            {hasWhiteLabel && <span className="crate-man-white-label">WL</span>}
+                                                            {lawyerIndex >= 0 && <span className={`crate-man-lawyer lawyer-${lawyerIndex}`}>LAW</span>}
+                                                            {isPlayer && <span className={`crate-man-player ${crateManInvincibleUntil > Date.now() ? 'invincible' : ''}`}>CM</span>}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {crateManState === 'caught' && (
+                                                    <div className="crate-man-endcard">
+                                                        <strong>Cease and desist.</strong>
+                                                        <span>The copyright lawyer got you.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="request-evader-controls crate-man-controls">
+                                                <button onClick={() => moveCrateMan(0, -1)}>Up</button>
+                                                <div>
+                                                    <button onClick={() => moveCrateMan(-1, 0)}>Left</button>
+                                                    <button onClick={() => moveCrateMan(1, 0)}>Right</button>
+                                                </div>
+                                                <button onClick={() => moveCrateMan(0, 1)}>Down</button>
+                                                <small>Keyboard: arrows/WASD. Eat records. White Labels scare lawyers.</small>
+                                            </div>
+                                        </div>
+                                    ) : crateCrack.gameType === 'request_evader' ? (
+                                        <div className={`request-evader-game ${requestEvaderState}`}>
+                                            <div className="request-evader-hud">
+                                                <span>Requests Dodged</span>
+                                                <strong>
+                                                    {requestEvaderState === 'intro'
+                                                        ? `Ready ${requestEvaderIntroCount}`
+                                                        : requestEvaderState === 'hit'
+                                                            ? 'Busted'
+                                                            : `${Math.ceil(crateCrackRemaining / 1000)}s`}
+                                                </strong>
+                                                <button onClick={triggerEchoHorn} disabled={!echoHornReady || requestEvaderState !== 'playing'}>
+                                                    Echo Horn
+                                                </button>
+                                            </div>
+                                            <div
+                                                className="request-evader-stage"
+                                                onPointerDown={(event) => {
+                                                    evaderPointerActive.current = true;
+                                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                                    moveRequestPlayerToPointer(event.clientX, event.clientY, event.currentTarget);
+                                                }}
+                                                onPointerMove={(event) => {
+                                                    if (event.pointerType === 'mouse' || evaderPointerActive.current) {
+                                                        moveRequestPlayerToPointer(event.clientX, event.clientY, event.currentTarget);
+                                                    }
+                                                }}
+                                                onPointerUp={() => {
+                                                    evaderPointerActive.current = false;
+                                                }}
+                                                onPointerCancel={() => {
+                                                    evaderPointerActive.current = false;
+                                                }}
+                                            >
+                                                <div className="club-light light-a" />
+                                                <div className="club-light light-b" />
+                                                <div className="club-light light-c" />
+                                                <div className="club-strobes" />
+                                                <div className="club-floor-grid" />
+                                                <div className="dj-booth">
+                                                    <div className="turntable left"><span /></div>
+                                                    <div className="mixer"><i /></div>
+                                                    <div className="turntable right"><span /></div>
+                                                </div>
+                                                {requestPowerups.map(powerup => (
+                                                    <div
+                                                        key={powerup.id}
+                                                        className={`request-powerup ${powerup.type}`}
+                                                        style={{ left: `${powerup.x}%`, top: `${powerup.y}%` }}
+                                                    >
+                                                        <b>{powerup.type === 'shield' ? 'LP' : 'SFX'}</b>
+                                                        <small>{powerup.label}</small>
+                                                    </div>
+                                                ))}
+                                                {requestEnemies.map((enemy, index) => (
+                                                    <div
+                                                        key={enemy.id}
+                                                        className={`request-enemy request-type-${index % 5}`}
+                                                        style={{ left: `${enemy.x}%`, top: `${enemy.y}%` }}
+                                                    >
+                                                        <div className="enemy-phone" />
+                                                        <span>{enemy.label}</span>
+                                                    </div>
+                                                ))}
+                                                <div
+                                                    className={`request-dj ${shieldUntil > Date.now() ? 'shielded' : ''}`}
+                                                    style={{ left: `${requestPlayer.x}%`, top: `${requestPlayer.y}%` }}
+                                                >
+                                                    <div className="dj-headphones" />
+                                                    <div className="dj-body" />
+                                                </div>
+                                                {requestEvaderState === 'hit' && (
+                                                    <div className="request-evader-endcard">
+                                                        <strong>Request got through.</strong>
+                                                        <span>No promo this round. The booth got swarmed.</span>
+                                                    </div>
+                                                )}
+                                                {requestEvaderState === 'intro' && (
+                                                    <div className="request-evader-intro-card">
+                                                        <strong>{requestEvaderIntroCount}</strong>
+                                                        <span>Move the DJ. Avoid phones. Grab powerups.</span>
+                                                        <small>Mouse, touch, arrows, or WASD.</small>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="request-evader-controls">
+                                                <button onClick={() => moveRequestPlayer(0, -1)}>Up</button>
+                                                <div>
+                                                    <button onClick={() => moveRequestPlayer(-1, 0)}>Left</button>
+                                                    <button onClick={triggerEchoHorn} disabled={!echoHornReady}>Horn</button>
+                                                    <button onClick={() => moveRequestPlayer(1, 0)}>Right</button>
+                                                </div>
+                                                <button onClick={() => moveRequestPlayer(0, 1)}>Down</button>
+                                                <small>Keyboard: arrows/WASD. Space fires echo horn.</small>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="crate-crack-stack">
+                                            {crateCrackOrder.map((card, index) => (
+                                                <div key={card.id} className="crate-crack-record">
+                                                    <div className="crate-crack-vinyl" aria-label={`Record ${index + 1}`}>
+                                                        <span>{index + 1}</span>
+                                                    </div>
+                                                    <div className="crate-crack-record-copy">
+                                                        <strong>{card.title}</strong>
+                                                        <span>{card.hint}</span>
+                                                    </div>
+                                                    <div className="crate-crack-move">
+                                                        <button onClick={() => moveCrateCrackCard(index, -1)} disabled={index === 0}>Up</button>
+                                                        <button onClick={() => moveCrateCrackCard(index, 1)} disabled={index === crateCrackOrder.length - 1}>Down</button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {crateCrack.gameType !== 'request_evader' && (
+                                        <button className="crate-crack-submit" onClick={() => handleSubmitCrateCrack()} disabled={isSubmittingCrateCrack}>
+                                            {isSubmittingCrateCrack ? 'Checking...' : `Win Crate Games For ${crateCrack.defaultRewardLabel}`}
+                                        </button>
+                                    )}
+                                    {crateCrackMessage && <p className="crate-crack-message">{crateCrackMessage}</p>}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )
+            }
+
             {/* 🎰 MEGA-ANNOUNCEMENT: KARMA RAIN SPLASH */}
             {
                 showKarmaRainSplash && (
@@ -2574,64 +3616,102 @@ export default function HomePage() {
 
             {/* 🎰 GOLDEN HOUR PRIZE DROP */}
             {
-                showPrizeDrop && (
-                    <div className={`prize-drop-overlay ${prizeDropIsWinner ? 'is-winner' : 'is-viewer'}`} onClick={(e) => {
+                showPrizeDrop && prizeDropEvent && (
+                    <div className={`prize-drop-overlay ${prizeDropIsWinner ? 'is-winner' : 'is-viewer'} reveal-mode-${prizeDropEvent.revealMode}`} onClick={(e) => {
                         if (e.target === e.currentTarget) setShowPrizeDrop(false);
                     }}>
-                        {prizeDropIsWinner ? (
-                            <div className="prize-drop-modal winner-modal-prize">
+                        <div className={prizeDropIsWinner ? 'prize-drop-modal winner-modal-prize' : 'prize-drop-broadcast'}>
+                            {prizeDropIsWinner && (
                                 <button className="winner-close" onClick={() => setShowPrizeDrop(false)}>✕</button>
-                                <div className="prize-drop-particles">
-                                    {[...Array(15)].map((_, i) => (
-                                        <span key={i} className="prize-particle" style={{
-                                            left: `${Math.random() * 100}%`,
-                                            top: `${Math.random() * 100}%`,
-                                            animationDelay: `${Math.random() * 2}s`,
-                                        }}>
-                                            {['🎧', '📦', '⚡', '📡', '💎'][i % 5]}
-                                        </span>
-                                    ))}
-                                </div>
-                                <span className="prize-drop-mega-icon">🎰</span>
-                                <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
-                                <p className="prize-drop-subtitle">You&apos;ve been selected — free hat incoming! 🎩</p>
-                                <div className="winner-prize">
-                                    <img src="/hat-prize.png" alt="Free Hat" className="prize-image" />
-                                    <div className="prize-details">
-                                        <h2>FREE HAT!</h2>
-                                        <p className="promo-code">Code: <strong>HACKATHONWINNER</strong></p>
-                                        <p className="winner-shipping-note">Just pay shipping · Hat is on us 🎩</p>
+                            )}
+                            <div className="prize-drop-particles">
+                                {[...Array(prizeDropIsWinner ? 15 : 10)].map((_, i) => (
+                                    <span key={i} className="prize-particle" style={{
+                                        left: `${Math.random() * 100}%`,
+                                        top: `${Math.random() * 100}%`,
+                                        animationDelay: `${Math.random() * 2}s`,
+                                    }}>
+                                        {['🎧', '📦', '⚡', '📡', '💎'][i % 5]}
+                                    </span>
+                                ))}
+                            </div>
+
+                            <span className="prize-drop-mega-icon">{prizeDropEvent.template.icon}</span>
+                            <h1 className="prize-drop-title">{prizeDropEvent.template.title}</h1>
+
+                            {prizeDropEvent.revealMode === 'spin' && prizeDropEvent.finalists.length > 0 && (
+                                <div className="prize-wheel-stage">
+                                    <div className="prize-reveal-label">Spin The Crate</div>
+                                    <div className="prize-wheel-pointer">▼</div>
+                                    <div className="prize-wheel" style={{ '--slot-count': prizeDropEvent.finalists.length } as CSSProperties}>
+                                        {prizeDropEvent.finalists.map((finalist, index) => {
+                                            const angle = `${(360 / Math.max(prizeDropEvent.finalists.length, 1)) * index}deg`;
+                                            return (
+                                                <span
+                                                    key={finalist.visitorId}
+                                                    className={finalist.visitorId === prizeDropEvent.winnerVisitorId ? 'winner' : ''}
+                                                    style={{ '--angle': angle } as CSSProperties}
+                                                >
+                                                    {finalist.name}
+                                                </span>
+                                            );
+                                        })}
+                                        <div className="prize-wheel-center">
+                                            <small>Winner</small>
+                                            <strong>{prizeDropWinnerName}</strong>
+                                        </div>
                                     </div>
+                                    <p className="prize-wheel-caption">{prizeDropEvent.finalists.length} live eligible names on the wheel</p>
                                 </div>
-                                <a
-                                    href="https://dj.style/products/crate-hackers-vintage-cotton-twill-hat-special-offer"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="claim-prize-btn"
-                                >
-                                    🎁 Claim Your Free Hat →
-                                </a>
-                                <p className="winner-note">Tap above → Enter code <strong>HACKATHONWINNER</strong> at checkout → Done!</p>
-                            </div>
-                        ) : (
-                            <div className="prize-drop-broadcast">
-                                <div className="prize-drop-particles">
-                                    {[...Array(10)].map((_, i) => (
-                                        <span key={i} className="prize-particle" style={{
-                                            left: `${Math.random() * 100}%`,
-                                            top: `${Math.random() * 100}%`,
-                                            animationDelay: `${Math.random() * 2}s`,
-                                        }}>
-                                            {['🎧', '📦', '⚡', '📡', '💎'][i % 5]}
-                                        </span>
-                                    ))}
+                            )}
+
+                            {prizeDropEvent.revealMode === 'final_three' && prizeDropEvent.finalists.length > 0 && (
+                                <div className="prize-quick-picks-stage">
+                                    <div className="prize-reveal-label">Final Three Quick Picks</div>
+                                    <div className="prize-quick-picks">
+                                        {prizeDropEvent.finalists.map((finalist, index) => (
+                                            <div
+                                                key={finalist.visitorId}
+                                                className={`prize-quick-pick-card ${finalist.visitorId === prizeDropEvent.winnerVisitorId ? 'winner' : ''}`}
+                                            >
+                                                <small>{index === 0 ? 'Most Active' : index === 1 ? 'Hot Streak' : 'Live Contender'}</small>
+                                                <strong>{finalist.name}</strong>
+                                                {finalist.visitorId === prizeDropEvent.winnerVisitorId && <span>Winner</span>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="prize-quick-picks-caption">Top live engagement. One random winner.</p>
                                 </div>
-                                <span className="prize-drop-mega-icon">🎰</span>
-                                <h1 className="prize-drop-title">GOLDEN HOUR DROP!</h1>
-                                <p className="prize-drop-winner-name">📦 {prizeDropWinnerName} just won a free hat!</p>
-                                <p className="prize-drop-hint">Stay active — you could be next! 🎚️</p>
-                            </div>
-                        )}
+                            )}
+
+                            {prizeDropIsWinner ? (
+                                <>
+                                    <p className="prize-drop-subtitle">{prizeDropEvent.template.winnerSubtitle}</p>
+                                    <div className="winner-prize">
+                                        <img src={prizeDropEvent.template.imageUrl} alt={prizeDropEvent.template.prizeName} className="prize-image" />
+                                        <div className="prize-details">
+                                            <h2>{prizeDropEvent.template.prizeName}</h2>
+                                            <p className="promo-code">Code: <strong>{prizeDropEvent.template.promoCode}</strong></p>
+                                            <p className="winner-shipping-note">Prize is ready to claim.</p>
+                                        </div>
+                                    </div>
+                                    <a
+                                        href={prizeDropEvent.template.claimUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="claim-prize-btn"
+                                    >
+                                        🎁 Claim Your Prize →
+                                    </a>
+                                    <p className="winner-note">{prizeDropEvent.template.claimInstructions}</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="prize-drop-winner-name">📦 {prizeDropWinnerName} {prizeDropEvent.template.viewerMessage}!</p>
+                                    <p className="prize-drop-hint">Stay active — you could be next! 🎚️</p>
+                                </>
+                            )}
+                        </div>
                     </div>
                 )
             }
@@ -2718,6 +3798,18 @@ export default function HomePage() {
                         {!deleteWindow.canDelete && deleteWindow.reason && (
                             <span className="purge-restriction">{deleteWindow.reason}</span>
                         )}
+                    </div>
+                )
+            }
+
+            {/* 🟡 PERSISTENT QUEUE INDICATOR (after splash) */}
+            {
+                queueWindow.active && !showQueueSplash && (
+                    <div className="queue-persistent-indicator">
+                        <span className="queue-icon">[?]</span>
+                        <span className="queue-text">QUEUE REVIEW</span>
+                        <span className="queue-countdown">{Math.ceil(queueWindowRemaining / 1000)}s</span>
+                        <span className="queue-target-count">{queueSongs.length} packets</span>
                     </div>
                 )
             }
@@ -2838,6 +3930,38 @@ export default function HomePage() {
                     )}
                 </div>
             </header>
+
+            {/* 📺 SHOW CLOCK - audience-facing show progress */}
+            {activeShowSegment && (
+                <section className={`show-clock-card ${showClockWarningLevel !== 'none' ? `ticker-${showClockWarningLevel}` : ''}`}>
+                    <div className="show-clock-card-main">
+                        <div className="show-clock-live-label">
+                            <span className="show-clock-live-dot" />
+                            Live now
+                        </div>
+                        <div className="show-clock-current">
+                            <span className="show-clock-current-icon">{activeShowSegment.icon}</span>
+                            <div>
+                                <p className="show-clock-eyebrow">Current segment</p>
+                                <h2>{activeShowSegment.name}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="show-clock-timer-block">
+                        <span className="show-clock-countdown-label">Next segment in</span>
+                        <span className="show-clock-countdown">{showClockDisplayTime}</span>
+                    </div>
+                    <div className="show-clock-preview">
+                        <span className="show-clock-preview-label">Next up</span>
+                        <span className="show-clock-preview-name">
+                            {nextShowSegment ? `${nextShowSegment.icon} ${nextShowSegment.name}` : 'Final stretch'}
+                        </span>
+                    </div>
+                    <div className="show-clock-progress-track" aria-hidden="true">
+                        <div className="show-clock-progress-fill" style={{ width: `${showClockProgress}%` }} />
+                    </div>
+                </section>
+            )}
 
             {/* 🎮 GAME FEATURES BAR - Leaderboard, Predictions, Sound toggle */}
             {/* Hidden during Demo Night - no voting games when demo mode is active */}
@@ -3240,25 +4364,6 @@ export default function HomePage() {
 
             {/* 🎧 YOUR REQUESTS - REMOVED: Now using in-playlist highlighting instead */}
 
-            {/* 📺 SHOW CLOCK TICKER BAR - ESPN-style segment progress */}
-            {showClock?.isRunning && (
-                <div className={`show-clock-ticker ${showClockWarningLevel !== 'none' ? `ticker-${showClockWarningLevel}` : ''}`}>
-                    <div className="ticker-segments">
-                        {showClock.segments.map((seg, i) => (
-                            <div key={seg.id} className={`ticker-seg ${i === showClock.activeSegmentIndex ? 'current' : i < showClock.activeSegmentIndex ? 'done' : 'upcoming'}`}>
-                                <span className="ticker-seg-icon">{seg.icon}</span>
-                                <span className="ticker-seg-name">{seg.name}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="ticker-countdown">
-                        <span className="ticker-time">
-                            {Math.floor(showClockRemaining / 60000)}:{String(Math.floor((showClockRemaining % 60000) / 1000)).padStart(2, '0')}
-                        </span>
-                    </div>
-                </div>
-            )}
-
             {/* 📺 SHOW CLOCK TRANSITION SPLASH */}
             {showClockTransition && (
                 <div className="show-clock-splash">
@@ -3594,11 +4699,66 @@ export default function HomePage() {
                 )
             )}
 
+            {!demoNight.enabled && queueWindow.active && (
+                <section className="queue-section" aria-label="The Queue zero-vote review">
+                    <div className="queue-header">
+                        <div>
+                            <span className="queue-kicker">ZERO-VOTE SCANNER</span>
+                            <h2>The Queue</h2>
+                            <p>60-second review round. Everything else is noise. These packets need ears.</p>
+                        </div>
+                        <div className="queue-live-clock">
+                            <span>{Math.ceil(queueWindowRemaining / 1000)}s</span>
+                            <small>review window</small>
+                        </div>
+                    </div>
+
+                    {queueSongs.length === 0 ? (
+                        <div className="queue-clear-state">Queue clear. Every packet has at least one vote.</div>
+                    ) : (
+                        <div className="queue-packet-list">
+                            {queueSongs.map(song => {
+                                const rank = songRankById.get(song.id) || 0;
+                                const votesReceived = getTotalVotes(song);
+
+                                return (
+                                    <button
+                                        key={song.id}
+                                        type="button"
+                                        className="queue-packet-card"
+                                        onClick={() => {
+                                            const songEl = document.querySelector(`[data-song-id="${song.id}"]`);
+                                            if (songEl) {
+                                                songEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                songEl.classList.add('highlight-flash');
+                                                setTimeout(() => songEl.classList.remove('highlight-flash'), 2000);
+                                            }
+                                        }}
+                                    >
+                                        <img src={song.albumArt || '/placeholder.svg'} alt="" />
+                                        <div className="queue-packet-copy">
+                                            <span className="queue-packet-title">{song.name}</span>
+                                            <span className="queue-packet-artist">{song.artist}</span>
+                                            <span className="blind-spot-badge">NEEDS REVIEW</span>
+                                        </div>
+                                        <div className="queue-packet-stats">
+                                            <span>{votesReceived} votes</span>
+                                            <span>{formatTimeSinceAdded(song.addedAt)}</span>
+                                            <span>rank #{rank}</span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </section>
+            )}
+
             {/* ═══════════════════════════════════════════════════════════
                 SONG LIST - The main star. Music first!
                ═══════════════════════════════════════════════════════════ */}
             {!demoNight.enabled && (
-                <div className={`song-list-stream${chatDocked ? ' chat-docked' : ''}`} id="song-list">
+                <div className={`song-list-stream${chatDocked ? ' chat-docked' : ''}${queueWindow.active ? ' queue-game-active' : ''}`} id="song-list">
                     {sortedSongs.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-icon"><img src="/logo.png" alt="" className="empty-crate-icon" /></div>
@@ -3710,18 +4870,24 @@ export default function HomePage() {
 
                         </div>
                     ) : (
-                        sortedSongs.map((song, index) => {
+                        sortedSongs.map((song) => {
+                            const originalRank = songRankById.get(song.id) || 0;
+                            const index = Math.max(0, originalRank - 1);
                             const hasUpvoted = userVotes.upvotedSongIds.includes(song.id);
                             const hasDownvoted = userVotes.downvotedSongIds.includes(song.id);
                             const isMyComment = song.addedBy === visitorId;
                             const movement = recentlyMoved[song.id];
                             const isNewEntry = (Date.now() - song.addedAt) < 60000; // 60s
+                            const isQueueSong = queueSongIdSet.has(song.id);
+                            const isVotedDown = song.score < 0;
+                            const statusClass = isVotedDown ? 'voted-down' : queueWindow.active && isQueueSong ? 'queue-song' : index < 3 ? 'top-song' : '';
+                            const queueFocusClass = queueWindow.active ? (isQueueSong ? 'queue-focus' : 'queue-muted') : '';
 
                             return (
                                 <div
                                     key={song.id}
                                     data-song-id={song.id}
-                                    className={`song-row-stream ${index < 3 ? 'top-song' : ''} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''} ${isNewEntry ? 'new-entry' : ''}`}
+                                    className={`song-row-stream ${statusClass} ${queueFocusClass} ${isMyComment ? 'my-song' : ''} ${movement ? `move-${movement}` : ''} ${isNewEntry ? 'new-entry' : ''}`}
                                     onMouseEnter={markInteraction}
                                     onTouchStart={markInteraction}
                                 >

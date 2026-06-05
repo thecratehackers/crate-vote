@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchTracks } from '@/lib/itunes';
+import { resolvePreviewUrl } from '@/lib/preview-resolver';
 
 // Public endpoint. Takes { artist, songName } and returns a working preview URL
 // from iTunes (which is far more reliable than Spotify's previewUrl field).
@@ -20,28 +20,20 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Build a focused query. iTunes ranks well when given "artist songName"
-        // but works fine with just an artist name too (will return their top tracks).
-        const query = songName?.trim()
-            ? `${artist.trim()} ${songName.trim()}`
-            : artist.trim();
+        const result = await resolvePreviewUrl({
+            artist,
+            songName,
+        });
 
-        const results = await searchTracks(query, 5);
-
-        // Find the first result that actually has a previewUrl. iTunes almost
-        // always returns one for major-label tracks but indie stuff occasionally
-        // skips it.
-        const hit = results.find(r => !!r.previewUrl);
-
-        if (!hit?.previewUrl) {
+        if (!result.previewUrl) {
             return NextResponse.json({ previewUrl: null, source: 'none' });
         }
 
         return NextResponse.json({
-            previewUrl: hit.previewUrl,
-            source: 'itunes',
-            matchedArtist: hit.artist,
-            matchedTrack: hit.name,
+            previewUrl: result.previewUrl,
+            source: result.source,
+            matchedArtist: result.matchedArtist,
+            matchedTrack: result.matchedTrack,
         });
     } catch (error) {
         console.error('Preview lookup failed:', error);

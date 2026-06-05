@@ -1,4 +1,6 @@
 import { Redis } from '@upstash/redis';
+import { resolvePreviewUrl } from './preview-resolver';
+import { PrizeRevealMode, PrizeTemplateId, getPrizeTemplate } from './prize-templates';
 
 // Validate Redis configuration
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
@@ -76,15 +78,21 @@ const TOP3_KARMA_GRANTED_KEY = 'hackathon:top3KarmaGranted';  // Track songs tha
 const USER_LAST_ACTIVITY_KEY = 'hackathon:userLastActivity';  // Track when users were last active
 const DELETE_WINDOW_KEY = 'hackathon:deleteWindow';  // { endTime: timestamp } - when delete window is active
 const DELETE_WINDOW_USED_KEY = 'hackathon:deleteWindowUsed';  // Set of visitorIds who used their delete this window
+const PURGE_DELETION_LOG_KEY = 'hackathon:purgeDeletionLog';  // Recent songs removed during The Purge
+const LEADS_KEY = 'hackathon:leads';  // Source-of-truth backup of RSVP leads (email keyed) — Kartra masks API lead domains, so we keep the real address here
+const QUEUE_WINDOW_KEY = 'hackathon:queueWindow';  // { endTime: timestamp } - when The Queue review game is active
 const KARMA_RAIN_KEY = 'hackathon:karmaRain';  // { timestamp: number } - when last karma rain happened
 const SESSION_PERMISSIONS_KEY = 'hackathon:sessionPermissions';  // { canVote: boolean, canAddSongs: boolean }
 const YOUTUBE_EMBED_KEY = 'hackathon:youtubeEmbed';  // YouTube URL for live stream embed (legacy)
 const STREAM_CONFIG_KEY = 'hackathon:streamConfig';  // { platform, youtubeUrl?, twitchChannel? }
 const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } - when double points mode is active
 const PRIZE_DROP_KEY = 'hackathon:prizeDrop';  // { winnerVisitorId, winnerName, timestamp, prizeType } - active prize drop
+const PRIZE_DROP_HISTORY_KEY = 'hackathon:prizeDropHistory';  // Persistent winner history for admin reference
 const LEADERBOARD_KING_KEY = 'hackathon:leaderboardKing';  // { winnerVisitorId, winnerName, score, timestamp } - session-end MVP
 const SHOW_CLOCK_KEY = 'hackathon:showClock';  // ShowClock state for ESPN-style segment ticker
 const DEMO_NIGHT_KEY = 'hackathon:demoNight';  // { enabled, headline, description, linkUrl, linkLabel } - Demo Night mode
+const CRATE_CRACK_KEY = 'hackathon:crateCrack';  // Active Crate Games side quest
+const CRATE_CRACK_RESULTS_KEY = 'hackathon:crateCrackResults';  // Per-player Crate Games results
 
 // 💣 BOMB FEATURE KEYS - Skip currently playing jukebox song via crowd consensus
 const NOW_PLAYING_KEY = 'hackathon:nowPlaying';  // { songId, songName, artistName, albumArt, startedAt } - current jukebox song
@@ -1031,6 +1039,289 @@ export async function setDemoNightConfig(config: DemoNightConfig): Promise<void>
     }
 }
 
+// ============ CRATE GAMES SIDE QUEST ============
+export type CrateCrackRewardType = 'trial' | 'crate_annual' | 'banger_annual' | 'lifetime';
+export type CrateCrackGameType = 'request_evader' | 'crate_man' | 'missile_wedding' | 'bpm_sort';
+
+export interface CrateCrackCard {
+    id: string;
+    title: string;
+    hint: string;
+}
+
+export interface CrateCrackReward {
+    type: CrateCrackRewardType;
+    label: string;
+    code: string;
+    claimUrl: string;
+}
+
+interface CrateCrackRoundData {
+    active: boolean;
+    roundId: string;
+    gameType: CrateCrackGameType;
+    startedAt: number;
+    endTime: number;
+    durationSeconds: number;
+    prompt: string;
+    cards: CrateCrackCard[];
+    answerIds: string[];
+    defaultReward: CrateCrackReward;
+    rareRewards: CrateCrackReward[];
+}
+
+export interface CrateCrackPublicStatus {
+    active: boolean;
+    roundId: string | null;
+    gameType: CrateCrackGameType;
+    startedAt: number | null;
+    endTime: number | null;
+    remaining: number;
+    durationSeconds: number;
+    prompt: string;
+    cards: CrateCrackCard[];
+    defaultRewardLabel: string;
+    rareRewardsArmed: boolean;
+}
+
+export interface CrateCrackAdminStatus extends CrateCrackPublicStatus {
+    completions: number;
+    attempts: number;
+    rareRewards: Array<Pick<CrateCrackReward, 'type' | 'label'> & { armed: boolean }>;
+}
+
+interface CrateCrackResult {
+    visitorId: string;
+    roundId: string;
+    completed: boolean;
+    score: number;
+    reward: CrateCrackReward | null;
+    submittedAt: number;
+}
+
+const CRATE_CRACK_CARDS: CrateCrackCard[] = [
+    { id: 'warmup', title: 'Warm-Up Record', hint: 'Start here. Easy tempo, low pressure.' },
+    { id: 'groove', title: 'Groove Builder', hint: 'Bring the room in without rushing it.' },
+    { id: 'bridge', title: 'Bridge Track', hint: 'Connect the room to the big moment.' },
+    { id: 'peak', title: 'Peak Hour Weapon', hint: 'This is the hands-up record.' },
+    { id: 'closer', title: 'Closer', hint: 'Land the plane and make it feel intentional.' },
+];
+
+const CRATE_CRACK_ANSWER_IDS = ['warmup', 'groove', 'bridge', 'peak', 'closer'];
+
+const CRATE_CRACK_GAME_CONFIG: Record<Exclude<CrateCrackGameType, 'request_evader' | 'crate_man' | 'missile_wedding'>, {
+    prompt: string;
+    cards: CrateCrackCard[];
+    answerIds: string[];
+}> = {
+    bpm_sort: {
+        prompt: 'Sort the crate from slowest BPM to fastest BPM.',
+        cards: [
+            { id: 'bpm-96', title: '96 BPM', hint: 'Slowest pocket.' },
+            { id: 'bpm-104', title: '104 BPM', hint: 'Groove builder.' },
+            { id: 'bpm-112', title: '112 BPM', hint: 'Room starts moving.' },
+            { id: 'bpm-124', title: '124 BPM', hint: 'Peak dance lane.' },
+            { id: 'bpm-132', title: '132 BPM', hint: 'Fastest record.' },
+        ],
+        answerIds: ['bpm-96', 'bpm-104', 'bpm-112', 'bpm-124', 'bpm-132'],
+    },
+};
+
+const DEFAULT_CRATE_CRACK_REWARD: CrateCrackReward = {
+    type: 'trial',
+    label: '14 Free Days',
+    code: '',
+    claimUrl: 'https://www.cratehackers.com/14daytrial',
+};
+
+function shuffleCrateCrackCards(seed: number): CrateCrackCard[] {
+    return CRATE_CRACK_CARDS
+        .map((card, index) => {
+            const sort = Math.sin(seed + index * 999) * 10000;
+            return { card, sort: sort - Math.floor(sort) };
+        })
+        .sort((a, b) => a.sort - b.sort)
+        .map(item => item.card);
+}
+
+function shuffleCards(cards: CrateCrackCard[], seed: number): CrateCrackCard[] {
+    return cards
+        .map((card, index) => {
+            const sort = Math.sin(seed + index * 999) * 10000;
+            return { card, sort: sort - Math.floor(sort) };
+        })
+        .sort((a, b) => a.sort - b.sort)
+        .map(item => item.card);
+}
+
+function getInactiveCrateCrackStatus(): CrateCrackPublicStatus {
+    return {
+        active: false,
+        roundId: null,
+        gameType: 'request_evader',
+        startedAt: null,
+        endTime: null,
+        remaining: 0,
+        durationSeconds: 60,
+        prompt: '',
+        cards: [],
+        defaultRewardLabel: DEFAULT_CRATE_CRACK_REWARD.label,
+        rareRewardsArmed: false,
+    };
+}
+
+async function getCrateCrackRoundData(): Promise<CrateCrackRoundData | null> {
+    const round = await redis.get<CrateCrackRoundData>(CRATE_CRACK_KEY);
+    if (!round || Date.now() >= round.endTime) return null;
+    return round;
+}
+
+function toCrateCrackPublicStatus(round: CrateCrackRoundData | null): CrateCrackPublicStatus {
+    if (!round) return getInactiveCrateCrackStatus();
+    return {
+        active: true,
+        roundId: round.roundId,
+        gameType: round.gameType,
+        startedAt: round.startedAt,
+        endTime: round.endTime,
+        remaining: Math.max(0, round.endTime - Date.now()),
+        durationSeconds: round.durationSeconds,
+        prompt: round.prompt,
+        cards: round.cards,
+        defaultRewardLabel: round.defaultReward.label,
+        rareRewardsArmed: round.rareRewards.length > 0,
+    };
+}
+
+export async function getCrateCrackStatus(): Promise<CrateCrackPublicStatus> {
+    try {
+        return toCrateCrackPublicStatus(await getCrateCrackRoundData());
+    } catch (error) {
+        console.error('Failed to get Crate Games status:', error);
+        return getInactiveCrateCrackStatus();
+    }
+}
+
+export async function getCrateCrackAdminStatus(): Promise<CrateCrackAdminStatus> {
+    try {
+        const round = await getCrateCrackRoundData();
+        const results = await redis.hgetall<Record<string, CrateCrackResult>>(CRATE_CRACK_RESULTS_KEY) || {};
+        const activeResults = Object.values(results).filter(result => round && result.roundId === round.roundId);
+        const publicStatus = toCrateCrackPublicStatus(round);
+        return {
+            ...publicStatus,
+            attempts: activeResults.length,
+            completions: activeResults.filter(result => result.completed).length,
+            rareRewards: [
+                { type: 'crate_annual', label: 'Annual Crate Hackers', armed: !!round?.rareRewards.some(reward => reward.type === 'crate_annual') },
+                { type: 'banger_annual', label: 'Annual Banger Button', armed: !!round?.rareRewards.some(reward => reward.type === 'banger_annual') },
+                { type: 'lifetime', label: 'Lifetime Offer', armed: !!round?.rareRewards.some(reward => reward.type === 'lifetime') },
+            ],
+        };
+    } catch (error) {
+        console.error('Failed to get Crate Games admin status:', error);
+        return { ...getInactiveCrateCrackStatus(), attempts: 0, completions: 0, rareRewards: [] };
+    }
+}
+
+export async function startCrateCrackRound(options: {
+    durationSeconds?: number;
+    gameType?: CrateCrackGameType;
+    defaultReward?: Partial<CrateCrackReward>;
+    rareRewards?: CrateCrackReward[];
+} = {}): Promise<CrateCrackPublicStatus> {
+    const durationSeconds = Math.max(15, Math.min(options.durationSeconds || 60, 180));
+    const startedAt = Date.now();
+    const seed = startedAt + Math.floor(Math.random() * 100000);
+    const gameType = options.gameType || 'request_evader';
+    const gameConfig = gameType === 'request_evader' || gameType === 'crate_man' || gameType === 'missile_wedding' ? null : CRATE_CRACK_GAME_CONFIG[gameType];
+    const round: CrateCrackRoundData = {
+        active: true,
+        roundId: `crate-crack-${startedAt}`,
+        gameType,
+        startedAt,
+        endTime: startedAt + durationSeconds * 1000,
+        durationSeconds,
+        prompt: gameType === 'request_evader'
+            ? 'Dodge bad requests for 60 seconds. Survive the dance floor and claim the promo.'
+            : gameType === 'crate_man'
+                ? 'Eat the records, dodge the copyright lawyers, and grab White Labels for protection.'
+                : gameType === 'missile_wedding'
+                    ? 'Protect dance floor energy from speeches, cake cutting, and drunk uncle.'
+                    : gameConfig?.prompt || 'Sort the records before the clock dies.',
+        cards: gameConfig ? shuffleCards(gameConfig.cards, seed) : shuffleCrateCrackCards(seed),
+        answerIds: gameConfig?.answerIds || CRATE_CRACK_ANSWER_IDS,
+        defaultReward: { ...DEFAULT_CRATE_CRACK_REWARD, ...options.defaultReward },
+        rareRewards: options.rareRewards || [],
+    };
+
+    await Promise.all([
+        redis.set(CRATE_CRACK_KEY, round, { ex: durationSeconds + 600 }),
+        redis.del(CRATE_CRACK_RESULTS_KEY),
+    ]);
+
+    return toCrateCrackPublicStatus(round);
+}
+
+export async function stopCrateCrackRound(): Promise<CrateCrackPublicStatus> {
+    await redis.del(CRATE_CRACK_KEY);
+    return getInactiveCrateCrackStatus();
+}
+
+export async function submitCrateCrackResult(visitorId: string, orderedIds: string[]): Promise<{
+    success: boolean;
+    completed: boolean;
+    score: number;
+    reward: CrateCrackReward | null;
+    error?: string;
+}> {
+    try {
+        const round = await getCrateCrackRoundData();
+        if (!round) {
+            return { success: false, completed: false, score: 0, reward: null, error: 'Crate Games is not live.' };
+        }
+
+        const existing = await redis.hget<CrateCrackResult>(CRATE_CRACK_RESULTS_KEY, visitorId);
+        if (existing?.roundId === round.roundId) {
+            return {
+                success: true,
+                completed: existing.completed,
+                score: existing.score,
+                reward: existing.reward,
+            };
+        }
+
+        const score = round.gameType === 'request_evader' || round.gameType === 'crate_man' || round.gameType === 'missile_wedding'
+            ? round.answerIds.length
+            : round.answerIds.reduce((total, id, index) => total + (orderedIds[index] === id ? 1 : 0), 0);
+        const completed = score === round.answerIds.length;
+        const allResults = await redis.hgetall<Record<string, CrateCrackResult>>(CRATE_CRACK_RESULTS_KEY) || {};
+        const rareAlreadyAwarded = Object.values(allResults).some(result =>
+            result.roundId === round.roundId &&
+            result.reward &&
+            result.reward.type !== 'trial'
+        );
+        const reward = completed
+            ? (!rareAlreadyAwarded && round.rareRewards.length > 0 ? round.rareRewards[0] : round.defaultReward)
+            : null;
+        const result: CrateCrackResult = {
+            visitorId,
+            roundId: round.roundId,
+            completed,
+            score,
+            reward,
+            submittedAt: Date.now(),
+        };
+
+        await redis.hset(CRATE_CRACK_RESULTS_KEY, { [visitorId]: result });
+
+        return { success: true, completed, score, reward };
+    } catch (error) {
+        console.error('Failed to submit Crate Games result:', error);
+        return { success: false, completed: false, score: 0, reward: null, error: 'Could not submit Crate Games result.' };
+    }
+}
+
 // ============ BAN FUNCTIONS ============
 export async function banUser(visitorId: string): Promise<void> {
     await redis.sadd(BANNED_KEY, visitorId);
@@ -1132,19 +1423,115 @@ export async function getTimerStatus(): Promise<{ endTime: number | null; runnin
 interface DeleteWindowData {
     endTime: number;
     startedBy: string;
+    startedAt?: number;
+}
+
+export interface PurgeDeletionEvent {
+    id: string;
+    songId: string;
+    songName: string;
+    artist: string;
+    albumArt: string;
+    deletedBy: string;
+    deletedByName: string;
+    source: 'purge';
+    timestamp: number;
+    restoredAt?: number;
+    restoredBy?: string;
+    song: Song;
+}
+
+const MAX_PURGE_DELETION_ITEMS = 50;
+
+async function logPurgeDeletion({
+    song,
+    deletedBy,
+    deletedByName,
+}: {
+    song: Song;
+    deletedBy: string;
+    deletedByName: string;
+}): Promise<PurgeDeletionEvent> {
+    const event: PurgeDeletionEvent = {
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
+        songId: song.id,
+        songName: song.name,
+        artist: song.artist,
+        albumArt: song.albumArt,
+        deletedBy,
+        deletedByName,
+        source: 'purge',
+        timestamp: Date.now(),
+        song,
+    };
+
+    await redis.lpush(PURGE_DELETION_LOG_KEY, JSON.stringify(event));
+    await redis.ltrim(PURGE_DELETION_LOG_KEY, 0, MAX_PURGE_DELETION_ITEMS - 1);
+    return event;
+}
+
+export async function getRecentPurgeDeletions(limit = MAX_PURGE_DELETION_ITEMS): Promise<PurgeDeletionEvent[]> {
+    try {
+        const items = await redis.lrange(PURGE_DELETION_LOG_KEY, 0, Math.max(0, limit - 1));
+        return items.map(item => typeof item === 'string' ? JSON.parse(item) : item);
+    } catch (error) {
+        console.error('Failed to get purge deletions:', error);
+        return [];
+    }
 }
 
 // Start a new delete window (admin only)
 export async function startDeleteWindow(durationSeconds: number = 30): Promise<{ success: boolean; endTime: number }> {
+    const startedAt = Date.now();
     const endTime = Date.now() + (durationSeconds * 1000);
 
     // Clear previous window's used list and set new window
     await redis.del(DELETE_WINDOW_USED_KEY);
-    await redis.set(DELETE_WINDOW_KEY, { endTime, startedBy: 'admin' } as DeleteWindowData);
+    await redis.set(DELETE_WINDOW_KEY, { endTime, startedBy: 'admin', startedAt } as DeleteWindowData);
 
     console.log(`🗑️ DELETE WINDOW: Started ${durationSeconds}s window, ends at ${new Date(endTime).toISOString()}`);
 
     return { success: true, endTime };
+}
+
+export async function stopDeleteWindow(): Promise<{ success: boolean }> {
+    await redis.del(DELETE_WINDOW_KEY);
+    return { success: true };
+}
+
+export async function startQueueWindow(durationSeconds: number = 60): Promise<{ success: boolean; endTime: number }> {
+    const startedAt = Date.now();
+    const endTime = startedAt + (durationSeconds * 1000);
+
+    await redis.set(QUEUE_WINDOW_KEY, { endTime, startedBy: 'admin', startedAt } as DeleteWindowData);
+
+    console.log(`📡 QUEUE WINDOW: Started ${durationSeconds}s window, ends at ${new Date(endTime).toISOString()}`);
+
+    return { success: true, endTime };
+}
+
+export async function stopQueueWindow(): Promise<{ success: boolean }> {
+    await redis.del(QUEUE_WINDOW_KEY);
+    return { success: true };
+}
+
+export async function getQueueWindowStatus(): Promise<{ active: boolean; endTime: number | null; remaining: number }> {
+    const window = await redis.get<DeleteWindowData>(QUEUE_WINDOW_KEY);
+
+    if (!window) {
+        return { active: false, endTime: null, remaining: 0 };
+    }
+
+    const now = Date.now();
+    if (now >= window.endTime) {
+        return { active: false, endTime: null, remaining: 0 };
+    }
+
+    return {
+        active: true,
+        endTime: window.endTime,
+        remaining: window.endTime - now,
+    };
 }
 
 // Get delete window status
@@ -1240,11 +1627,111 @@ export async function useWindowDelete(visitorId: string, songId: string): Promis
     }
 
     await redis.hdel(SONGS_KEY, songId);
+    await logPurgeDeletion({
+        song,
+        deletedBy: visitorId,
+        deletedByName: song.addedByName ? `${song.addedByName}'s device` : `Viewer ${visitorId.slice(0, 6)}`,
+    });
     invalidateSongsCache();
 
     console.log(`🗑️ WINDOW DELETE: User ${visitorId} deleted "${song.name}"`);
 
     return { success: true };
+}
+
+async function validatePurgeSong(songId: string): Promise<{ success: true; song: Song } | { success: false; error: string }> {
+    const windowStatus = await getDeleteWindowStatus();
+    if (!windowStatus.active) {
+        return { success: false, error: 'The Purge is not active.' };
+    }
+
+    const battleStatus = await getVersusBattleStatus();
+    if (battleStatus.active && battleStatus.songA && battleStatus.songB) {
+        if (songId === battleStatus.songA.id || songId === battleStatus.songB.id) {
+            return { success: false, error: 'This song is in an active Versus Battle.' };
+        }
+    }
+
+    const sortedSongs = await getSortedSongs();
+    const protectedIds = new Set(
+        sortedSongs.slice(0, PURGE_PROTECTED_TOP_N).map(s => s.id)
+    );
+    if (protectedIds.has(songId)) {
+        return { success: false, error: 'Top 3 songs are protected from The Purge.' };
+    }
+
+    const song = await redis.hget<Song>(SONGS_KEY, songId);
+    if (!song) {
+        return { success: false, error: 'This song was already removed from the playlist.' };
+    }
+
+    return { success: true, song };
+}
+
+export async function adminPurgeDeleteSong(songId: string, deletedByName = 'Volunteer'): Promise<{
+    success: boolean;
+    error?: string;
+    event?: PurgeDeletionEvent;
+}> {
+    try {
+        const validation = await validatePurgeSong(songId);
+        if (!validation.success) {
+            return { success: false, error: validation.error };
+        }
+
+        await redis.hdel(SONGS_KEY, songId);
+        const event = await logPurgeDeletion({
+            song: validation.song,
+            deletedBy: 'admin-volunteer',
+            deletedByName,
+        });
+        invalidateSongsCache();
+
+        return { success: true, event };
+    } catch (error) {
+        console.error('Admin purge delete failed:', error);
+        return { success: false, error: 'Could not purge song. Please try again.' };
+    }
+}
+
+export async function undoLastPurgeDelete(restoredBy = 'admin'): Promise<{
+    success: boolean;
+    error?: string;
+    event?: PurgeDeletionEvent;
+}> {
+    try {
+        const items = await redis.lrange(PURGE_DELETION_LOG_KEY, 0, MAX_PURGE_DELETION_ITEMS - 1);
+        const events: PurgeDeletionEvent[] = items.map(item => typeof item === 'string' ? JSON.parse(item) : item);
+        const eventIndex = events.findIndex(event => !event.restoredAt);
+
+        if (eventIndex === -1) {
+            return { success: false, error: 'No purge deletion available to undo.' };
+        }
+
+        const event = events[eventIndex];
+        const existing = await redis.hget<Song>(SONGS_KEY, event.songId);
+        if (existing) {
+            return { success: false, error: 'That song is already back in the playlist.' };
+        }
+
+        await redis.hset(SONGS_KEY, { [event.songId]: event.song });
+        events[eventIndex] = {
+            ...event,
+            restoredAt: Date.now(),
+            restoredBy,
+        };
+
+        await redis.del(PURGE_DELETION_LOG_KEY);
+        if (events.length > 0) {
+            await redis.rpush(PURGE_DELETION_LOG_KEY, ...events.map(item => JSON.stringify(item)));
+        }
+        invalidateSongsCache();
+
+        return { success: true, event: events[eventIndex] };
+    } catch (error) {
+        console.error('Undo purge delete failed:', error);
+        return { success: false, error: 'Could not undo the last purge.' };
+    }
 }
 
 // ============ DOUBLE POINTS ROUND ============
@@ -1712,6 +2199,70 @@ export interface ActivityItem {
 
 const MAX_ACTIVITY_ITEMS = 100; // Keep 100 items for full session history
 const ACTIVITY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours - keep activities for full session
+
+// ============ RSVP LEAD CAPTURE (real-email backup) ============
+// Kartra's GDPR setting masks every API-created lead's domain to name@kartra.com,
+// so the real address is lost on their side. We store the real email/phone/name
+// here (keyed by lowercased email so re-RSVPs dedupe) as the source of truth that
+// Aaron actually owns and can export.
+// Schema matches the legacy gate-era records already living under this key, so the
+// existing ~550 leads and new RSVPs read/export as one clean dataset.
+export interface CapturedLead {
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string | null;
+    source: string;
+    kartraSynced: boolean;
+    createdAt: number;
+}
+
+export async function captureLead(lead: {
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+    source?: string;
+    kartraSynced?: boolean;
+}): Promise<void> {
+    try {
+        const email = lead.email?.trim().toLowerCase();
+        if (!email || !email.includes('@')) return;
+
+        const item: CapturedLead = {
+            email,
+            firstName: lead.firstName?.trim() || null,
+            lastName: lead.lastName?.trim() || null,
+            phone: lead.phone?.trim() || null,
+            source: lead.source || 'rsvp',
+            kartraSynced: lead.kartraSynced ?? false,
+            createdAt: Date.now(),
+        };
+
+        await redis.hset(LEADS_KEY, { [email]: JSON.stringify(item) });
+    } catch (error) {
+        // Never block the signup flow on the backup write
+        console.error('Failed to capture lead backup:', error);
+    }
+}
+
+export async function getCapturedLeads(): Promise<CapturedLead[]> {
+    try {
+        const raw = await redis.hgetall<Record<string, string | CapturedLead>>(LEADS_KEY);
+        if (!raw) return [];
+        return Object.values(raw)
+            .map((v) => (typeof v === 'string' ? JSON.parse(v) as CapturedLead : v))
+            // Tolerate legacy records that used `createdAt` and any that used `timestamp`.
+            .sort((a, b) => {
+                const at = a.createdAt ?? (a as unknown as { timestamp?: number }).timestamp ?? 0;
+                const bt = b.createdAt ?? (b as unknown as { timestamp?: number }).timestamp ?? 0;
+                return bt - at;
+            });
+    } catch (error) {
+        console.error('Failed to read captured leads:', error);
+        return [];
+    }
+}
 
 export async function addActivity(activity: Omit<ActivityItem, 'id' | 'timestamp'>): Promise<void> {
     try {
@@ -2374,71 +2925,358 @@ interface PrizeDropData {
     winnerVisitorId: string;
     winnerName: string;
     timestamp: number;
-    prizeType: 'golden_hour';
+    prizeType: PrizeTemplateId;
+    prizeTemplateId: PrizeTemplateId;
+    revealMode: PrizeRevealMode;
+    finalists: PrizeDropFinalist[];
+}
+
+export interface PrizeDropHistoryItem extends PrizeDropData {
+    id: string;
+}
+
+export interface PrizeDropFinalist {
+    visitorId: string;
+    name: string;
+}
+
+export interface PrizeDropEligibilitySummary {
+    eligibleActiveUsers: number;
+    blockedRecentWinners: number;
+    freshEligibleUsers: number;
+    cooldownDays: number;
+    lastWinner: PrizeDropHistoryItem | null;
+}
+
+export interface PrizeDropStatus {
+    active: boolean;
+    winnerVisitorId: string | null;
+    winnerName: string | null;
+    timestamp: number;
+    prizeType: PrizeTemplateId;
+    prizeTemplateId: PrizeTemplateId;
+    revealMode: PrizeRevealMode;
+    finalists: PrizeDropFinalist[];
+    template: ReturnType<typeof getPrizeTemplate>;
+}
+
+interface PrizeAdminParticipant {
+    visitorId: string;
+    name: string;
+}
+
+const MAX_PRIZE_DROP_HISTORY_ITEMS = 100;
+const PRIZE_DROP_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const PRIZE_DROP_COOLDOWN_DAYS = 30;
+
+function normalizePrizeWinnerName(name: string): string {
+    return name.trim().toLowerCase();
+}
+
+function isPrizeAdminUser(visitorId: string, name: string): boolean {
+    return visitorId.startsWith('admin-') || normalizePrizeWinnerName(name).includes('admin');
+}
+
+function shufflePrizeFinalists(finalists: PrizeDropFinalist[]): PrizeDropFinalist[] {
+    return finalists
+        .map(finalist => ({ finalist, sort: Math.random() }))
+        .sort((a, b) => a.sort - b.sort)
+        .map(({ finalist }) => finalist);
+}
+
+function getTopEngagedVisitorIds(
+    visitorIds: string[],
+    engagementScores: Record<string, number>,
+    limit: number
+): string[] {
+    return [...visitorIds]
+        .sort((a, b) => (engagementScores[b] || 0) - (engagementScores[a] || 0))
+        .slice(0, limit);
+}
+
+function buildPrizeFinalists(
+    eligibleVisitorIds: string[],
+    usernameMap: Record<string, string>,
+    winnerVisitorId: string,
+    revealMode: PrizeRevealMode,
+    engagementScores: Record<string, number>
+): PrizeDropFinalist[] {
+    const winner = { visitorId: winnerVisitorId, name: usernameMap[winnerVisitorId] || 'Anonymous' };
+    const others = shufflePrizeFinalists(
+        eligibleVisitorIds
+            .filter(visitorId => visitorId !== winnerVisitorId)
+            .map(visitorId => ({ visitorId, name: usernameMap[visitorId] || 'Anonymous' }))
+    );
+
+    if (revealMode === 'spin') {
+        // Spin The Crate should feel like a real wheel: every eligible live user
+        // gets a spot, with the winner mixed into the wheel.
+        return shufflePrizeFinalists([winner, ...others]);
+    }
+
+    if (revealMode === 'final_three') {
+        return getTopEngagedVisitorIds(eligibleVisitorIds, engagementScores, 3)
+            .map(visitorId => ({ visitorId, name: usernameMap[visitorId] || 'Anonymous' }));
+    }
+
+    return [winner];
+}
+
+function parsePrizeDropHistoryItem(item: unknown): PrizeDropHistoryItem | null {
+    try {
+        const parsed = typeof item === 'string' ? JSON.parse(item) : item;
+        if (!parsed || typeof parsed !== 'object') return null;
+        const candidate = parsed as Partial<PrizeDropHistoryItem>;
+        if (!candidate.winnerVisitorId || !candidate.winnerName || !candidate.timestamp) return null;
+        const template = getPrizeTemplate(candidate.prizeTemplateId || candidate.prizeType);
+        const revealMode = candidate.revealMode || 'instant';
+        return {
+            id: candidate.id || `${candidate.timestamp}-${candidate.winnerVisitorId}`,
+            winnerVisitorId: candidate.winnerVisitorId,
+            winnerName: candidate.winnerName,
+            timestamp: candidate.timestamp,
+            prizeType: template.id,
+            prizeTemplateId: template.id,
+            revealMode,
+            finalists: candidate.finalists || [],
+        };
+    } catch {
+        return null;
+    }
+}
+
+async function getPrizeEligibilityContext(adminParticipant?: PrizeAdminParticipant): Promise<{
+    eligibleViewers: string[];
+    freshEligibleViewers: string[];
+    usernameMap: Record<string, string>;
+    engagementScores: Record<string, number>;
+    blockedRecentWinners: number;
+    lastWinner: PrizeDropHistoryItem | null;
+}> {
+    const [heartbeatMap, songMap, history, upvoteMap, downvoteMap, karmaMap, lastActivityMap] = await Promise.all([
+        redis.hgetall<Record<string, number>>(VIEWER_HEARTBEAT_KEY),
+        redis.hgetall<Record<string, Song>>(SONGS_KEY),
+        getPrizeDropHistory(MAX_PRIZE_DROP_HISTORY_ITEMS),
+        redis.hgetall<Record<string, string[]>>(USER_UPVOTE_KEY),
+        redis.hgetall<Record<string, string[]>>(USER_DOWNVOTE_KEY),
+        redis.hgetall<Record<string, number>>(USER_KARMA_KEY),
+        redis.hgetall<Record<string, number>>(USER_LAST_ACTIVITY_KEY),
+    ]);
+    const heartbeats = heartbeatMap || {};
+    const songs = songMap || {};
+    const upvotes = upvoteMap || {};
+    const downvotes = downvoteMap || {};
+    const karma = karmaMap || {};
+    const lastActivity = lastActivityMap || {};
+    const now = Date.now();
+    const activeThreshold = now - 60000; // Active in last 60s
+    const usernameMap: Record<string, string> = {};
+    const songAddCounts: Record<string, number> = {};
+
+    for (const song of Object.values(songs || {})) {
+        if (song.addedBy && song.addedByName) {
+            usernameMap[song.addedBy] = song.addedByName;
+            songAddCounts[song.addedBy] = (songAddCounts[song.addedBy] || 0) + 1;
+        }
+    }
+
+    const eligibleViewers = Object.entries(heartbeats)
+        .filter(([visitorId, lastSeen]) => lastSeen >= activeThreshold && usernameMap[visitorId])
+        .map(([visitorId]) => visitorId);
+
+    if (adminParticipant && !eligibleViewers.includes(adminParticipant.visitorId)) {
+        usernameMap[adminParticipant.visitorId] = adminParticipant.name;
+        songAddCounts[adminParticipant.visitorId] = Math.max(songAddCounts[adminParticipant.visitorId] || 0, 1);
+        eligibleViewers.push(adminParticipant.visitorId);
+    }
+
+    const recentCutoff = now - PRIZE_DROP_COOLDOWN_MS;
+    const recentWinners = history.filter(item =>
+        item.timestamp >= recentCutoff && !isPrizeAdminUser(item.winnerVisitorId, item.winnerName)
+    );
+    const recentWinnerIds = new Set(recentWinners.map(item => item.winnerVisitorId));
+    const recentWinnerNames = new Set(recentWinners.map(item => normalizePrizeWinnerName(item.winnerName)));
+
+    const freshEligibleViewers = eligibleViewers.filter(visitorId => {
+        const name = usernameMap[visitorId] || '';
+        if (isPrizeAdminUser(visitorId, name)) return true;
+        return !recentWinnerIds.has(visitorId) && !recentWinnerNames.has(normalizePrizeWinnerName(name));
+    });
+    const engagementScores = Object.fromEntries(eligibleViewers.map(visitorId => {
+        const recentAge = now - (lastActivity[visitorId] || 0);
+        const recentBonus = recentAge <= 5 * 60 * 1000 ? 8 : recentAge <= 15 * 60 * 1000 ? 4 : recentAge <= 60 * 60 * 1000 ? 1 : 0;
+        const score =
+            (songAddCounts[visitorId] || 0) * 6 +
+            ((upvotes[visitorId]?.length || 0) + (downvotes[visitorId]?.length || 0)) * 2 +
+            (karma[visitorId] || 0) +
+            recentBonus;
+        return [visitorId, score];
+    }));
+
+    return {
+        eligibleViewers,
+        freshEligibleViewers,
+        usernameMap,
+        engagementScores,
+        blockedRecentWinners: eligibleViewers.length - freshEligibleViewers.length,
+        lastWinner: history[0] || null,
+    };
+}
+
+export async function getPrizeDropEligibilitySummary(adminParticipant?: PrizeAdminParticipant): Promise<PrizeDropEligibilitySummary> {
+    try {
+        const context = await getPrizeEligibilityContext(adminParticipant);
+        return {
+            eligibleActiveUsers: context.eligibleViewers.length,
+            blockedRecentWinners: context.blockedRecentWinners,
+            freshEligibleUsers: context.freshEligibleViewers.length,
+            cooldownDays: PRIZE_DROP_COOLDOWN_DAYS,
+            lastWinner: context.lastWinner,
+        };
+    } catch (error) {
+        console.error('Failed to get prize drop eligibility:', error);
+        return {
+            eligibleActiveUsers: 0,
+            blockedRecentWinners: 0,
+            freshEligibleUsers: 0,
+            cooldownDays: PRIZE_DROP_COOLDOWN_DAYS,
+            lastWinner: null,
+        };
+    }
 }
 
 // Trigger a prize drop — pick a random active viewer
-export async function triggerPrizeDrop(): Promise<{ success: boolean; winner?: { visitorId: string; name: string }; error?: string }> {
+export async function triggerPrizeDrop(options: {
+    prizeTemplateId?: string | null;
+    revealMode?: PrizeRevealMode;
+    adminParticipant?: PrizeAdminParticipant;
+} = {}): Promise<{ success: boolean; winner?: { visitorId: string; name: string }; error?: string; blockedRecentWinners?: number; event?: PrizeDropStatus }> {
     try {
-        // Get active viewers from heartbeats (active in last 60 seconds for prize eligibility)
-        const heartbeats = await redis.hgetall<Record<string, number>>(VIEWER_HEARTBEAT_KEY) || {};
         const now = Date.now();
-        const activeThreshold = now - 60000; // Active in last 60s
-
-        // Also get usernames from songs they've added
-        const songs = await redis.hgetall<Record<string, Song>>(SONGS_KEY) || {};
-        const usernameMap: Record<string, string> = {};
-        for (const song of Object.values(songs || {})) {
-            if (song.addedBy && song.addedByName) {
-                usernameMap[song.addedBy] = song.addedByName;
-            }
-        }
-
-        // Filter to active viewers who have contributed songs (real participants, not lurkers)
-        const eligibleViewers = Object.entries(heartbeats)
-            .filter(([visitorId, lastSeen]) => lastSeen >= activeThreshold && usernameMap[visitorId])
-            .map(([visitorId]) => visitorId);
+        const template = getPrizeTemplate(options.prizeTemplateId);
+        const revealMode = options.revealMode || 'instant';
+        const { eligibleViewers, freshEligibleViewers, usernameMap, engagementScores, blockedRecentWinners } = await getPrizeEligibilityContext(options.adminParticipant);
 
         if (eligibleViewers.length === 0) {
             return { success: false, error: 'No eligible active users found. Users need to have added at least one song.' };
         }
 
+        if (freshEligibleViewers.length === 0) {
+            return {
+                success: false,
+                error: 'All eligible active users have won in the last 30 days. No fresh prize winner available.',
+                blockedRecentWinners: eligibleViewers.length,
+            };
+        }
+
         // Pick a random winner
-        const winnerVisitorId = eligibleViewers[Math.floor(Math.random() * eligibleViewers.length)];
+        const winnerPool = revealMode === 'final_three'
+            ? getTopEngagedVisitorIds(freshEligibleViewers, engagementScores, 3)
+            : freshEligibleViewers;
+        const winnerVisitorId = winnerPool[Math.floor(Math.random() * winnerPool.length)];
         const winnerName = usernameMap[winnerVisitorId] || 'Anonymous';
+        const finalists = buildPrizeFinalists(freshEligibleViewers, usernameMap, winnerVisitorId, revealMode, engagementScores);
 
         // Store the prize drop (expires in 60 seconds — enough for all clients to poll and see it)
         const prizeData: PrizeDropData = {
             winnerVisitorId,
             winnerName,
             timestamp: now,
-            prizeType: 'golden_hour',
+            prizeType: template.id,
+            prizeTemplateId: template.id,
+            revealMode,
+            finalists,
         };
         await redis.set(PRIZE_DROP_KEY, prizeData, { ex: 60 });
 
+        const historyItem: PrizeDropHistoryItem = {
+            id: `prize-${now}-${winnerVisitorId}`,
+            ...prizeData,
+        };
+        await redis.lpush(PRIZE_DROP_HISTORY_KEY, JSON.stringify(historyItem));
+        await redis.ltrim(PRIZE_DROP_HISTORY_KEY, 0, MAX_PRIZE_DROP_HISTORY_ITEMS - 1);
+
         console.log(`🎰 PRIZE DROP: ${winnerName} (${winnerVisitorId}) won the Golden Hour Drop!`);
 
-        return { success: true, winner: { visitorId: winnerVisitorId, name: winnerName } };
+        return {
+            success: true,
+            winner: { visitorId: winnerVisitorId, name: winnerName },
+            blockedRecentWinners,
+            event: {
+                active: true,
+                winnerVisitorId,
+                winnerName,
+                timestamp: now,
+                prizeType: template.id,
+                prizeTemplateId: template.id,
+                revealMode,
+                finalists,
+                template,
+            },
+        };
     } catch (error) {
         console.error('Failed to trigger prize drop:', error);
         return { success: false, error: 'Failed to trigger prize drop' };
     }
 }
 
+export async function getPrizeDropHistory(limit = 20): Promise<PrizeDropHistoryItem[]> {
+    try {
+        const safeLimit = Math.max(1, Math.min(limit, MAX_PRIZE_DROP_HISTORY_ITEMS));
+        const items = await redis.lrange(PRIZE_DROP_HISTORY_KEY, 0, safeLimit - 1);
+        return items
+            .map(parsePrizeDropHistoryItem)
+            .filter((item): item is PrizeDropHistoryItem => item !== null);
+    } catch (error) {
+        console.error('Failed to get prize drop history:', error);
+        return [];
+    }
+}
+
 // Get prize drop status (for clients to detect via polling)
-export async function getPrizeDropStatus(): Promise<{ active: boolean; winnerVisitorId: string | null; winnerName: string | null; timestamp: number }> {
+export async function getPrizeDropStatus(): Promise<PrizeDropStatus> {
     try {
         const data = await redis.get<PrizeDropData>(PRIZE_DROP_KEY);
-        if (!data) return { active: false, winnerVisitorId: null, winnerName: null, timestamp: 0 };
+        if (!data) {
+            const template = getPrizeTemplate();
+            return {
+                active: false,
+                winnerVisitorId: null,
+                winnerName: null,
+                timestamp: 0,
+                prizeType: template.id,
+                prizeTemplateId: template.id,
+                revealMode: 'instant',
+                finalists: [],
+                template,
+            };
+        }
+        const template = getPrizeTemplate(data.prizeTemplateId || data.prizeType);
         return {
             active: true,
             winnerVisitorId: data.winnerVisitorId,
             winnerName: data.winnerName,
             timestamp: data.timestamp,
+            prizeType: template.id,
+            prizeTemplateId: template.id,
+            revealMode: data.revealMode || 'instant',
+            finalists: data.finalists || [],
+            template,
         };
     } catch (error) {
         console.error('Failed to get prize drop status:', error);
-        return { active: false, winnerVisitorId: null, winnerName: null, timestamp: 0 };
+        const template = getPrizeTemplate();
+        return {
+            active: false,
+            winnerVisitorId: null,
+            winnerName: null,
+            timestamp: 0,
+            prizeType: template.id,
+            prizeTemplateId: template.id,
+            revealMode: 'instant',
+            finalists: [],
+            template,
+        };
     }
 }
 
@@ -3247,6 +4085,16 @@ interface ArtistVersusContestant {
     previewUrl: string | null;  // Spotify 30s preview MP3 URL (often null - many tracks have no preview)
 }
 
+interface ArtistVersusAudioCue {
+    cueId: string;
+    side: 'A' | 'B';
+    artistName: string;
+    songName: string;
+    previewUrl: string;
+    startedAt: number;
+    durationMs: number;
+}
+
 interface ArtistVersusRound {
     roundNumber: 1 | 2 | 3;
     artistA: ArtistVersusContestant;
@@ -3273,6 +4121,7 @@ interface ArtistVersusState {
     bombUsed: boolean;
     playerName: string | null;
     startedAt: number;
+    audioCue: ArtistVersusAudioCue | null;
 }
 
 // API-facing alias — same shape as internal state, exported for client consumers
@@ -3313,18 +4162,28 @@ function getUsedArtistKeys(state: ArtistVersusState): Set<string> {
     return used;
 }
 
-// Build a contestant card from an artist's flagship song.
-// Picks the first song WITH a preview URL if any exist (so the host always
-// has something to play); falls back to the highest-scoring song otherwise.
-function buildContestant(displayName: string, songs: (Song & { score: number })[]): ArtistVersusContestant {
-    const flagship = songs.find(s => !!s.previewUrl) ?? songs[0];
-    return {
-        name: displayName,
-        albumArt: flagship.albumArt,
-        sampleSongName: flagship.name,
-        songCount: songs.length,
-        previewUrl: flagship.previewUrl ?? null,
-    };
+// Build a contestant card only when we can resolve a playable preview.
+// No clip means no contestant for 1s and 0s.
+async function buildContestant(displayName: string, songs: (Song & { score: number })[]): Promise<ArtistVersusContestant | null> {
+    for (const song of songs) {
+        const preview = await resolvePreviewUrl({
+            artist: displayName,
+            songName: song.name,
+            existingPreviewUrl: song.previewUrl,
+        });
+
+        if (preview.previewUrl) {
+            return {
+                name: displayName,
+                albumArt: song.albumArt,
+                sampleSongName: song.name,
+                songCount: songs.length,
+                previewUrl: preview.previewUrl,
+            };
+        }
+    }
+
+    return null;
 }
 
 // Pick a random pair of artists for a round.
@@ -3356,20 +4215,35 @@ async function pickArtistPair(
 
     // Prefer popular artists (flagship song popularity >= 50)
     const popular = candidates.filter(c => (c.songs[0].popularity ?? 0) >= 50);
-    const finalPool = popular.length >= 2 ? popular : candidates;
 
-    if (finalPool.length < 2) {
+    if (candidates.length < 2) {
         return null;
     }
 
-    // Shuffle and take 2
-    const shuffled = [...finalPool].sort(() => Math.random() - 0.5);
-    const a = shuffled[0];
-    const b = shuffled[1];
+    const buildPlayablePair = async (
+        pool: Array<{ key: string; displayName: string; songs: (Song & { score: number })[] }>
+    ): Promise<ArtistVersusContestant[]> => {
+        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+        const contestants: ArtistVersusContestant[] = [];
+        for (const candidate of shuffled) {
+            const contestant = await buildContestant(candidate.displayName, candidate.songs);
+            if (contestant) contestants.push(contestant);
+            if (contestants.length >= 2) break;
+        }
+        return contestants;
+    };
+
+    // Try the preferred popular pool first, then the full eligible pool.
+    let contestants = popular.length >= 2 ? await buildPlayablePair(popular) : [];
+    if (contestants.length < 2) {
+        contestants = await buildPlayablePair(candidates);
+    }
+
+    if (contestants.length < 2) return null;
 
     return {
-        artistA: buildContestant(a.displayName, a.songs),
-        artistB: buildContestant(b.displayName, b.songs),
+        artistA: contestants[0],
+        artistB: contestants[1],
     };
 }
 
@@ -3388,9 +4262,10 @@ export async function getArtistVersusStatus(): Promise<ArtistVersusStatus> {
                 bombUsed: false,
                 playerName: null,
                 startedAt: 0,
+                audioCue: null,
             };
         }
-        return state;
+        return { ...state, audioCue: state.audioCue ?? null };
     } catch (error) {
         console.error('Failed to get artist versus status:', error);
         return {
@@ -3401,6 +4276,7 @@ export async function getArtistVersusStatus(): Promise<ArtistVersusStatus> {
             bombUsed: false,
             playerName: null,
             startedAt: 0,
+            audioCue: null,
         };
     }
 }
@@ -3421,7 +4297,7 @@ export async function startArtistVersus(playerName?: string): Promise<{
         if (!pair) {
             return {
                 success: false,
-                error: 'Need at least 2 eligible artists in the playlist (excluding now-playing and top 3). Add more songs first.',
+                error: 'Need at least 2 eligible artists with audio previews (excluding now-playing and top 3). Add more songs first.',
             };
         }
 
@@ -3442,6 +4318,7 @@ export async function startArtistVersus(playerName?: string): Promise<{
             bombUsed: false,
             playerName: playerName?.trim() || null,
             startedAt: Date.now(),
+            audioCue: null,
         };
 
         await redis.set(ARTIST_VERSUS_KEY, state);
@@ -3505,6 +4382,7 @@ export async function pickArtistVersus(choice: 'A' | 'B'): Promise<{
         currentRound.outcome = 'pick';
         currentRound.winner = choice;
         currentRound.completedAt = Date.now();
+        state.audioCue = null;
 
         // After round 3 → damage report; otherwise wait for admin to advance
         state.phase = state.currentRound === 3 ? 'damageReport' : 'awaitingNext';
@@ -3570,6 +4448,7 @@ export async function bombArtistVersus(target: 'A' | 'B'): Promise<{
         currentRound.completedAt = Date.now();
 
         state.bombUsed = true;
+        state.audioCue = null;
         state.phase = state.currentRound === 3 ? 'damageReport' : 'awaitingNext';
 
         await redis.set(ARTIST_VERSUS_KEY, state);
@@ -3580,6 +4459,68 @@ export async function bombArtistVersus(target: 'A' | 'B'): Promise<{
     } catch (error) {
         console.error('Failed to bomb artist versus:', error);
         return { success: false, error: 'Could not deploy bomb. Please try again.' };
+    }
+}
+
+export async function cueArtistVersusPreview(side: 'A' | 'B', durationMs = 7000): Promise<{
+    success: boolean;
+    error?: string;
+    state?: ArtistVersusState;
+}> {
+    try {
+        const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (!state || !state.active) {
+            return { success: false, error: 'No active 1s and 0s session.' };
+        }
+        if (state.phase !== 'round') {
+            return { success: false, error: 'Preview is only available during an active round.' };
+        }
+
+        const currentRound = state.rounds[state.currentRound - 1];
+        if (!currentRound || currentRound.outcome !== null) {
+            return { success: false, error: 'This round is already resolved.' };
+        }
+
+        const contestant = side === 'A' ? currentRound.artistA : currentRound.artistB;
+        if (!contestant.previewUrl) {
+            return { success: false, error: 'No preview available for this artist.' };
+        }
+
+        state.audioCue = {
+            cueId: `${Date.now()}-${side}-${Math.random().toString(36).slice(2, 8)}`,
+            side,
+            artistName: contestant.name,
+            songName: contestant.sampleSongName,
+            previewUrl: contestant.previewUrl,
+            startedAt: Date.now(),
+            durationMs,
+        };
+
+        await redis.set(ARTIST_VERSUS_KEY, state);
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to cue artist versus preview:', error);
+        return { success: false, error: 'Could not cue preview. Please try again.' };
+    }
+}
+
+export async function stopArtistVersusPreviewCue(): Promise<{
+    success: boolean;
+    error?: string;
+    state?: ArtistVersusState;
+}> {
+    try {
+        const state = await redis.get<ArtistVersusState>(ARTIST_VERSUS_KEY);
+        if (!state || !state.active) {
+            return { success: false, error: 'No active 1s and 0s session.' };
+        }
+
+        state.audioCue = null;
+        await redis.set(ARTIST_VERSUS_KEY, state);
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to stop artist versus preview cue:', error);
+        return { success: false, error: 'Could not stop preview. Please try again.' };
     }
 }
 
@@ -3606,7 +4547,7 @@ export async function advanceArtistVersusRound(): Promise<{
         if (!pair) {
             return {
                 success: false,
-                error: 'Not enough eligible artists left for another round. End the session.',
+                error: 'Not enough eligible artists with audio previews left for another round. End the session.',
             };
         }
 
@@ -3623,6 +4564,7 @@ export async function advanceArtistVersusRound(): Promise<{
         state.rounds.push(nextRound);
         state.currentRound = nextRoundNumber;
         state.phase = 'round';
+        state.audioCue = null;
 
         await redis.set(ARTIST_VERSUS_KEY, state);
 
@@ -3648,6 +4590,7 @@ export async function endArtistVersus(): Promise<{
         }
 
         state.phase = 'damageReport';
+        state.audioCue = null;
         await redis.set(ARTIST_VERSUS_KEY, state);
 
         console.log(`🎤 ARTIST VERSUS: Session ended. Player=${state.playerName || 'anon'}, BombUsed=${state.bombUsed}`);

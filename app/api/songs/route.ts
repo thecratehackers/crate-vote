@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getDemoNightConfig } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getQueueWindowStatus, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getDemoNightConfig, getCrateCrackStatus, getShowClock } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
@@ -59,13 +59,14 @@ export async function GET(request: Request) {
 
     // Fetch data in parallel - most of these are cached
     // Timer + ban status included here to eliminate separate /api/timer polling
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying, demoNight] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, queueWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying, demoNight, crateCrack, showClock] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
         getRecentActivity(),
         getActiveViewerCount(),
         getDeleteWindowStatus(),
+        getQueueWindowStatus(),
         getVersusBattleStatus(visitorId || undefined, false), // Don't include vote counts for users
         getKarmaRainStatus(),
         getSessionPermissions(),
@@ -77,6 +78,8 @@ export async function GET(request: Request) {
         visitorId ? isUserBanned(visitorId) : Promise.resolve(false),
         getNowPlaying(),
         getDemoNightConfig(),
+        getCrateCrackStatus(),
+        getShowClock(),
     ]);
 
     // Check if user can delete during window
@@ -125,6 +128,7 @@ export async function GET(request: Request) {
             canDelete: canDeleteInWindow,
             reason: deleteWindowReason,
         },
+        queueWindow: queueWindowStatus,
         versusBattle: versusBattleStatus,
         karmaRain: karmaRainStatus,
         permissions: sessionPermissions,
@@ -139,6 +143,8 @@ export async function GET(request: Request) {
         },
         nowPlaying: nowPlaying || null,
         demoNight,
+        crateCrack,
+        showClock,
     });
 }
 

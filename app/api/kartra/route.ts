@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { captureLead } from '@/lib/redis-store';
 
 /**
  * POST /api/kartra
@@ -17,6 +18,11 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+
+        // Back up the REAL email first. Kartra masks API-lead domains to name@kartra.com
+        // (GDPR setting), so this is the source-of-truth address Aaron actually owns.
+        // kartraSynced gets flipped to true below once Kartra confirms the lead.
+        await captureLead({ email, phone, firstName, kartraSynced: false });
 
         const apiKey = process.env.KARTRA_API_KEY;
         const apiPassword = process.env.KARTRA_API_PASSWORD;
@@ -64,22 +70,21 @@ export async function POST(request: NextRequest) {
 
         const kartraData = await kartraResponse.json();
 
+        // Log the full create response so real failures are visible in Vercel logs
+        // (previously this route returned success even when the subscribe action failed).
+        console.log('[kartra] create response:', JSON.stringify(kartraData));
+
         if (kartraData.status === 'Error') {
-            console.error('Kartra API error:', kartraData);
-            // Still return success to the user — don't block onboarding
-            // The lead creation might fail if the lead already exists, which is fine
-            if (kartraData.message?.includes('already exists') || kartraData.message?.includes('Lead Not Found')) {
-                // Lead exists — try subscribing them anyway
-                console.log('Lead may already exist, continuing...');
-            } else {
-                return NextResponse.json(
-                    { success: false, error: 'Failed to save to mailing list' },
-                    { status: 502 }
-                );
-            }
+            console.error('[kartra] create error for', email, '->', kartraData.message);
+            // Don't block onboarding. A lead that already exists is fine; anything
+            // else still gets logged above so we can spot a real outage. The real
+            // email is already safely stored via captureLead() above.
+        } else {
+            // Kartra accepted the lead — mark our backup record as synced.
+            await captureLead({ email, phone, firstName, kartraSynced: true });
         }
 
-        console.log('Kartra lead created successfully:', email);
+        console.log('[kartra] lead processed for:', email);
         return NextResponse.json({ success: true });
 
     } catch (error) {

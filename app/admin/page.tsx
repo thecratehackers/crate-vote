@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { APP_CONFIG, BROADCAST } from '@/lib/config';
 import { persistGet, persistSet, persistRemove } from '@/lib/persist';
 import TabsShowsDashboard from './TabsShowsDashboard';
+import PrizeHQ from './PrizeHQ';
 import './admin.css';
 
 interface Song {
@@ -17,6 +18,9 @@ interface Song {
     albumArt: string;
     addedBy: string;        // Visitor ID (fingerprint)
     addedByName: string;
+    addedAt: number;
+    upvotes?: string[];
+    downvotes?: string[];
     score: number;
 }
 
@@ -33,6 +37,23 @@ interface Stats {
     totalSongs: number;
     totalVotes: number;
     uniqueVoters: number;
+}
+
+interface CrateCrackAdminStatus {
+    active: boolean;
+    roundId: string | null;
+    gameType: 'request_evader' | 'crate_man' | 'missile_wedding' | 'bpm_sort';
+    startedAt: number | null;
+    endTime: number | null;
+    remaining: number;
+    durationSeconds: number;
+    prompt: string;
+    cards: { id: string; title: string; hint: string }[];
+    defaultRewardLabel: string;
+    rareRewardsArmed: boolean;
+    attempts: number;
+    completions: number;
+    rareRewards: { type: string; label: string; armed: boolean }[];
 }
 
 interface TimerStatus {
@@ -52,7 +73,108 @@ interface ActivityItem {
 }
 
 // Tab type for admin panel navigation
-type AdminTab = 'activity' | 'users' | 'playlist' | 'tools' | 'shows';
+type AdminTab = 'activity' | 'users' | 'playlist' | 'purge' | 'queue' | 'ones' | 'crateCrack' | 'prize' | 'tools' | 'shows';
+
+interface HostGuideContent {
+    title: string;
+    viewerRules: string[];
+    hostScript: string;
+    howToRun: string[];
+}
+
+const purgeHostGuide: HostGuideContent = {
+    title: 'The Purge Host Guide',
+    viewerRules: [
+        'The top 3 songs are safe.',
+        'Everything under the top 3 can be deleted.',
+        'Each person gets one delete.',
+        'You have 60 seconds.',
+        'If the host says stop, the round is over.',
+    ],
+    hostScript:
+        'The Purge is open. Top 3 songs are safe. Everything under that line can get deleted. You get one shot. Pick carefully. When the clock hits zero, the crate is locked again.',
+    howToRun: [
+        'Press Start 60s Purge.',
+        'Read the script out loud while the timer starts.',
+        'Watch Live Deletions for names and songs.',
+        'Use Hand Tablet To Volunteer only when someone on camera is choosing.',
+        'Use Undo Last Purge only if something clearly went wrong.',
+    ],
+};
+
+const queueHostGuide: HostGuideContent = {
+    title: 'The Queue Host Guide',
+    viewerRules: [
+        'This is a 60-second review round.',
+        'Only songs with zero votes get spotlighted.',
+        'Zero votes does not mean bad. It means nobody checked it yet.',
+        'Vote up if it belongs in the crate.',
+        'Vote down if it needs to go.',
+    ],
+    hostScript:
+        'The Queue is live. These are the songs nobody has touched yet. Not bad songs. Just unchecked songs. Give them ears now. Vote up if they belong. Vote down if they do not.',
+    howToRun: [
+        'Press Start 60s Queue.',
+        'Call out that zero-vote songs are getting reviewed.',
+        'Watch Current Queue Targets for what needs attention.',
+        'Use Live Vote Feed to shout out people voting.',
+        'Let the timer end or press End Early when the room is done.',
+    ],
+};
+
+const onesHostGuide: HostGuideContent = {
+    title: '1s and 0s Host Guide',
+    viewerRules: [
+        'A volunteer chooses between two artists.',
+        'There are 3 rounds.',
+        'Tap PLAY to hear a short clip.',
+        'Pick the artist you would keep in the crate.',
+        'The bomb can wipe one artist, but only once.',
+    ],
+    hostScript:
+        'This is 1s and 0s. Two artists come up. The player hears the clips and picks who survives. Three rounds. One bomb. If the bomb gets used, that artist gets nuked from the crate.',
+    howToRun: [
+        'Press 1s and 0s.',
+        'Type the volunteer name if you have it.',
+        'Press Start Game.',
+        'Tap PLAY for each artist clip.',
+        'Tap the artist card to pick, or arm and fire the nuke when the player calls bomb.',
+        'After round 3, press Show Damage Report.',
+    ],
+};
+
+function HostGuide({ guide }: { guide: HostGuideContent }) {
+    return (
+        <section className="host-guide-card">
+            <div className="host-guide-header">
+                <span>Host Script</span>
+                <h3>{guide.title}</h3>
+            </div>
+            <div className="host-guide-grid">
+                <div className="host-guide-block viewer">
+                    <h4>Rules For The Screen</h4>
+                    <ul>
+                        {guide.viewerRules.map(rule => (
+                            <li key={rule}>{rule}</li>
+                        ))}
+                    </ul>
+                </div>
+                <div className="host-guide-block script">
+                    <h4>Say This</h4>
+                    <p>{guide.hostScript}</p>
+                </div>
+                <div className="host-guide-block run">
+                    <h4>How To Run It</h4>
+                    <ul>
+                        {guide.howToRun.map(step => (
+                            <li key={step}>{step}</li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+        </section>
+    );
+}
 
 export default function AdminPage() {
     const { data: session } = useSession();
@@ -118,7 +240,6 @@ export default function AdminPage() {
     const [isStartingDoublePoints, setIsStartingDoublePoints] = useState(false);
     const [doublePointsActive, setDoublePointsActive] = useState(false);
     const [isAddingSong, setIsAddingSong] = useState<string | null>(null);
-    const [isTriggeredPrizeDrop, setIsTriggeredPrizeDrop] = useState(false);
 
     // 🤖 AUTO-PILOT - Random surprise events during live sessions
     const [autoPilotEnabled, setAutoPilotEnabled] = useState(false);
@@ -156,11 +277,73 @@ export default function AdminPage() {
     const [isStartingDeleteWindow, setIsStartingDeleteWindow] = useState(false);
     const [deleteWindowActive, setDeleteWindowActive] = useState(false);
     const [deleteWindowEndTime, setDeleteWindowEndTime] = useState<number | null>(null);
+    const [deleteWindowRemaining, setDeleteWindowRemaining] = useState(0);
+    const [isStoppingDeleteWindow, setIsStoppingDeleteWindow] = useState(false);
+    const [isUndoingPurge, setIsUndoingPurge] = useState(false);
+    const [purgeVolunteerMode, setPurgeVolunteerMode] = useState(false);
+    const [purgeDeletingSongId, setPurgeDeletingSongId] = useState<string | null>(null);
+    interface PurgeDeletionEventLocal {
+        id: string;
+        songId: string;
+        songName: string;
+        artist: string;
+        albumArt: string;
+        deletedBy: string;
+        deletedByName: string;
+        source: 'purge';
+        timestamp: number;
+        restoredAt?: number;
+        restoredBy?: string;
+    }
+    const [purgeDeletions, setPurgeDeletions] = useState<PurgeDeletionEventLocal[]>([]);
+    const [purgeDeletedCount, setPurgeDeletedCount] = useState(0);
+
+    // The Queue game state
+    const [isStartingQueueWindow, setIsStartingQueueWindow] = useState(false);
+    const [isStoppingQueueWindow, setIsStoppingQueueWindow] = useState(false);
+    const [queueWindowActive, setQueueWindowActive] = useState(false);
+    const [queueWindowEndTime, setQueueWindowEndTime] = useState<number | null>(null);
+    const [queueWindowRemaining, setQueueWindowRemaining] = useState(0);
+
+    // Crate Games side quest state
+    const [crateCrackStatus, setCrateCrackStatus] = useState<CrateCrackAdminStatus>({
+        active: false,
+        roundId: null,
+        gameType: 'request_evader',
+        startedAt: null,
+        endTime: null,
+        remaining: 0,
+        durationSeconds: 60,
+        prompt: '',
+        cards: [],
+        defaultRewardLabel: '14 Free Days',
+        rareRewardsArmed: false,
+        attempts: 0,
+        completions: 0,
+        rareRewards: [],
+    });
+    const [isStartingCrateCrack, setIsStartingCrateCrack] = useState(false);
+    const [isStoppingCrateCrack, setIsStoppingCrateCrack] = useState(false);
+    const [crateCrackGameType, setCrateCrackGameType] = useState<'request_evader' | 'crate_man' | 'missile_wedding' | 'bpm_sort'>('request_evader');
+    const [crateCrackDuration, setCrateCrackDuration] = useState(60);
+    const [crateCrackRewardLabel, setCrateCrackRewardLabel] = useState('14 Free Days');
+    const [crateCrackRewardUrl, setCrateCrackRewardUrl] = useState('https://www.cratehackers.com/14daytrial');
+    const [armCrateAnnual, setArmCrateAnnual] = useState(false);
+    const [armBangerAnnual, setArmBangerAnnual] = useState(false);
+    const [armLifetime, setArmLifetime] = useState(false);
+    const [crateAnnualCode, setCrateAnnualCode] = useState('CRATEYEAR');
+    const [bangerAnnualCode, setBangerAnnualCode] = useState('BANGERYEAR');
+    const [lifetimeCode, setLifetimeCode] = useState('LIFETIMECRATE');
 
     // Import playlist state
     const [importUrl, setImportUrl] = useState('');
     const [isImporting, setIsImporting] = useState(false);
     const [showImportPanel, setShowImportPanel] = useState(false);
+
+    // Leads export state (download signup list as CSV, optionally by date range)
+    const [exportFrom, setExportFrom] = useState('');
+    const [exportTo, setExportTo] = useState('');
+    const [isExportingLeads, setIsExportingLeads] = useState(false);
 
     // Predictions state
     const [isRevealingPredictions, setIsRevealingPredictions] = useState(false);
@@ -208,6 +391,90 @@ export default function AdminPage() {
             },
         });
     };
+
+    const applyPurgeStatus = (data: {
+        active?: boolean;
+        endTime?: number | null;
+        remaining?: number;
+        recentDeletions?: PurgeDeletionEventLocal[];
+        deletedCount?: number;
+    }) => {
+        setDeleteWindowActive(!!data.active);
+        setDeleteWindowEndTime(data.endTime ?? null);
+        setDeleteWindowRemaining(data.remaining ?? 0);
+        if (data.recentDeletions) setPurgeDeletions(data.recentDeletions);
+        if (typeof data.deletedCount === 'number') setPurgeDeletedCount(data.deletedCount);
+    };
+
+    const applyQueueStatus = (data: {
+        active?: boolean;
+        endTime?: number | null;
+        remaining?: number;
+    }) => {
+        setQueueWindowActive(!!data.active);
+        setQueueWindowEndTime(data.endTime ?? null);
+        setQueueWindowRemaining(data.remaining ?? 0);
+    };
+
+    const applyCrateCrackStatus = (data: Partial<CrateCrackAdminStatus>) => {
+        setCrateCrackStatus(prev => ({
+            ...prev,
+            ...data,
+            active: !!data.active,
+            remaining: data.remaining ?? 0,
+        }));
+    };
+
+    const fetchPurgeStatus = useCallback(async () => {
+        if (!isAuthenticated) return;
+        try {
+            const res = await fetch('/api/admin/delete-window', {
+                headers: {
+                    'x-admin-key': adminPassword,
+                    'x-admin-id': adminId,
+                },
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            applyPurgeStatus(data);
+        } catch (error) {
+            console.error('Failed to fetch purge status:', error);
+        }
+    }, [isAuthenticated, adminPassword, adminId]);
+
+    const fetchQueueStatus = useCallback(async () => {
+        if (!isAuthenticated) return;
+        try {
+            const res = await fetch('/api/admin/queue-window', {
+                headers: {
+                    'x-admin-key': adminPassword,
+                    'x-admin-id': adminId,
+                },
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            applyQueueStatus(data);
+        } catch (error) {
+            console.error('Failed to fetch queue status:', error);
+        }
+    }, [isAuthenticated, adminPassword, adminId]);
+
+    const fetchCrateCrackStatus = useCallback(async () => {
+        if (!isAuthenticated) return;
+        try {
+            const res = await fetch('/api/admin/crate-crack', {
+                headers: {
+                    'x-admin-key': adminPassword,
+                    'x-admin-id': adminId,
+                },
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            applyCrateCrackStatus(data);
+        } catch (error) {
+            console.error('Failed to fetch Crate Games status:', error);
+        }
+    }, [isAuthenticated, adminPassword, adminId]);
 
     // Fetch playlist data (with admin heartbeat)
     const fetchPlaylist = useCallback(async () => {
@@ -312,6 +579,15 @@ export default function AdminPage() {
         songCount: number;
         previewUrl?: string | null;
     }
+    interface ArtistVersusAudioCueLocal {
+        cueId: string;
+        side: 'A' | 'B';
+        artistName: string;
+        songName: string;
+        previewUrl: string;
+        startedAt: number;
+        durationMs: number;
+    }
     interface ArtistVersusRoundLocal {
         roundNumber: 1 | 2 | 3;
         artistA: ArtistVersusContestantLocal;
@@ -331,6 +607,7 @@ export default function AdminPage() {
         bombUsed: boolean;
         playerName: string | null;
         startedAt: number;
+        audioCue: ArtistVersusAudioCueLocal | null;
     }
     const initialArtistVersus: ArtistVersusStateLocal = {
         active: false,
@@ -340,6 +617,7 @@ export default function AdminPage() {
         bombUsed: false,
         playerName: null,
         startedAt: 0,
+        audioCue: null,
     };
     const [artistVersus, setArtistVersus] = useState<ArtistVersusStateLocal>(initialArtistVersus);
     const [showArtistVersusLobby, setShowArtistVersusLobby] = useState(false);
@@ -407,8 +685,11 @@ export default function AdminPage() {
         if (isAuthenticated) {
             fetchPlaylist();
             fetchTimer();
+            fetchPurgeStatus();
+            fetchQueueStatus();
+            fetchCrateCrackStatus();
         }
-    }, [isAuthenticated, fetchPlaylist, fetchTimer]);
+    }, [isAuthenticated, fetchPlaylist, fetchTimer, fetchPurgeStatus, fetchQueueStatus, fetchCrateCrackStatus]);
 
     // REAL-TIME POLLING - refresh every 3 seconds
     useEffect(() => {
@@ -421,6 +702,80 @@ export default function AdminPage() {
 
         return () => clearInterval(interval);
     }, [isAuthenticated, fetchPlaylist, fetchTimer]);
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const interval = setInterval(fetchPurgeStatus, deleteWindowActive ? 1000 : 3000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated, deleteWindowActive, fetchPurgeStatus]);
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const interval = setInterval(fetchQueueStatus, queueWindowActive ? 1000 : 3000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated, queueWindowActive, fetchQueueStatus]);
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const interval = setInterval(fetchCrateCrackStatus, crateCrackStatus.active ? 1000 : 3000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated, crateCrackStatus.active, fetchCrateCrackStatus]);
+
+    useEffect(() => {
+        if (!deleteWindowActive || !deleteWindowEndTime) {
+            setDeleteWindowRemaining(0);
+            return;
+        }
+
+        const tick = () => {
+            const remaining = Math.max(0, deleteWindowEndTime - Date.now());
+            setDeleteWindowRemaining(remaining);
+            if (remaining <= 0) {
+                setDeleteWindowActive(false);
+                setDeleteWindowEndTime(null);
+            }
+        };
+
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [deleteWindowActive, deleteWindowEndTime]);
+
+    useEffect(() => {
+        if (!queueWindowActive || !queueWindowEndTime) {
+            setQueueWindowRemaining(0);
+            return;
+        }
+
+        const tick = () => {
+            const remaining = Math.max(0, queueWindowEndTime - Date.now());
+            setQueueWindowRemaining(remaining);
+            if (remaining <= 0) {
+                setQueueWindowActive(false);
+            }
+        };
+
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [queueWindowActive, queueWindowEndTime]);
+
+    useEffect(() => {
+        if (!crateCrackStatus.active || !crateCrackStatus.endTime) return;
+
+        const tick = () => {
+            const remaining = Math.max(0, crateCrackStatus.endTime! - Date.now());
+            setCrateCrackStatus(prev => ({
+                ...prev,
+                remaining,
+                active: remaining > 0,
+            }));
+        };
+
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [crateCrackStatus.active, crateCrackStatus.endTime]);
 
     // Update timer display every second
     useEffect(() => {
@@ -449,6 +804,26 @@ export default function AdminPage() {
         }
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
+
+    const getTotalVotes = useCallback((song: Song) => {
+        const upvotes = Array.isArray(song.upvotes) ? song.upvotes.length : 0;
+        const downvotes = Array.isArray(song.downvotes) ? song.downvotes.length : 0;
+        return upvotes + downvotes;
+    }, []);
+
+    const queueTargets = useMemo(() => {
+        if (songs.length === 0) return [];
+
+        return songs
+            .filter(song => getTotalVotes(song) === 0)
+            .sort((a, b) => a.addedAt - b.addedAt);
+    }, [getTotalVotes, songs]);
+
+    const queueVoteActivity = useMemo(() => {
+        return recentActivity
+            .filter(activity => activity.type === 'upvote' || activity.type === 'downvote')
+            .slice(0, 12);
+    }, [recentActivity]);
 
     // Auto-hide message
     useEffect(() => {
@@ -1094,6 +1469,46 @@ export default function AdminPage() {
         handleSaveStream('youtube');
     };
 
+    // Download the signup list as CSV. With no dates it grabs everyone; with a
+    // from/to it filters by signup date. Uses adminFetch so the admin key rides along,
+    // then turns the response into a file download.
+    const handleExportLeads = async () => {
+        if (exportFrom && exportTo && exportFrom > exportTo) {
+            setMessage({ type: 'error', text: 'Start date must be before end date.' });
+            return;
+        }
+
+        setIsExportingLeads(true);
+        try {
+            const qs = new URLSearchParams({ format: 'csv' });
+            if (exportFrom) qs.set('from', exportFrom);
+            if (exportTo) qs.set('to', exportTo);
+
+            const res = await adminFetch(`/api/admin/leads?${qs.toString()}`);
+            if (!res.ok) {
+                setMessage({ type: 'error', text: 'Export failed — check your admin access.' });
+                return;
+            }
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const rangeTag = exportFrom || exportTo ? `-${exportFrom || 'start'}_to_${exportTo || 'now'}` : '';
+            a.download = `crate-leads${rangeTag}-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            setMessage({ type: 'success', text: '✓ Leads CSV downloaded' });
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Export failed — network error.' });
+        } finally {
+            setIsExportingLeads(false);
+        }
+    };
+
     // Shuffle all songs in the playlist
     const handleShufflePlaylist = async () => {
         if (songs.length < 2) {
@@ -1136,16 +1551,10 @@ export default function AdminPage() {
 
                     if (res.ok) {
                         const data = await res.json();
-                        setDeleteWindowActive(true);
-                        setDeleteWindowEndTime(data.endTime);
+                        applyPurgeStatus(data);
                         setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 60 seconds to purge ONE song!' });
-
-                        // Auto-refresh when window ends
-                        setTimeout(() => {
-                            setDeleteWindowActive(false);
-                            setDeleteWindowEndTime(null);
-                            fetchPlaylist();
-                        }, 60000);
+                        setActiveTab('purge');
+                        fetchPlaylist();
                     } else {
                         const data = await res.json();
                         setMessage({ type: 'error', text: data.error || 'Failed to start The Purge' });
@@ -1158,6 +1567,189 @@ export default function AdminPage() {
             },
             'Start The Purge'
         );
+    };
+
+    const handleStopDeleteWindow = async () => {
+        setIsStoppingDeleteWindow(true);
+        try {
+            const res = await adminFetch('/api/admin/delete-window', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'stop' }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                applyPurgeStatus(data);
+                setMessage({ type: 'success', text: 'The Purge has been stopped.' });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to stop The Purge' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to stop The Purge - network error' });
+        } finally {
+            setIsStoppingDeleteWindow(false);
+        }
+    };
+
+    const handleStartQueueWindow = () => {
+        showConfirmModal(
+            'START THE QUEUE?',
+            'This starts a 60-second zero-vote review. The public screen will gray out everything except songs with no votes.',
+            async () => {
+                setIsStartingQueueWindow(true);
+                try {
+                    const res = await adminFetch('/api/admin/queue-window', {
+                        method: 'POST',
+                        body: JSON.stringify({ duration: 60 }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        applyQueueStatus(data);
+                        setMessage({ type: 'success', text: '📡 THE QUEUE IS LIVE! Members have 60 seconds to inspect every zero-vote song.' });
+                        setActiveTab('queue');
+                        fetchPlaylist();
+                    } else {
+                        setMessage({ type: 'error', text: data.error || 'Failed to start The Queue' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to start The Queue - network error' });
+                } finally {
+                    setIsStartingQueueWindow(false);
+                }
+            },
+            'Start The Queue'
+        );
+    };
+
+    const handleStopQueueWindow = async () => {
+        setIsStoppingQueueWindow(true);
+        try {
+            const res = await adminFetch('/api/admin/queue-window', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'stop' }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                applyQueueStatus(data);
+                setMessage({ type: 'success', text: 'The Queue has been stopped.' });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to stop The Queue' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to stop The Queue - network error' });
+        } finally {
+            setIsStoppingQueueWindow(false);
+        }
+    };
+
+    const handleStartCrateCrack = () => {
+        const armedRewards = [armCrateAnnual, armBangerAnnual, armLifetime].filter(Boolean).length;
+        showConfirmModal(
+            'START CRATE GAMES?',
+            `This launches a ${crateCrackDuration}-second full-screen side quest for everyone on the public page.\n\nDefault reward: ${crateCrackRewardLabel}\nRare rewards armed: ${armedRewards}`,
+            async () => {
+                setIsStartingCrateCrack(true);
+                try {
+                    const res = await adminFetch('/api/admin/crate-crack', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            durationSeconds: crateCrackDuration,
+                            gameType: crateCrackGameType,
+                            defaultRewardLabel: crateCrackRewardLabel,
+                            defaultRewardUrl: crateCrackRewardUrl,
+                            armCrateAnnual,
+                            armBangerAnnual,
+                            armLifetime,
+                            crateAnnualCode,
+                            bangerAnnualCode,
+                            lifetimeCode,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        applyCrateCrackStatus(data);
+                        setMessage({ type: 'success', text: 'Crate Games is live. Players have 60 seconds to win the promo.' });
+                        setActiveTab('crateCrack');
+                    } else {
+                        setMessage({ type: 'error', text: data.error || 'Failed to start Crate Games' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to start Crate Games - network error' });
+                } finally {
+                    setIsStartingCrateCrack(false);
+                }
+            },
+            'Start Crate Games'
+        );
+    };
+
+    const handleStopCrateCrack = async () => {
+        setIsStoppingCrateCrack(true);
+        try {
+            const res = await adminFetch('/api/admin/crate-crack', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'stop' }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                applyCrateCrackStatus(data);
+                setMessage({ type: 'success', text: 'Crate Games has been stopped.' });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to stop Crate Games' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to stop Crate Games - network error' });
+        } finally {
+            setIsStoppingCrateCrack(false);
+        }
+    };
+
+    const handleUndoLastPurge = async () => {
+        setIsUndoingPurge(true);
+        try {
+            const res = await adminFetch('/api/admin/delete-window', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'undo' }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                applyPurgeStatus(data);
+                setMessage({ type: 'success', text: `Restored "${data.restored?.songName || 'last purged song'}".` });
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Nothing to undo' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to undo purge - network error' });
+        } finally {
+            setIsUndoingPurge(false);
+        }
+    };
+
+    const handleVolunteerPurgeDelete = async (song: Song) => {
+        if (!deleteWindowActive || purgeDeletingSongId) return;
+        setPurgeDeletingSongId(song.id);
+        try {
+            const res = await adminFetch('/api/admin/delete-window', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'delete',
+                    songId: song.id,
+                    deletedByName: 'Volunteer',
+                }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                applyPurgeStatus(data);
+                setMessage({ type: 'success', text: `Purged "${song.name}".` });
+                fetchPlaylist();
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Could not purge song' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to purge song - network error' });
+        } finally {
+            setPurgeDeletingSongId(null);
+        }
     };
 
     // Karma Rain - give everyone +1 karma!
@@ -1208,25 +1800,6 @@ export default function AdminPage() {
         }
     };
 
-    // 🎰 Golden Hour Prize Drop - pick random active user to win a prize
-    const handlePrizeDrop = async () => {
-        setIsTriggeredPrizeDrop(true);
-        try {
-            const res = await adminFetch('/api/admin/prize-drop', { method: 'POST' });
-            const data = await res.json();
-
-            if (res.ok) {
-                setMessage({ type: 'success', text: `🎰 Golden Hour Drop! ${data.winner?.name} won a prize!` });
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Failed to trigger prize drop' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to trigger prize drop - network error' });
-        } finally {
-            setIsTriggeredPrizeDrop(false);
-        }
-    };
-
     // ═══════════════════════════════════════════════════════════════════
     // 🤖 AUTO-PILOT - Silent event triggers for automation
     // ═══════════════════════════════════════════════════════════════════
@@ -1239,15 +1812,11 @@ export default function AdminPage() {
                 body: JSON.stringify({ duration: 60 }),
             });
             if (res.ok) {
-                setDeleteWindowActive(true);
                 const data = await res.json();
-                setDeleteWindowEndTime(data.endTime);
+                applyPurgeStatus(data);
                 setMessage({ type: 'success', text: '💀 AUTO-PILOT: THE PURGE HAS BEGUN!' });
-                setTimeout(() => {
-                    setDeleteWindowActive(false);
-                    setDeleteWindowEndTime(null);
-                    fetchPlaylist();
-                }, 60000);
+                setActiveTab('purge');
+                fetchPlaylist();
             }
         } catch (error) {
             console.error('Auto-pilot purge failed:', error);
@@ -1580,6 +2149,7 @@ export default function AdminPage() {
     const handleArtistVersusPreview = useCallback((side: 'A' | 'B') => {
         if (previewingSide === side) {
             stopArtistVersusPreview();
+            artistVersusAction({ action: 'stopPreview' });
             return;
         }
         stopArtistVersusPreview();
@@ -1599,9 +2169,11 @@ export default function AdminPage() {
             audio.volume = 0.85;
             previewAudioRef.current = audio;
             setPreviewingSide(side);
+            artistVersusAction({ action: 'preview', side, durationMs: PREVIEW_DURATION_MS });
             audio.play().catch(err => {
                 console.warn('Preview playback rejected:', err);
                 stopArtistVersusPreview();
+                artistVersusAction({ action: 'stopPreview' });
                 setMessage({ type: 'error', text: 'Browser blocked playback. Try again.' });
             });
             previewStopTimeoutRef.current = setTimeout(() => {
@@ -2210,6 +2782,49 @@ export default function AdminPage() {
                     {songs.length > 0 && <span className="tab-badge">{songs.length}</span>}
                 </button>
                 <button
+                    className={`admin-tab ${activeTab === 'purge' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('purge')}
+                >
+                    <span className="tab-icon">💀</span>
+                    <span className="tab-label">Purge</span>
+                    {(deleteWindowActive || purgeDeletedCount > 0) && (
+                        <span className="tab-badge">{deleteWindowActive ? Math.ceil(deleteWindowRemaining / 1000) : purgeDeletedCount}</span>
+                    )}
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'queue' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('queue')}
+                >
+                    <span className="tab-icon">📡</span>
+                    <span className="tab-label">Queue</span>
+                    {(queueWindowActive || queueTargets.length > 0) && (
+                        <span className="tab-badge">{queueWindowActive ? Math.ceil(queueWindowRemaining / 1000) : queueTargets.length}</span>
+                    )}
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'ones' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('ones')}
+                >
+                    <span className="tab-icon">🎲</span>
+                    <span className="tab-label">1s and 0s</span>
+                    {artistVersus.active && <span className="tab-badge">LIVE</span>}
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'crateCrack' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('crateCrack')}
+                >
+                    <span className="tab-icon">🎮</span>
+                    <span className="tab-label">Crate Games</span>
+                    {crateCrackStatus.active && <span className="tab-badge">LIVE</span>}
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'prize' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('prize')}
+                >
+                    <span className="tab-icon">🎰</span>
+                    <span className="tab-label">Prize</span>
+                </button>
+                <button
                     className={`admin-tab ${activeTab === 'tools' ? 'active' : ''}`}
                     onClick={() => setActiveTab('tools')}
                 >
@@ -2374,9 +2989,723 @@ export default function AdminPage() {
                     </div>
                 )}
 
+                {/* PURGE TAB */}
+                {activeTab === 'purge' && (
+                    <div className="tab-panel purge-panel">
+                        <HostGuide guide={purgeHostGuide} />
+                        <div className={`purge-command-center ${deleteWindowActive ? 'active' : ''} ${purgeVolunteerMode ? 'volunteer-mode' : ''}`}>
+                            <div className="purge-command-header">
+                                <div>
+                                    <div className="purge-command-kicker">GAME SHOW MODE</div>
+                                    <h2>{deleteWindowActive ? 'The Purge Is Live' : 'The Purge Command Center'}</h2>
+                                    <p>
+                                        {purgeVolunteerMode
+                                            ? 'Volunteer handoff is active. This screen only allows purge deletes.'
+                                            : 'Host view for narrating the chaos, tracking kills, and keeping master control.'}
+                                    </p>
+                                </div>
+                                <div className={`purge-command-timer ${deleteWindowRemaining < 10000 && deleteWindowActive ? 'urgent' : ''}`}>
+                                    <span>{deleteWindowActive ? formatTime(deleteWindowRemaining) : 'READY'}</span>
+                                    <small>{deleteWindowActive ? 'remaining' : 'standby'}</small>
+                                </div>
+                            </div>
+
+                            {!purgeVolunteerMode && (
+                                <>
+                                    <div className="purge-command-actions">
+                                        <button
+                                            className="purge-master-btn start"
+                                            onClick={handleStartDeleteWindow}
+                                            disabled={isStartingDeleteWindow || deleteWindowActive || songs.length === 0}
+                                        >
+                                            {isStartingDeleteWindow ? 'Starting...' : 'Start 60s Purge'}
+                                        </button>
+                                        <button
+                                            className="purge-master-btn stop"
+                                            onClick={handleStopDeleteWindow}
+                                            disabled={isStoppingDeleteWindow || !deleteWindowActive}
+                                        >
+                                            {isStoppingDeleteWindow ? 'Stopping...' : 'End Early'}
+                                        </button>
+                                        <button
+                                            className="purge-master-btn undo"
+                                            onClick={handleUndoLastPurge}
+                                            disabled={isUndoingPurge || purgeDeletions.every(item => item.restoredAt)}
+                                        >
+                                            {isUndoingPurge ? 'Restoring...' : 'Undo Last Purge'}
+                                        </button>
+                                        <button
+                                            className="purge-master-btn volunteer"
+                                            onClick={() => setPurgeVolunteerMode(true)}
+                                            disabled={!deleteWindowActive}
+                                        >
+                                            Hand Tablet To Volunteer
+                                        </button>
+                                    </div>
+
+                                    <div className="purge-command-stats">
+                                        <div>
+                                            <strong>{purgeDeletedCount}</strong>
+                                            <span>songs purged</span>
+                                        </div>
+                                        <div>
+                                            <strong>{songs.length}</strong>
+                                            <span>songs remain</span>
+                                        </div>
+                                        <div>
+                                            <strong>{Math.max(0, songs.length - 3)}</strong>
+                                            <span>eligible targets</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="purge-narration-card">
+                                        <strong>Host read:</strong>
+                                        <span>
+                                            {deleteWindowActive
+                                                ? `The Purge is live. Top 3 songs are protected. Everything below them is on the chopping block for ${Math.ceil(deleteWindowRemaining / 1000)} more seconds.`
+                                                : 'When you start The Purge, the public page lights up and eligible users get one shot to delete a song.'}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
+
+                            {purgeVolunteerMode && (
+                                <div className="purge-volunteer-shell">
+                                    <div className="purge-volunteer-topbar">
+                                        <button className="purge-exit-volunteer" onClick={() => setPurgeVolunteerMode(false)}>
+                                            Return To Host Controls
+                                        </button>
+                                        <div className="purge-volunteer-warning">
+                                            Delete-only mode. Top 3 are locked.
+                                        </div>
+                                    </div>
+                                    {!deleteWindowActive ? (
+                                        <div className="purge-volunteer-empty">The Purge is not active. Hand control back to the host.</div>
+                                    ) : (
+                                        <div className="purge-volunteer-grid">
+                                            {songs.map((song, index) => {
+                                                const battleLocked = !!(versusBattle.active && (versusBattle.songA?.id === song.id || versusBattle.songB?.id === song.id));
+                                                const protectedSong = index < 3;
+                                                const disabled = protectedSong || battleLocked || purgeDeletingSongId === song.id;
+                                                return (
+                                                    <div key={song.id} className={`purge-target-card ${protectedSong ? 'protected' : ''} ${battleLocked ? 'battle-locked' : ''}`}>
+                                                        <img src={song.albumArt || '/placeholder.svg'} alt="" />
+                                                        <div className="purge-target-info">
+                                                            <span className="purge-target-rank">#{index + 1}</span>
+                                                            <strong>{song.name}</strong>
+                                                            <span>{song.artist}</span>
+                                                            <small>Score {song.score > 0 ? '+' : ''}{song.score}</small>
+                                                        </div>
+                                                        <button
+                                                            className="purge-target-delete"
+                                                            onClick={() => handleVolunteerPurgeDelete(song)}
+                                                            disabled={disabled}
+                                                        >
+                                                            {purgeDeletingSongId === song.id
+                                                                ? 'Purging...'
+                                                                : protectedSong
+                                                                    ? 'Top 3 Locked'
+                                                                    : battleLocked
+                                                                        ? 'Battle Locked'
+                                                                        : 'Purge This Song'}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {!purgeVolunteerMode && (
+                                <div className="purge-feed-card">
+                                    <div className="purge-feed-header">
+                                        <h3>Live Deletions</h3>
+                                        <span>{purgeDeletions.length} recent</span>
+                                    </div>
+                                    {purgeDeletions.length === 0 ? (
+                                        <div className="purge-feed-empty">No purges yet. Start the round and watch the feed light up.</div>
+                                    ) : (
+                                        <div className="purge-feed-list">
+                                            {purgeDeletions.slice(0, 12).map(event => {
+                                                const timeStr = new Date(event.timestamp).toLocaleTimeString('en-US', {
+                                                    hour: 'numeric',
+                                                    minute: '2-digit',
+                                                    second: '2-digit',
+                                                    hour12: true,
+                                                    timeZone: 'America/Chicago'
+                                                });
+                                                return (
+                                                    <div key={event.id} className={`purge-feed-row ${event.restoredAt ? 'restored' : ''}`}>
+                                                        <img src={event.albumArt || '/placeholder.svg'} alt="" />
+                                                        <div>
+                                                            <strong>{event.songName}</strong>
+                                                            <span>{event.artist}</span>
+                                                            <small>{event.restoredAt ? 'Restored by host' : `Purged by ${event.deletedByName}`} at {timeStr}</small>
+                                                        </div>
+                                                        <span className="purge-feed-status">{event.restoredAt ? 'RESTORED' : 'PURGED'}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* QUEUE TAB */}
+                {activeTab === 'queue' && (
+                    <div className="tab-panel queue-panel">
+                        <HostGuide guide={queueHostGuide} />
+                        <div className={`queue-command-center ${queueWindowActive ? 'active' : ''}`}>
+                            <div className="purge-command-header queue-command-header">
+                                <div>
+                                    <div className="purge-command-kicker queue-command-kicker">GAME SHOW MODE</div>
+                                    <h2>{queueWindowActive ? 'The Queue Is Live' : 'The Queue Command Center'}</h2>
+                                    <p>
+                                        Host-triggered zero-vote review. For 60 seconds, the public screen grays out the crate and lights up every song with no votes.
+                                    </p>
+                                </div>
+                                <div className={`purge-command-timer queue-command-timer ${queueWindowRemaining < 10000 && queueWindowActive ? 'urgent' : ''}`}>
+                                    <span>{queueWindowActive ? formatTime(queueWindowRemaining) : 'READY'}</span>
+                                    <small>{queueWindowActive ? 'remaining' : 'standby'}</small>
+                                </div>
+                            </div>
+
+                            <div className="purge-command-actions queue-command-actions">
+                                <button
+                                    className="purge-master-btn queue-start"
+                                    onClick={handleStartQueueWindow}
+                                    disabled={isStartingQueueWindow || queueWindowActive || queueTargets.length === 0}
+                                >
+                                    {isStartingQueueWindow ? 'Starting...' : 'Start 60s Queue'}
+                                </button>
+                                <button
+                                    className="purge-master-btn queue-stop"
+                                    onClick={handleStopQueueWindow}
+                                    disabled={isStoppingQueueWindow || !queueWindowActive}
+                                >
+                                    {isStoppingQueueWindow ? 'Stopping...' : 'End Early'}
+                                </button>
+                            </div>
+
+                            <div className="purge-command-stats queue-command-stats">
+                                <div>
+                                    <strong>{queueTargets.length}</strong>
+                                    <span>zero-vote songs</span>
+                                </div>
+                                <div>
+                                    <strong>{songs.reduce((sum, song) => sum + getTotalVotes(song), 0)}</strong>
+                                    <span>votes logged</span>
+                                </div>
+                                <div>
+                                    <strong>{songs.length}</strong>
+                                    <span>songs scanned</span>
+                                </div>
+                            </div>
+
+                            <div className="purge-narration-card queue-narration-card">
+                                <strong>Host read:</strong>
+                                <span>
+                                    {queueWindowActive
+                                        ? `The Queue is live. These are not bad songs. They are uninspected packets. Put ears on them before the round ends. ${Math.ceil(queueWindowRemaining / 1000)} seconds.`
+                                        : 'Start The Queue when songs are getting ignored. The public page will spotlight every track with zero votes.'}
+                                </span>
+                            </div>
+
+                            <div className="queue-target-list">
+                                <div className="purge-feed-header">
+                                    <h3>Current Queue Targets</h3>
+                                    <span>{queueTargets.length} packets</span>
+                                </div>
+                                {queueTargets.length === 0 ? (
+                                    <div className="purge-feed-empty">No zero-vote songs right now. Every packet has at least one vote.</div>
+                                ) : (
+                                    <div className="queue-target-grid">
+                                        {queueTargets.map(song => (
+                                            <div key={song.id} className="queue-target-card">
+                                                <img src={song.albumArt || '/placeholder.svg'} alt="" />
+                                                <div className="queue-target-info">
+                                                    <strong>{song.name}</strong>
+                                                    <span>{song.artist}</span>
+                                                    <small>{getTotalVotes(song)} votes received</small>
+                                                </div>
+                                                <span className="queue-target-badge">NEEDS REVIEW</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="queue-vote-feed">
+                                <div className="purge-feed-header">
+                                    <h3>Live Vote Feed</h3>
+                                    <span>{queueVoteActivity.length} recent votes</span>
+                                </div>
+                                {queueVoteActivity.length === 0 ? (
+                                    <div className="purge-feed-empty">No votes yet. Start The Queue and watch for shout-outs here.</div>
+                                ) : (
+                                    <div className="queue-vote-feed-list">
+                                        {queueVoteActivity.map(activity => {
+                                            const timeStr = new Date(activity.timestamp).toLocaleTimeString('en-US', {
+                                                hour: 'numeric',
+                                                minute: '2-digit',
+                                                second: '2-digit',
+                                                hour12: true,
+                                                timeZone: 'America/Chicago'
+                                            });
+                                            const isUpvote = activity.type === 'upvote';
+                                            return (
+                                                <div key={activity.id} className={`queue-vote-feed-row ${activity.type}`}>
+                                                    <span className="queue-vote-feed-icon">{isUpvote ? '👍' : '👎'}</span>
+                                                    <div>
+                                                        <strong>{activity.userName}</strong>
+                                                        <span>{isUpvote ? 'voted up' : 'voted down'} "{activity.songName}"</span>
+                                                        <small>{activity.userLocation ? `${activity.userLocation} · ` : ''}{timeStr}</small>
+                                                    </div>
+                                                    <span className="queue-vote-feed-status">{isUpvote ? 'UP' : 'DOWN'}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 1s AND 0s TAB */}
+                {activeTab === 'ones' && (
+                    <div className="tab-panel ones-panel">
+                        <HostGuide guide={onesHostGuide} />
+                        {/* 🎲 1s AND 0s - Admin-hosted artist-vs-artist game-show segment */}
+                        <div className={`artist-versus-section ${(showArtistVersusLobby || artistVersus.active) ? 'host-mode' : ''}`}>
+                            {!artistVersus.active && !showArtistVersusLobby && (
+                                <button
+                                    className="tool-btn artist-versus-launcher"
+                                    onClick={() => setShowArtistVersusLobby(true)}
+                                >
+                                    <span className="tool-icon">🎲</span>
+                                    <span className="tool-name">1s and 0s</span>
+                                </button>
+                            )}
+
+                            {!artistVersus.active && showArtistVersusLobby && (
+                                <div className="artist-versus-lobby">
+                                    <div className="av-lobby-kicker">HOST MODE</div>
+                                    <div className="av-lobby-title">1s and 0s — Volunteer Up</div>
+                                    <div className="av-lobby-hint">Type the volunteer's first name if you have it. Leave it blank when you need to move fast.</div>
+                                    <input
+                                        type="text"
+                                        className="av-lobby-input"
+                                        value={artistVersusPlayerInput}
+                                        onChange={(e) => setArtistVersusPlayerInput(e.target.value)}
+                                        placeholder="Player first name"
+                                        maxLength={30}
+                                        autoFocus
+                                    />
+                                    <div className="av-lobby-actions">
+                                        <button
+                                            className="tool-btn av-lobby-start"
+                                            onClick={handleStartArtistVersus}
+                                            disabled={isArtistVersusBusy}
+                                        >
+                                            <span className="tool-name">{isArtistVersusBusy ? 'Starting...' : 'Start Game'}</span>
+                                        </button>
+                                        <button
+                                            className="tool-btn danger-subtle"
+                                            onClick={() => { setShowArtistVersusLobby(false); setArtistVersusPlayerInput(''); }}
+                                            disabled={isArtistVersusBusy}
+                                        >
+                                            <span className="tool-name">Cancel</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {artistVersus.active && (
+                                <div className="artist-versus-host">
+                                    <div className="av-host-header">
+                                        <div className="av-host-title">
+                                            1s and 0s Host Mode
+                                            {artistVersus.playerName && <span className="av-host-player"> — {artistVersus.playerName}</span>}
+                                            <div className="av-host-control-hint">Tap play for the clip. Tap the artist card to pick. Bomb is still a two-tap safety.</div>
+                                        </div>
+                                        <div className="av-host-meta">
+                                            <span className="av-host-round">
+                                                {artistVersus.phase === 'damageReport'
+                                                    ? 'COMPLETE'
+                                                    : `R${artistVersus.currentRound}/3`}
+                                            </span>
+                                            <span className={`av-host-bomb ${artistVersus.bombUsed ? 'used' : 'armed'}`}>
+                                                💣 {artistVersus.bombUsed ? 'USED' : 'READY'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Active round — pick / bomb controls */}
+                                    {artistVersus.phase === 'round' && artistVersus.rounds[artistVersus.currentRound - 1] && (() => {
+                                        const round = artistVersus.rounds[artistVersus.currentRound - 1];
+                                        return (
+                                            <div className="av-host-arena">
+                                                {(['A', 'B'] as const).map(side => {
+                                                    const contestant = side === 'A' ? round.artistA : round.artistB;
+                                                    const isArmed = bombArmedSide === side;
+                                                    const isPreviewing = previewingSide === side;
+                                                    const cached = previewUrlCache[side];
+                                                    const isLoadingPreview = cached === 'loading';
+                                                    const noPreview = cached === null;
+                                                    return (
+                                                        <div key={side} className={`av-host-side ${isArmed ? 'armed' : ''}`}>
+                                                            <div className="av-host-side-label">SIDE {side}</div>
+                                                            <div className="av-host-art-wrap">
+                                                                <button
+                                                                    className="av-host-pick-btn"
+                                                                    onClick={() => handleArtistVersusPick(side)}
+                                                                    disabled={isArtistVersusBusy}
+                                                                >
+                                                                    <img src={contestant.albumArt} alt="" className="av-host-art" />
+                                                                    <div className="av-host-name">{contestant.name}</div>
+                                                                    <div className="av-host-sub">"{contestant.sampleSongName}"</div>
+                                                                    <div className="av-host-sub-count">{contestant.songCount} songs</div>
+                                                                    <div className="av-host-pick-copy">PICK {contestant.name}</div>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className={`av-host-preview-btn ${isPreviewing ? 'playing' : ''} ${isLoadingPreview ? 'loading' : ''} ${noPreview ? 'no-preview' : ''}`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleArtistVersusPreview(side);
+                                                                    }}
+                                                                    disabled={noPreview}
+                                                                    title={
+                                                                        noPreview ? 'No preview available' :
+                                                                            isLoadingPreview ? 'Loading preview...' :
+                                                                                isPreviewing ? 'Stop preview' : 'Play 7-second preview'
+                                                                    }
+                                                                    aria-label={isPreviewing ? `Stop ${contestant.name} preview` : `Preview ${contestant.name}`}
+                                                                >
+                                                                    <span className="av-host-preview-symbol">{isPreviewing ? 'STOP' : isLoadingPreview ? '...' : noPreview ? 'NO CLIP' : 'PLAY'}</span>
+                                                                </button>
+                                                            </div>
+                                                            {!isArmed ? (
+                                                                <button
+                                                                    className="av-host-bomb-btn arm"
+                                                                    onClick={() => handleArtistVersusBombArm(side)}
+                                                                    disabled={isArtistVersusBusy || artistVersus.bombUsed}
+                                                                    title={artistVersus.bombUsed ? 'Bomb already used' : 'Arm nuke'}
+                                                                >
+                                                                    ARM NUKE
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    className="av-host-bomb-btn fire"
+                                                                    onClick={() => handleArtistVersusBombFire(side)}
+                                                                    disabled={isArtistVersusBusy}
+                                                                >
+                                                                    FIRE — NUKE {contestant.name.toUpperCase()}
+                                                                </button>
+                                                            )}
+                                                            <div className="av-host-nuke-hint">
+                                                                {artistVersus.bombUsed ? 'Bomb already used this game.' : isArmed ? 'Tap FIRE only when you are sure.' : 'Arm first. Fire second.'}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Awaiting next round */}
+                                    {artistVersus.phase === 'awaitingNext' && (
+                                        <div className="av-host-between">
+                                            <div className="av-host-result">
+                                                Round {artistVersus.currentRound} resolved.
+                                                {(() => {
+                                                    const r = artistVersus.rounds[artistVersus.currentRound - 1];
+                                                    if (!r) return null;
+                                                    if (r.outcome === 'pick') {
+                                                        const w = r.winner === 'A' ? r.artistA.name : r.artistB.name;
+                                                        const l = r.winner === 'A' ? r.artistB.name : r.artistA.name;
+                                                        return ` ${w} over ${l}.`;
+                                                    }
+                                                    if (r.outcome === 'bomb') {
+                                                        return ` ${r.nukedArtistName} NUKED (${r.nukedSongIds?.length || 0} songs wiped).`;
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+                                            <button
+                                                className="tool-btn av-host-next"
+                                                onClick={handleArtistVersusNext}
+                                                disabled={isArtistVersusBusy}
+                                            >
+                                                <span className="tool-icon">⏭️</span>
+                                                <span className="tool-name">Next Round</span>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Damage report after round 3 (or admin-ended) */}
+                                    {artistVersus.phase === 'damageReport' && (
+                                        <div className="av-host-damage">
+                                            <div className="av-host-damage-title">DAMAGE REPORT</div>
+                                            {artistVersus.rounds.map(r => (
+                                                <div key={r.roundNumber} className={`av-host-damage-row ${r.outcome === 'bomb' ? 'nuked' : ''}`}>
+                                                    <span>R{r.roundNumber}</span>
+                                                    <span>
+                                                        {r.outcome === 'pick'
+                                                            ? `${r.winner === 'A' ? r.artistA.name : r.artistB.name} over ${r.winner === 'A' ? r.artistB.name : r.artistA.name}`
+                                                            : r.outcome === 'bomb'
+                                                                ? `NUKED ${r.nukedArtistName} (${r.nukedSongIds?.length || 0} songs wiped)`
+                                                                : 'incomplete'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Action buttons - end / cancel */}
+                                    <div className="av-host-actions">
+                                        {artistVersus.phase === 'awaitingNext' && artistVersus.currentRound === 3 && (
+                                            <button
+                                                className="tool-btn av-host-end"
+                                                onClick={handleArtistVersusEnd}
+                                                disabled={isArtistVersusBusy}
+                                            >
+                                                <span className="tool-icon">🏁</span>
+                                                <span className="tool-name">Show Damage Report</span>
+                                            </button>
+                                        )}
+                                        <button
+                                            className="tool-btn danger-subtle"
+                                            onClick={handleArtistVersusCancel}
+                                            disabled={isArtistVersusBusy}
+                                        >
+                                            <span className="tool-icon">✕</span>
+                                            <span className="tool-name">{artistVersus.phase === 'damageReport' ? 'Close' : 'Cancel'}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* CRATE GAMES TAB */}
+                {activeTab === 'crateCrack' && (
+                    <div className="tab-panel crate-crack-panel">
+                        <div className={`crate-crack-command-center ${crateCrackStatus.active ? 'active' : ''}`}>
+                            <div className="purge-command-header crate-crack-command-header">
+                                <div>
+                                    <div className="purge-command-kicker crate-crack-kicker">SIDE QUEST</div>
+                                    <h2>{crateCrackStatus.active ? 'Crate Games Is Live' : 'Crate Games'}</h2>
+                                    <p>
+                                        Launch a 60-second full-screen mini-game. Players sort the record stack and earn the default promo when they finish.
+                                    </p>
+                                </div>
+                                <div className={`purge-command-timer crate-crack-timer ${crateCrackStatus.remaining < 10000 && crateCrackStatus.active ? 'urgent' : ''}`}>
+                                    <span>{crateCrackStatus.active ? formatTime(crateCrackStatus.remaining) : 'READY'}</span>
+                                    <small>{crateCrackStatus.active ? 'remaining' : 'standby'}</small>
+                                </div>
+                            </div>
+
+                            <div className="crate-crack-grid">
+                                <section className="admin-card crate-crack-card crate-crack-sales-card">
+                                    <h3>Sales Game</h3>
+                                    <p className="admin-sub">Pick the mini-game that appears on every player screen.</p>
+                                    <label>
+                                        Mini-Game
+                                        <select value={crateCrackGameType} onChange={(e) => setCrateCrackGameType(e.target.value as typeof crateCrackGameType)}>
+                                            <option value="request_evader">Request Evader Arcade</option>
+                                            <option value="crate_man">Crate-Man</option>
+                                            <option value="missile_wedding">Missile Command: Wedding Edition</option>
+                                            <option value="bpm_sort">Sort By BPM</option>
+                                        </select>
+                                    </label>
+                                    <div className="crate-crack-sales-note">
+                                        <strong>
+                                            {crateCrackGameType === 'request_evader'
+                                                ? 'Arcade promo game.'
+                                                : crateCrackGameType === 'crate_man'
+                                                    ? 'Maze promo game.'
+                                                    : crateCrackGameType === 'missile_wedding'
+                                                        ? 'Wedding defense game.'
+                                                        : 'Decision game.'}
+                                        </strong>
+                                        <span>
+                                            {crateCrackGameType === 'request_evader'
+                                                ? 'Players dodge phone requests, grab DJ power-ups, and survive for the promo reveal.'
+                                                : crateCrackGameType === 'crate_man'
+                                                    ? 'Players eat records, dodge copyright lawyers, and grab White Labels for invincibility.'
+                                                    : crateCrackGameType === 'missile_wedding'
+                                                        ? 'Players protect dance floor energy from speeches, cake cutting, and drunk uncle.'
+                                                        : 'Players sort a tiny crate. Finishers get the promo reveal.'}
+                                        </span>
+                                    </div>
+                                </section>
+
+                                <section className="admin-card crate-crack-card">
+                                    <h3>Default Reward</h3>
+                                    <p className="admin-sub">Everyone who completes the side quest gets this direct redeem link.</p>
+                                    <label>
+                                        Reward Label
+                                        <input value={crateCrackRewardLabel} onChange={(e) => setCrateCrackRewardLabel(e.target.value)} />
+                                    </label>
+                                    <label>
+                                        Claim URL
+                                        <input value={crateCrackRewardUrl} onChange={(e) => setCrateCrackRewardUrl(e.target.value)} />
+                                    </label>
+                                    <label>
+                                        Timer Seconds
+                                        <input
+                                            type="number"
+                                            min={15}
+                                            max={180}
+                                            value={crateCrackDuration}
+                                            onChange={(e) => setCrateCrackDuration(Number(e.target.value) || 60)}
+                                        />
+                                    </label>
+                                </section>
+
+                                <section className="admin-card crate-crack-card">
+                                    <h3>Rare Rewards</h3>
+                                    <p className="admin-sub">These are impossible unless you arm them before launch.</p>
+                                    <label className="crate-crack-toggle">
+                                        <input type="checkbox" checked={armCrateAnnual} onChange={(e) => setArmCrateAnnual(e.target.checked)} />
+                                        Annual Crate Hackers
+                                    </label>
+                                    {armCrateAnnual && <input value={crateAnnualCode} onChange={(e) => setCrateAnnualCode(e.target.value)} placeholder="Annual code" />}
+
+                                    <label className="crate-crack-toggle">
+                                        <input type="checkbox" checked={armBangerAnnual} onChange={(e) => setArmBangerAnnual(e.target.checked)} />
+                                        Annual Banger Button
+                                    </label>
+                                    {armBangerAnnual && <input value={bangerAnnualCode} onChange={(e) => setBangerAnnualCode(e.target.value)} placeholder="Annual code" />}
+
+                                    <label className="crate-crack-toggle danger">
+                                        <input type="checkbox" checked={armLifetime} onChange={(e) => setArmLifetime(e.target.checked)} />
+                                        Lifetime Offer
+                                    </label>
+                                    {armLifetime && <input value={lifetimeCode} onChange={(e) => setLifetimeCode(e.target.value)} placeholder="Lifetime code" />}
+                                </section>
+                            </div>
+
+                            <div className="purge-command-actions crate-crack-actions">
+                                <button
+                                    className="purge-master-btn start"
+                                    onClick={handleStartCrateCrack}
+                                    disabled={isStartingCrateCrack || crateCrackStatus.active}
+                                >
+                                    {isStartingCrateCrack ? 'Starting...' : 'Launch 60s Crate Games'}
+                                </button>
+                                <button
+                                    className="purge-master-btn stop"
+                                    onClick={handleStopCrateCrack}
+                                    disabled={isStoppingCrateCrack || !crateCrackStatus.active}
+                                >
+                                    {isStoppingCrateCrack ? 'Stopping...' : 'End Early'}
+                                </button>
+                            </div>
+
+                            <div className="purge-command-stats crate-crack-stats">
+                                <div>
+                                    <strong>{crateCrackStatus.attempts}</strong>
+                                    <span>attempts</span>
+                                </div>
+                                <div>
+                                    <strong>{crateCrackStatus.completions}</strong>
+                                    <span>completed</span>
+                                </div>
+                                <div>
+                                    <strong>{crateCrackStatus.rareRewardsArmed ? 'ARMED' : 'OFF'}</strong>
+                                    <span>rare rewards</span>
+                                </div>
+                            </div>
+
+                            <div className="purge-narration-card crate-crack-narration">
+                                <strong>Host read:</strong>
+                                <span>
+                                    {crateCrackStatus.active
+                                        ? `Crate Games is live. Win the mini-game before the clock dies. ${Math.ceil(crateCrackStatus.remaining / 1000)} seconds.`
+                                        : 'When you launch Crate Games, every player gets a short side quest on top of the voting screen.'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* PRIZE TAB */}
+                {activeTab === 'prize' && (
+                    <div className="tab-panel prize-panel">
+                        <PrizeHQ
+                            adminKey={adminPassword}
+                            adminId={adminId}
+                            onMessage={setMessage}
+                        />
+                    </div>
+                )}
+
                 {/* TOOLS TAB */}
                 {activeTab === 'tools' && (
                     <div className="tab-panel tools-panel">
+                        {/* Export signups / mailing list */}
+                        <div className="leads-export-section">
+                            <div className="leads-export-head">
+                                <span className="tool-icon">📧</span>
+                                <div>
+                                    <h3 className="leads-export-title">Export Signups (CSV)</h3>
+                                    <p className="leads-export-hint">
+                                        Real emails of everyone who signed up. Ready for a Kartra import.
+                                        Leave dates blank to grab the full list.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="leads-export-controls">
+                                <label className="leads-date-field">
+                                    <span>From</span>
+                                    <input
+                                        type="date"
+                                        value={exportFrom}
+                                        max={exportTo || undefined}
+                                        onChange={(e) => setExportFrom(e.target.value)}
+                                    />
+                                </label>
+                                <label className="leads-date-field">
+                                    <span>To</span>
+                                    <input
+                                        type="date"
+                                        value={exportTo}
+                                        min={exportFrom || undefined}
+                                        onChange={(e) => setExportTo(e.target.value)}
+                                    />
+                                </label>
+                                {(exportFrom || exportTo) && (
+                                    <button
+                                        className="leads-clear-btn"
+                                        onClick={() => { setExportFrom(''); setExportTo(''); }}
+                                        disabled={isExportingLeads}
+                                    >
+                                        Clear dates
+                                    </button>
+                                )}
+                                <button
+                                    className="tool-btn leads-export-btn"
+                                    onClick={handleExportLeads}
+                                    disabled={isExportingLeads}
+                                >
+                                    <span className="tool-icon">⬇️</span>
+                                    <span className="tool-name">
+                                        {isExportingLeads
+                                            ? 'Preparing…'
+                                            : (exportFrom || exportTo) ? 'Download Range CSV' : 'Download All CSV'}
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Import from Spotify */}
                         <div className="import-section">
                             <button
@@ -2692,213 +4021,6 @@ export default function AdminPage() {
                             )}
                         </div>
 
-                        {/* 🎲 1s AND 0s - Admin-hosted artist-vs-artist game-show segment */}
-                        <div className="artist-versus-section">
-                            {!artistVersus.active && !showArtistVersusLobby && (
-                                <button
-                                    className="tool-btn artist-versus-launcher"
-                                    onClick={() => setShowArtistVersusLobby(true)}
-                                >
-                                    <span className="tool-icon">🎲</span>
-                                    <span className="tool-name">1s and 0s</span>
-                                </button>
-                            )}
-
-                            {!artistVersus.active && showArtistVersusLobby && (
-                                <div className="artist-versus-lobby">
-                                    <div className="av-lobby-title">🎲 1s and 0s — Pick Your Player</div>
-                                    <div className="av-lobby-hint">Grab someone from the crowd. Type their first name (optional, looks great on stream).</div>
-                                    <input
-                                        type="text"
-                                        className="av-lobby-input"
-                                        value={artistVersusPlayerInput}
-                                        onChange={(e) => setArtistVersusPlayerInput(e.target.value)}
-                                        placeholder="Player first name"
-                                        maxLength={30}
-                                        autoFocus
-                                    />
-                                    <div className="av-lobby-actions">
-                                        <button
-                                            className="tool-btn av-lobby-start"
-                                            onClick={handleStartArtistVersus}
-                                            disabled={isArtistVersusBusy}
-                                        >
-                                            <span className="tool-icon">▶️</span>
-                                            <span className="tool-name">{isArtistVersusBusy ? 'Starting...' : 'Start Round 1'}</span>
-                                        </button>
-                                        <button
-                                            className="tool-btn danger-subtle"
-                                            onClick={() => { setShowArtistVersusLobby(false); setArtistVersusPlayerInput(''); }}
-                                            disabled={isArtistVersusBusy}
-                                        >
-                                            <span className="tool-icon">✕</span>
-                                            <span className="tool-name">Cancel</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {artistVersus.active && (
-                                <div className="artist-versus-host">
-                                    <div className="av-host-header">
-                                        <div className="av-host-title">
-                                            🎲 1s and 0s
-                                            {artistVersus.playerName && <span className="av-host-player"> — {artistVersus.playerName}</span>}
-                                        </div>
-                                        <div className="av-host-meta">
-                                            <span className="av-host-round">
-                                                {artistVersus.phase === 'damageReport'
-                                                    ? 'COMPLETE'
-                                                    : `R${artistVersus.currentRound}/3`}
-                                            </span>
-                                            <span className={`av-host-bomb ${artistVersus.bombUsed ? 'used' : 'armed'}`}>
-                                                💣 {artistVersus.bombUsed ? 'USED' : 'READY'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Active round — pick / bomb controls */}
-                                    {artistVersus.phase === 'round' && artistVersus.rounds[artistVersus.currentRound - 1] && (() => {
-                                        const round = artistVersus.rounds[artistVersus.currentRound - 1];
-                                        return (
-                                            <div className="av-host-arena">
-                                                {(['A', 'B'] as const).map(side => {
-                                                    const contestant = side === 'A' ? round.artistA : round.artistB;
-                                                    const isArmed = bombArmedSide === side;
-                                                    const isPreviewing = previewingSide === side;
-                                                    const cached = previewUrlCache[side];
-                                                    const isLoadingPreview = cached === 'loading';
-                                                    const noPreview = cached === null;
-                                                    return (
-                                                        <div key={side} className={`av-host-side ${isArmed ? 'armed' : ''}`}>
-                                                            <div className="av-host-art-wrap">
-                                                                <button
-                                                                    className="av-host-pick-btn"
-                                                                    onClick={() => handleArtistVersusPick(side)}
-                                                                    disabled={isArtistVersusBusy}
-                                                                >
-                                                                    <img src={contestant.albumArt} alt="" className="av-host-art" />
-                                                                    <div className="av-host-name">{contestant.name}</div>
-                                                                    <div className="av-host-sub">"{contestant.sampleSongName}"</div>
-                                                                    <div className="av-host-sub-count">{contestant.songCount} songs</div>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    className={`av-host-preview-btn ${isPreviewing ? 'playing' : ''} ${isLoadingPreview ? 'loading' : ''} ${noPreview ? 'no-preview' : ''}`}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleArtistVersusPreview(side);
-                                                                    }}
-                                                                    disabled={noPreview}
-                                                                    title={
-                                                                        noPreview ? 'No preview available' :
-                                                                        isLoadingPreview ? 'Loading preview...' :
-                                                                        isPreviewing ? 'Stop preview' : 'Play 7-second preview'
-                                                                    }
-                                                                    aria-label={isPreviewing ? `Stop ${contestant.name} preview` : `Preview ${contestant.name}`}
-                                                                >
-                                                                    {isPreviewing ? '⏸' : isLoadingPreview ? '…' : noPreview ? '🔇' : '▶'}
-                                                                </button>
-                                                            </div>
-                                                            {!isArmed ? (
-                                                                <button
-                                                                    className="av-host-bomb-btn arm"
-                                                                    onClick={() => handleArtistVersusBombArm(side)}
-                                                                    disabled={isArtistVersusBusy || artistVersus.bombUsed}
-                                                                    title={artistVersus.bombUsed ? 'Bomb already used' : 'Arm nuke'}
-                                                                >
-                                                                    💣 ARM NUKE
-                                                                </button>
-                                                            ) : (
-                                                                <button
-                                                                    className="av-host-bomb-btn fire"
-                                                                    onClick={() => handleArtistVersusBombFire(side)}
-                                                                    disabled={isArtistVersusBusy}
-                                                                >
-                                                                    🔥 FIRE — NUKES {contestant.name.toUpperCase()}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {/* Awaiting next round */}
-                                    {artistVersus.phase === 'awaitingNext' && (
-                                        <div className="av-host-between">
-                                            <div className="av-host-result">
-                                                Round {artistVersus.currentRound} resolved.
-                                                {(() => {
-                                                    const r = artistVersus.rounds[artistVersus.currentRound - 1];
-                                                    if (!r) return null;
-                                                    if (r.outcome === 'pick') {
-                                                        const w = r.winner === 'A' ? r.artistA.name : r.artistB.name;
-                                                        const l = r.winner === 'A' ? r.artistB.name : r.artistA.name;
-                                                        return ` ${w} over ${l}.`;
-                                                    }
-                                                    if (r.outcome === 'bomb') {
-                                                        return ` ${r.nukedArtistName} NUKED (${r.nukedSongIds?.length || 0} songs wiped).`;
-                                                    }
-                                                    return null;
-                                                })()}
-                                            </div>
-                                            <button
-                                                className="tool-btn av-host-next"
-                                                onClick={handleArtistVersusNext}
-                                                disabled={isArtistVersusBusy}
-                                            >
-                                                <span className="tool-icon">⏭️</span>
-                                                <span className="tool-name">Next Round</span>
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {/* Damage report after round 3 (or admin-ended) */}
-                                    {artistVersus.phase === 'damageReport' && (
-                                        <div className="av-host-damage">
-                                            <div className="av-host-damage-title">DAMAGE REPORT</div>
-                                            {artistVersus.rounds.map(r => (
-                                                <div key={r.roundNumber} className={`av-host-damage-row ${r.outcome === 'bomb' ? 'nuked' : ''}`}>
-                                                    <span>R{r.roundNumber}</span>
-                                                    <span>
-                                                        {r.outcome === 'pick'
-                                                            ? `${r.winner === 'A' ? r.artistA.name : r.artistB.name} over ${r.winner === 'A' ? r.artistB.name : r.artistA.name}`
-                                                            : r.outcome === 'bomb'
-                                                                ? `NUKED ${r.nukedArtistName} (${r.nukedSongIds?.length || 0} songs wiped)`
-                                                                : 'incomplete'}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Action buttons - end / cancel */}
-                                    <div className="av-host-actions">
-                                        {artistVersus.phase === 'awaitingNext' && artistVersus.currentRound === 3 && (
-                                            <button
-                                                className="tool-btn av-host-end"
-                                                onClick={handleArtistVersusEnd}
-                                                disabled={isArtistVersusBusy}
-                                            >
-                                                <span className="tool-icon">🏁</span>
-                                                <span className="tool-name">Show Damage Report</span>
-                                            </button>
-                                        )}
-                                        <button
-                                            className="tool-btn danger-subtle"
-                                            onClick={handleArtistVersusCancel}
-                                            disabled={isArtistVersusBusy}
-                                        >
-                                            <span className="tool-icon">✕</span>
-                                            <span className="tool-name">{artistVersus.phase === 'damageReport' ? 'Close' : 'Cancel'}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
                         {/* Quick Tools */}
                         <div className="tools-grid">
                             <button
@@ -2913,10 +4035,6 @@ export default function AdminPage() {
                             <button className="tool-btn shuffle" onClick={handleShufflePlaylist} disabled={isShuffling || songs.length < 2}>
                                 <span className="tool-icon">🔀</span>
                                 <span className="tool-name">{isShuffling ? 'Shuffling...' : 'Shuffle'}</span>
-                            </button>
-                            <button className="tool-btn purge" onClick={handleStartDeleteWindow} disabled={isStartingDeleteWindow || deleteWindowActive || songs.length === 0}>
-                                <span className="tool-icon">💀</span>
-                                <span className="tool-name">{deleteWindowActive ? 'PURGE ON!' : 'The Purge'}</span>
                             </button>
                             <button className="tool-btn danger" onClick={handleWipeSession} disabled={isWiping}>
                                 <span className="tool-icon">🗑️</span>
@@ -2933,10 +4051,6 @@ export default function AdminPage() {
                             <button className="tool-btn predictions" onClick={handleRevealPredictions} disabled={isRevealingPredictions}>
                                 <span className="tool-icon">🎯</span>
                                 <span className="tool-name">{isRevealingPredictions ? 'Revealing...' : 'Reveal Predictions'}</span>
-                            </button>
-                            <button className="tool-btn prize-drop" onClick={handlePrizeDrop} disabled={isTriggeredPrizeDrop}>
-                                <span className="tool-icon">🎰</span>
-                                <span className="tool-name">{isTriggeredPrizeDrop ? 'Dropping...' : 'Prize Drop'}</span>
                             </button>
 
                             {/* 📺 STREAM PLATFORM SELECTOR */}
