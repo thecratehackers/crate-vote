@@ -11297,6 +11297,13 @@ input:disabled {
     gap: 6px;
   }
 
+  /* Keep the Leaderboard / Predict buttons clear of the floating PiP video
+     in the top-right corner (only reserve space while the mini player is shown). */
+  body:has(.stream-host.pip-mode) .game-features-bar {
+    justify-content: flex-start;
+    padding-right: 150px;
+  }
+
   .feature-btn {
     padding: 5px 10px;
     font-size: 0.75rem;
