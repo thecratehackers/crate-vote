@@ -29,7 +29,6 @@ const PERSISTED_KEYS = [
     'crate-coach-done',
     'crate-last-session',
     'crate-admin-hide-stream',
-    'crate-user-second-screen',
 ] as const;
 
 type PersistedKey = typeof PERSISTED_KEYS[number];
