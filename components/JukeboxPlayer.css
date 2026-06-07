@@ -2444,8 +2444,8 @@
     }
 }
 
-/* Mobile - Hide sidebars */
-@media (max-width: 1024px) {
+/* Mobile - Hide sidebars (only on true small screens; laptops/iPads keep full layout) */
+@media (max-width: 899px) {
     .jukebox-sidebar {
         display: none;
     }
@@ -2456,11 +2456,27 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
+   💻 SMALL LAPTOP / iPAD LANDSCAPE — keep the full 3-column
+   dashboard (38% of viewers are on computer). Condense sidebar
+   widths so leaderboard + queue stay visible without scrolling.
+   ═══════════════════════════════════════════════════════════ */
+@media (min-width: 900px) and (max-width: 1024px) {
+    .jukebox-sidebar,
+    .jukebox-sidebar.right {
+        width: 208px;
+    }
+
+    .sidebar-section {
+        padding: 12px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
    📱 iPAD / TABLET BLOOMBERG MODE — Chunky blocks, BIG fonts
    Less is more. Fat readable cards. Dashboard energy.
    ═══════════════════════════════════════════════════════════ */
 
-@media (min-width: 768px) and (max-width: 1024px) {
+@media (min-width: 768px) and (max-width: 899px) {
 
     /* Show sidebars as bottom strip on tablet */
     .jukebox-sidebar {

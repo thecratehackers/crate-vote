@@ -14495,6 +14495,64 @@ input:disabled {
   border-color: #9146ff;
 }
 
+/* ── 📺 Second-screen mode: "On TV?" button + restore pill ── */
+.second-screen-btn {
+  background: rgba(211, 119, 29, 0.18);
+  border-color: rgba(211, 119, 29, 0.4);
+}
+
+.second-screen-btn:hover {
+  background: rgba(255, 107, 0, 0.45);
+  border-color: var(--orange-primary);
+}
+
+/* Persistent pill shown while the in-app video is hidden (watching on TV) */
+.second-screen-pill {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(26, 26, 26, 0.92);
+  border: 1px solid rgba(211, 119, 29, 0.45);
+  color: white;
+  font-family: 'Rubik', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  z-index: 95;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all 0.2s;
+}
+
+.second-screen-pill:hover {
+  border-color: var(--orange-primary);
+  transform: translateX(-50%) scale(1.04);
+}
+
+.second-screen-pill-action {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 107, 0, 0.25);
+  border: 1px solid rgba(255, 107, 0, 0.4);
+  font-size: 0.7rem;
+}
+
+@media (max-width: 640px) {
+  .second-screen-pill {
+    bottom: 14px;
+    font-size: 0.7rem;
+    padding: 8px 12px;
+  }
+}
+
 /* ── Video container (16:9 aspect ratio) ── */
 .stream-host-video {
   position: relative;

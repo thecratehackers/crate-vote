@@ -475,6 +475,7 @@ export default function HomePage() {
     const [streamMinimized, setStreamMinimized] = useState(true); // Start as PiP
     const [twitchParent, setTwitchParent] = useState('localhost');
     const [hideStreamLocally, setHideStreamLocally] = useState(false); // Admin screen-share mirror prevention
+    const [secondScreenMode, setSecondScreenMode] = useState(false); // 📺 User watching show on TV/another screen — hide in-app video
     const youtubePlayerRef = useRef<HTMLIFrameElement | null>(null);
     const youtubeWasUnmuted = useRef<boolean>(false);  // Track if user had audio on
     const [twitchMuted, setTwitchMuted] = useState(true); // Twitch starts muted
@@ -540,10 +541,32 @@ export default function HomePage() {
         }
     }, [streamPlatform]);
 
+    // 📺 Toggle "second screen" mode — for viewers watching the show on a TV/another
+    // device. Hides the in-app video so the whole phone screen goes to voting, and
+    // stops audio from doubling up with their TV. Persisted so it sticks per device.
+    const handleToggleSecondScreen = useCallback(() => {
+        setSecondScreenMode((prev) => {
+            const next = !prev;
+            persistSet('crate-user-second-screen', next ? 'true' : 'false');
+            if (next) {
+                // Entering second-screen mode: re-mute + reset so nothing auto-expands later
+                setStreamMinimized(true);
+                setScrollExpandedMuted(false);
+                setTwitchMuted(true);
+                hasAutoExpanded.current = true; // block scroll auto-expand
+            } else {
+                // Leaving second-screen mode: allow the video + auto-expand behavior again
+                hasAutoExpanded.current = false;
+                userManuallyMinimized.current = false;
+            }
+            return next;
+        });
+    }, []);
+
     // 📜 Scroll listener — auto-expand PiP when user scrolls into playlist
     useEffect(() => {
         const hasStream = (streamPlatform === 'youtube' && youtubeEmbed) || (streamPlatform === 'twitch' && twitchChannel);
-        if (!hasStream || hideStreamLocally) return;
+        if (!hasStream || hideStreamLocally || secondScreenMode) return;
 
         const onScroll = () => {
             const scrollY = window.scrollY || document.documentElement.scrollTop;
@@ -551,13 +574,25 @@ export default function HomePage() {
             if (scrollY > 350 && streamMinimized && !hasAutoExpanded.current && !userManuallyMinimized.current) {
                 hasAutoExpanded.current = true;
                 setStreamMinimized(false);
-                setScrollExpandedMuted(true); // Stay muted — don't scare them
+                setScrollExpandedMuted(true); // Stay muted — require an explicit "Tap for sound"
+                // Defensive: guarantee the player is muted on auto-expand so audio never
+                // leaks for the mobile crowd. Sound only ever comes from a deliberate tap.
+                if (streamPlatform === 'youtube' && youtubePlayerRef.current) {
+                    try {
+                        youtubePlayerRef.current.contentWindow?.postMessage(
+                            JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*'
+                        );
+                    } catch (e) { /* cross-origin may fail silently */ }
+                }
+                if (streamPlatform === 'twitch') {
+                    setTwitchMuted(true);
+                }
             }
         };
 
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
-    }, [streamPlatform, youtubeEmbed, twitchChannel, hideStreamLocally, streamMinimized]);
+    }, [streamPlatform, youtubeEmbed, twitchChannel, hideStreamLocally, secondScreenMode, streamMinimized]);
 
     // ⚔️ Versus Battle state
     interface VersusBattleSong {
@@ -1021,6 +1056,12 @@ export default function HomePage() {
             const hideStream = persistGet('crate-admin-hide-stream');
             if (hideStream === 'true') {
                 setHideStreamLocally(true);
+            }
+            // 📺 Restore user's "watching on TV" second-screen preference
+            const secondScreen = persistGet('crate-user-second-screen');
+            if (secondScreen === 'true') {
+                setSecondScreenMode(true);
+                hasAutoExpanded.current = true; // don't auto-expand a hidden stream
             }
             if (!savedName) {
                 setShowUsernameModal(true);
@@ -3997,12 +4038,18 @@ export default function HomePage() {
             {/* Hidden during Demo Night — video is rendered fullscreen inside demo takeover instead */}
             {/* YouTube Mode */}
             {
-                !demoNight.enabled && !hideStreamLocally && streamPlatform === 'youtube' && youtubeEmbed && (
+                !demoNight.enabled && !hideStreamLocally && !secondScreenMode && streamPlatform === 'youtube' && youtubeEmbed && (
                     <div className={`stream-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
                         <div className="stream-host-header">
                             <span className="live-host-badge replay-badge">🎬 REPLAY</span>
                             <div className="stream-host-controls">
-
+                                <button
+                                    className="stream-toggle-btn second-screen-btn"
+                                    onClick={handleToggleSecondScreen}
+                                    title="Watching on a TV or another screen? Hide this video and use your full screen to vote."
+                                >
+                                    📺 On TV?
+                                </button>
                                 <button
                                     className="stream-toggle-btn"
                                     onClick={() => streamMinimized ? handleExpandStream() : handleMinimizeStream()}
@@ -4096,11 +4143,18 @@ export default function HomePage() {
 
             {/* Twitch Mode — hidden during Demo Night */}
             {
-                !demoNight.enabled && !hideStreamLocally && streamPlatform === 'twitch' && twitchChannel && (
+                !demoNight.enabled && !hideStreamLocally && !secondScreenMode && streamPlatform === 'twitch' && twitchChannel && (
                     <div className={`stream-host twitch-host ${streamMinimized ? 'pip-mode' : 'expanded-mode'}`}>
                         <div className="stream-host-header twitch-header">
                             <span className="live-host-badge twitch-badge">🟣 LIVE</span>
                             <div className="stream-host-controls">
+                                <button
+                                    className="stream-toggle-btn second-screen-btn"
+                                    onClick={handleToggleSecondScreen}
+                                    title="Watching on a TV or another screen? Hide this video and use your full screen to vote."
+                                >
+                                    📺 On TV?
+                                </button>
                                 {!streamMinimized && (
                                     <>
                                         <a
@@ -4220,6 +4274,21 @@ export default function HomePage() {
                             </button>
                         )}
                     </div>
+                )
+            }
+
+            {/* 📺 SECOND-SCREEN RESTORE PILL — shown when the in-app video is hidden so users can bring it back */}
+            {
+                !demoNight.enabled && !hideStreamLocally && secondScreenMode &&
+                ((streamPlatform === 'youtube' && youtubeEmbed) || (streamPlatform === 'twitch' && twitchChannel)) && (
+                    <button
+                        className="second-screen-pill"
+                        onClick={handleToggleSecondScreen}
+                        title="Show the live video in the app again"
+                    >
+                        <span className="second-screen-pill-label">📺 Watching on TV</span>
+                        <span className="second-screen-pill-action">Show video</span>
+                    </button>
                 )
             }
 
