@@ -6,6 +6,7 @@ import { APP_CONFIG, BLOCKED_WORDS, GAME_TIPS, LIMITS, BROADCAST } from '@/lib/c
 import { PlaylistSkeleton } from '@/components/Skeleton';
 import VersusBattle from '@/components/VersusBattle';
 import ArtistVersus, { type ArtistVersusState as ArtistVersusComponentState } from '@/components/ArtistVersus';
+import DanceGame, { type DanceGameState as DanceGameComponentState } from '@/components/DanceGame';
 import VideoPreview from '@/components/VideoPreview';
 import JukeboxPlayer from '@/components/JukeboxPlayer';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -607,6 +608,21 @@ export default function HomePage() {
         audioCue: null,
     };
     const [artistVersus, setArtistVersus] = useState<ArtistVersusComponentState>(initialArtistVersusState);
+
+    // 💃 Can You Dance To It? state (admin-hosted party game, audience watches)
+    const initialDanceGameState: DanceGameComponentState = {
+        active: false,
+        phase: 'lobby',
+        wheel: [],
+        landedIndex: null,
+        landedSongId: null,
+        spinId: null,
+        spinDurationMs: 5200,
+        audioCue: null,
+        round: 0,
+        startedAt: 0,
+    };
+    const [danceGame, setDanceGame] = useState<DanceGameComponentState>(initialDanceGameState);
 
     // 🎬 Video Preview state
     interface VideoPreviewState {
@@ -1591,6 +1607,27 @@ export default function HomePage() {
         };
         fetchArtistVersus();
         const interval = setInterval(fetchArtistVersus, 1000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, []);
+
+    // 💃 CAN YOU DANCE TO IT? - poll public state every 1s so the audience screen stays live
+    useEffect(() => {
+        let cancelled = false;
+        const fetchDanceGame = async () => {
+            try {
+                const res = await fetch('/api/dance-game');
+                if (!res.ok) return;
+                const data: DanceGameComponentState = await res.json();
+                if (!cancelled) setDanceGame(data);
+            } catch (error) {
+                // Non-blocking — keep last known state on error
+            }
+        };
+        fetchDanceGame();
+        const interval = setInterval(fetchDanceGame, 1000);
         return () => {
             cancelled = true;
             clearInterval(interval);
@@ -4596,6 +4633,15 @@ export default function HomePage() {
                 artistVersus.active && (
                     <ErrorBoundary fallback={<div className="battle-error">🎲 1s and 0s error - refreshing...</div>}>
                         <ArtistVersus state={artistVersus} />
+                    </ErrorBoundary>
+                )
+            }
+
+            {/* 💃 CAN YOU DANCE TO IT? - admin-hosted party game, audience watches */}
+            {
+                danceGame.active && (
+                    <ErrorBoundary fallback={<div className="battle-error">💃 Can You Dance To It? error - refreshing...</div>}>
+                        <DanceGame state={danceGame} />
                     </ErrorBoundary>
                 )
             }

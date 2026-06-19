@@ -4613,3 +4613,210 @@ export async function cancelArtistVersus(): Promise<{ success: boolean }> {
         return { success: false };
     }
 }
+
+// ============ CAN YOU DANCE TO IT? ============
+// Admin-hosted party game. The host spins a wheel of the current playlist songs
+// on the audience screen. It lands on one song and instantly plays a 10s clip.
+// Whoever dances wins (prizes handled off-platform by the host).
+
+const DANCE_GAME_KEY = 'hackathon:danceGame';  // Single active "Can You Dance To It?" session
+const DANCE_MAX_WHEEL_SONGS = 10;              // Top 10 songs go on the wheel
+const DANCE_SPIN_DURATION_MS = 5200;           // How long the wheel visibly spins before landing
+const DANCE_CLIP_DURATION_MS = 10000;          // 10-second dance clip
+
+export interface DanceWheelEntry {
+    songId: string;
+    name: string;
+    artist: string;
+    albumArt: string;
+}
+
+export interface DanceAudioCue {
+    cueId: string;
+    songId: string;
+    songName: string;
+    artistName: string;
+    albumArt: string;
+    previewUrl: string;
+    startedAt: number;   // Epoch ms when the 10s clip should begin (after the wheel lands)
+    durationMs: number;
+}
+
+export type DanceGamePhase = 'lobby' | 'playing';
+
+export interface DanceGameState {
+    active: boolean;
+    phase: DanceGamePhase;
+    wheel: DanceWheelEntry[];
+    landedIndex: number | null;
+    landedSongId: string | null;
+    spinId: string | null;        // Changes every spin so the audience screen retriggers the animation
+    spinDurationMs: number;
+    audioCue: DanceAudioCue | null;
+    round: number;                // How many spins so far this session
+    startedAt: number;
+}
+
+export type DanceGameStatus = DanceGameState;
+
+function emptyDanceGameState(): DanceGameState {
+    return {
+        active: false,
+        phase: 'lobby',
+        wheel: [],
+        landedIndex: null,
+        landedSongId: null,
+        spinId: null,
+        spinDurationMs: DANCE_SPIN_DURATION_MS,
+        audioCue: null,
+        round: 0,
+        startedAt: 0,
+    };
+}
+
+// Build the wheel from the TOP 10 songs (by score), shuffled into wheel positions
+async function buildDanceWheel(): Promise<DanceWheelEntry[]> {
+    const songs = await getSortedSongs();  // Already sorted by score desc
+    const top = songs.slice(0, DANCE_MAX_WHEEL_SONGS);
+    const entries: DanceWheelEntry[] = top.map(song => ({
+        songId: song.id,
+        name: song.name,
+        artist: song.artist,
+        albumArt: song.albumArt,
+    }));
+    // Shuffle just the placement so the spin feels random
+    return entries.sort(() => Math.random() - 0.5);
+}
+
+// Read current state (used by both admin + audience polls)
+export async function getDanceGameStatus(): Promise<DanceGameStatus> {
+    try {
+        const state = await redis.get<DanceGameState>(DANCE_GAME_KEY);
+        if (!state) return emptyDanceGameState();
+        return { ...emptyDanceGameState(), ...state };
+    } catch (error) {
+        console.error('Failed to get dance game status:', error);
+        return emptyDanceGameState();
+    }
+}
+
+// Start a session — loads the wheel, shows it on the audience screen (no spin yet)
+export async function startDanceGame(): Promise<{
+    success: boolean;
+    error?: string;
+    state?: DanceGameState;
+}> {
+    try {
+        const existing = await redis.get<DanceGameState>(DANCE_GAME_KEY);
+        if (existing && existing.active) {
+            return { success: false, error: 'A Can You Dance To It? game is already live. End it first.' };
+        }
+
+        const wheel = await buildDanceWheel();
+        if (wheel.length < 2) {
+            return { success: false, error: 'Need at least 2 songs in the playlist to spin the wheel.' };
+        }
+
+        const state: DanceGameState = {
+            ...emptyDanceGameState(),
+            active: true,
+            phase: 'lobby',
+            wheel,
+            startedAt: Date.now(),
+        };
+
+        await redis.set(DANCE_GAME_KEY, state);
+        console.log(`💃 DANCE GAME: Started with ${wheel.length} songs on the wheel`);
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to start dance game:', error);
+        return { success: false, error: 'Could not start the game. Please try again.' };
+    }
+}
+
+// Spin the wheel — refreshes the wheel, lands on a song with a playable clip, cues the 10s preview
+export async function spinDanceGame(): Promise<{
+    success: boolean;
+    error?: string;
+    state?: DanceGameState;
+}> {
+    try {
+        const state = await redis.get<DanceGameState>(DANCE_GAME_KEY);
+        if (!state || !state.active) {
+            return { success: false, error: 'No active dance game. Start one first.' };
+        }
+
+        // Refresh the wheel each spin so newly added songs are included.
+        const wheel = await buildDanceWheel();
+        if (wheel.length < 2) {
+            return { success: false, error: 'Need at least 2 songs in the playlist to spin the wheel.' };
+        }
+
+        const songs = await getSortedSongs();
+        const songById = new Map(songs.map(song => [song.id, song]));
+
+        // Find a landing song that has a playable preview clip.
+        const order = [...wheel].sort(() => Math.random() - 0.5);
+        let landedEntry: DanceWheelEntry | null = null;
+        let landedPreviewUrl: string | null = null;
+        for (const entry of order) {
+            const song = songById.get(entry.songId);
+            const preview = await resolvePreviewUrl({
+                artist: entry.artist,
+                songName: entry.name,
+                existingPreviewUrl: song?.previewUrl ?? null,
+            });
+            if (preview.previewUrl) {
+                landedEntry = entry;
+                landedPreviewUrl = preview.previewUrl;
+                break;
+            }
+        }
+
+        if (!landedEntry || !landedPreviewUrl) {
+            return { success: false, error: 'None of the wheel songs have a playable 10s clip. Add more songs and try again.' };
+        }
+
+        const landedIndex = wheel.findIndex(entry => entry.songId === landedEntry!.songId);
+        const now = Date.now();
+        const spinId = `${now}-${Math.random().toString(36).slice(2, 8)}`;
+
+        state.wheel = wheel;
+        state.phase = 'playing';
+        state.landedIndex = landedIndex;
+        state.landedSongId = landedEntry.songId;
+        state.spinId = spinId;
+        state.spinDurationMs = DANCE_SPIN_DURATION_MS;
+        state.round += 1;
+        state.audioCue = {
+            cueId: spinId,
+            songId: landedEntry.songId,
+            songName: landedEntry.name,
+            artistName: landedEntry.artist,
+            albumArt: landedEntry.albumArt,
+            previewUrl: landedPreviewUrl,
+            // Clip starts the moment the wheel finishes spinning.
+            startedAt: now + DANCE_SPIN_DURATION_MS,
+            durationMs: DANCE_CLIP_DURATION_MS,
+        };
+
+        await redis.set(DANCE_GAME_KEY, state);
+        console.log(`💃 DANCE GAME: Spin #${state.round} landed on "${landedEntry.name}" by ${landedEntry.artist}`);
+        return { success: true, state };
+    } catch (error) {
+        console.error('Failed to spin dance game:', error);
+        return { success: false, error: 'Could not spin the wheel. Please try again.' };
+    }
+}
+
+// End / clear the session
+export async function endDanceGame(): Promise<{ success: boolean }> {
+    try {
+        await redis.del(DANCE_GAME_KEY);
+        console.log('💃 DANCE GAME: Ended by admin');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to end dance game:', error);
+        return { success: false };
+    }
+}

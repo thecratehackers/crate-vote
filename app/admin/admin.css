@@ -2094,3 +2094,119 @@
         min-width: 0;
     }
 }
+
+/* ============ CAN YOU DANCE TO IT? (admin) ============ */
+.dance-admin-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.dance-admin-landed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 14px;
+    border-radius: 14px;
+    background: rgba(236, 72, 153, 0.12);
+    border: 1px solid rgba(236, 72, 153, 0.4);
+    text-align: center;
+}
+
+.dance-admin-landed-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #f0abfc;
+    font-weight: 700;
+}
+
+.dance-admin-landed strong {
+    font-size: 1.1rem;
+    color: #fff;
+}
+
+.dance-admin-landed-artist {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+}
+
+.dance-admin-controls {
+    display: flex;
+    justify-content: center;
+}
+
+.dance-admin-live-buttons {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.dance-spin-btn {
+    background: linear-gradient(135deg, #d946ef, #f43f5e) !important;
+    flex: 1;
+    min-width: 200px;
+}
+
+.dance-end-btn {
+    flex-shrink: 0;
+}
+
+.dance-admin-wheel-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.dance-admin-wheel-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    min-width: 0;
+}
+
+.dance-admin-wheel-item img,
+.dance-admin-wheel-ph {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.dance-admin-wheel-ph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.dance-admin-wheel-item > div {
+    min-width: 0;
+}
+
+.dance-admin-wheel-item strong {
+    display: block;
+    font-size: 0.85rem;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dance-admin-wheel-item span {
+    display: block;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

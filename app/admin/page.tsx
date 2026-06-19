@@ -7,6 +7,7 @@ import { APP_CONFIG, BROADCAST } from '@/lib/config';
 import { persistGet, persistSet, persistRemove } from '@/lib/persist';
 import TabsShowsDashboard from './TabsShowsDashboard';
 import PrizeHQ from './PrizeHQ';
+import DanceGame from './DanceGame';
 import './admin.css';
 
 interface Song {
@@ -73,7 +74,7 @@ interface ActivityItem {
 }
 
 // Tab type for admin panel navigation
-type AdminTab = 'activity' | 'users' | 'playlist' | 'purge' | 'queue' | 'ones' | 'crateCrack' | 'prize' | 'tools' | 'shows';
+type AdminTab = 'activity' | 'users' | 'playlist' | 'purge' | 'queue' | 'ones' | 'crateCrack' | 'dance' | 'prize' | 'tools' | 'shows';
 
 interface HostGuideContent {
     title: string;
@@ -2818,6 +2819,13 @@ export default function AdminPage() {
                     {crateCrackStatus.active && <span className="tab-badge">LIVE</span>}
                 </button>
                 <button
+                    className={`admin-tab ${activeTab === 'dance' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('dance')}
+                >
+                    <span className="tab-icon">💃</span>
+                    <span className="tab-label">Dance</span>
+                </button>
+                <button
                     className={`admin-tab ${activeTab === 'prize' ? 'active' : ''}`}
                     onClick={() => setActiveTab('prize')}
                 >
@@ -3638,6 +3646,16 @@ export default function AdminPage() {
                 )}
 
                 {/* PRIZE TAB */}
+                {activeTab === 'dance' && (
+                    <div className="tab-panel dance-panel">
+                        <DanceGame
+                            adminKey={adminPassword}
+                            adminId={adminId}
+                            onMessage={setMessage}
+                        />
+                    </div>
+                )}
+
                 {activeTab === 'prize' && (
                     <div className="tab-panel prize-panel">
                         <PrizeHQ
