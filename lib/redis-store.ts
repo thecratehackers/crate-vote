@@ -4629,6 +4629,7 @@ export interface DanceWheelEntry {
     name: string;
     artist: string;
     albumArt: string;
+    previewUrl: string;   // Resolved at wheel-build time so every slice is danceable
 }
 
 export interface DanceAudioCue {
@@ -4674,18 +4675,41 @@ function emptyDanceGameState(): DanceGameState {
     };
 }
 
-// Build the wheel from the TOP 10 songs (by score), shuffled into wheel positions
+// Fisher-Yates shuffle (unbiased, unlike Array.sort(() => Math.random() - 0.5))
+function shuffleInPlace<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+// Build the wheel from the top songs that actually have a playable clip.
+// We scan from the highest-scoring songs downward until we have up to 10
+// danceable tracks, so every slice on the wheel can be landed on and played.
 async function buildDanceWheel(): Promise<DanceWheelEntry[]> {
     const songs = await getSortedSongs();  // Already sorted by score desc
-    const top = songs.slice(0, DANCE_MAX_WHEEL_SONGS);
-    const entries: DanceWheelEntry[] = top.map(song => ({
-        songId: song.id,
-        name: song.name,
-        artist: song.artist,
-        albumArt: song.albumArt,
-    }));
-    // Shuffle just the placement so the spin feels random
-    return entries.sort(() => Math.random() - 0.5);
+    const playable: DanceWheelEntry[] = [];
+
+    for (const song of songs) {
+        if (playable.length >= DANCE_MAX_WHEEL_SONGS) break;
+        const preview = await resolvePreviewUrl({
+            artist: song.artist,
+            songName: song.name,
+            existingPreviewUrl: song.previewUrl,
+        });
+        if (!preview.previewUrl) continue;
+        playable.push({
+            songId: song.id,
+            name: song.name,
+            artist: song.artist,
+            albumArt: song.albumArt,
+            previewUrl: preview.previewUrl,
+        });
+    }
+
+    // Shuffle placement so the wheel layout feels random
+    return shuffleInPlace(playable);
 }
 
 // Read current state (used by both admin + audience polls)
@@ -4714,7 +4738,7 @@ export async function startDanceGame(): Promise<{
 
         const wheel = await buildDanceWheel();
         if (wheel.length < 2) {
-            return { success: false, error: 'Need at least 2 songs in the playlist to spin the wheel.' };
+            return { success: false, error: 'Need at least 2 songs with playable clips. Add more songs and try again.' };
         }
 
         const state: DanceGameState = {
@@ -4734,7 +4758,7 @@ export async function startDanceGame(): Promise<{
     }
 }
 
-// Spin the wheel — refreshes the wheel, lands on a song with a playable clip, cues the 10s preview
+// Spin the wheel — lands on a RANDOM playable song (never the same one twice in a row)
 export async function spinDanceGame(): Promise<{
     success: boolean;
     error?: string;
@@ -4746,38 +4770,26 @@ export async function spinDanceGame(): Promise<{
             return { success: false, error: 'No active dance game. Start one first.' };
         }
 
-        // Refresh the wheel each spin so newly added songs are included.
-        const wheel = await buildDanceWheel();
+        // Keep the wheel stable across spins, but rebuild if it is missing,
+        // too small, or predates playable-preview support (no previewUrl).
+        let wheel = Array.isArray(state.wheel) ? state.wheel : [];
+        const needsRebuild = wheel.length < 2 || wheel.some(entry => !entry.previewUrl);
+        if (needsRebuild) {
+            wheel = await buildDanceWheel();
+        }
         if (wheel.length < 2) {
-            return { success: false, error: 'Need at least 2 songs in the playlist to spin the wheel.' };
+            return { success: false, error: 'Need at least 2 songs with playable clips on the wheel. Add more songs and try again.' };
         }
 
-        const songs = await getSortedSongs();
-        const songById = new Map(songs.map(song => [song.id, song]));
-
-        // Find a landing song that has a playable preview clip.
-        const order = [...wheel].sort(() => Math.random() - 0.5);
-        let landedEntry: DanceWheelEntry | null = null;
-        let landedPreviewUrl: string | null = null;
-        for (const entry of order) {
-            const song = songById.get(entry.songId);
-            const preview = await resolvePreviewUrl({
-                artist: entry.artist,
-                songName: entry.name,
-                existingPreviewUrl: song?.previewUrl ?? null,
-            });
-            if (preview.previewUrl) {
-                landedEntry = entry;
-                landedPreviewUrl = preview.previewUrl;
-                break;
-            }
+        // Pick a uniformly random slice, excluding the previous landing when possible.
+        let candidateIndexes = wheel.map((_, i) => i);
+        if (state.landedSongId) {
+            const filtered = candidateIndexes.filter(i => wheel[i].songId !== state.landedSongId);
+            if (filtered.length > 0) candidateIndexes = filtered;
         }
+        const landedIndex = candidateIndexes[Math.floor(Math.random() * candidateIndexes.length)];
+        const landedEntry = wheel[landedIndex];
 
-        if (!landedEntry || !landedPreviewUrl) {
-            return { success: false, error: 'None of the wheel songs have a playable 10s clip. Add more songs and try again.' };
-        }
-
-        const landedIndex = wheel.findIndex(entry => entry.songId === landedEntry!.songId);
         const now = Date.now();
         const spinId = `${now}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -4794,14 +4806,14 @@ export async function spinDanceGame(): Promise<{
             songName: landedEntry.name,
             artistName: landedEntry.artist,
             albumArt: landedEntry.albumArt,
-            previewUrl: landedPreviewUrl,
+            previewUrl: landedEntry.previewUrl,
             // Clip starts the moment the wheel finishes spinning.
             startedAt: now + DANCE_SPIN_DURATION_MS,
             durationMs: DANCE_CLIP_DURATION_MS,
         };
 
         await redis.set(DANCE_GAME_KEY, state);
-        console.log(`💃 DANCE GAME: Spin #${state.round} landed on "${landedEntry.name}" by ${landedEntry.artist}`);
+        console.log(`💃 DANCE GAME: Spin #${state.round} landed on "${landedEntry.name}" by ${landedEntry.artist} (slice ${landedIndex + 1}/${wheel.length})`);
         return { success: true, state };
     } catch (error) {
         console.error('Failed to spin dance game:', error);

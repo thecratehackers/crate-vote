@@ -7,6 +7,7 @@ interface DanceWheelEntry {
     name: string;
     artist: string;
     albumArt: string;
+    previewUrl?: string;
 }
 
 interface DanceAudioCue {
