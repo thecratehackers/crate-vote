@@ -41,18 +41,19 @@ interface DanceGameProps {
 
 const AUDIO_OPT_IN_KEY = 'crate-dance-game-audio-opt-in';
 
-// Vibrant slice palette that loops around the wheel
+// Crate Hackers brand palette (fire + box) — loops around the wheel
 const SLICE_COLORS = [
-    '#ef4444', '#f97316', '#f59e0b', '#eab308',
-    '#84cc16', '#22c55e', '#14b8a6', '#06b6d4',
-    '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7',
-    '#d946ef', '#ec4899', '#f43f5e', '#fb7185',
+    '#e09f24', // gold/amber
+    '#c94e23', // burnt orange
+    '#d3771d', // deep orange
+    '#874b23', // dark brown
 ];
 
 export default function DanceGame({ state }: DanceGameProps) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const audioStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const audioStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const audioCtxRef = useRef<AudioContext | null>(null);
     const lastCueIdRef = useRef<string | null>(null);
     const rotationRef = useRef(0);
     const lastSpinIdRef = useRef<string | null>(null);
@@ -67,11 +68,61 @@ export default function DanceGame({ state }: DanceGameProps) {
     const sliceCount = wheel.length || 1;
     const sliceAngle = 360 / sliceCount;
 
+    // ── Spinning sound (synthesized ticks, no asset needed) ─────────────────────
+    const ensureAudioCtx = useCallback((): AudioContext | null => {
+        if (typeof window === 'undefined') return null;
+        const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!Ctor) return null;
+        if (!audioCtxRef.current) {
+            try {
+                audioCtxRef.current = new Ctor();
+            } catch {
+                return null;
+            }
+        }
+        if (audioCtxRef.current.state === 'suspended') {
+            audioCtxRef.current.resume().catch(() => {});
+        }
+        return audioCtxRef.current;
+    }, []);
+
+    const playSpinSound = useCallback((durationMs: number, slices: number) => {
+        const ctx = ensureAudioCtx();
+        if (!ctx) return;
+        const start = ctx.currentTime;
+        const durSec = durationMs / 1000;
+        const rotations = 6; // matches the visual full spins
+        const totalTicks = Math.max(14, Math.round(rotations * Math.max(slices, 2)));
+
+        for (let k = 1; k <= totalTicks; k++) {
+            const f = k / totalTicks;                       // fraction of total rotation
+            const t = 1 - Math.pow(1 - f, 1 / 3);           // invert ease-out → ticks slow down
+            const when = start + t * durSec;
+            const gainVal = 0.05 * (0.45 + 0.55 * (1 - f)); // soften toward the end
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(1050, when);
+            gain.gain.setValueAtTime(0.0001, when);
+            gain.gain.exponentialRampToValueAtTime(gainVal, when + 0.004);
+            gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(when);
+            osc.stop(when + 0.06);
+        }
+    }, [ensureAudioCtx]);
+
     // ── Spin animation: retrigger whenever spinId changes ──────────────────────
     useEffect(() => {
         if (!state.spinId || state.landedIndex === null) return;
         if (lastSpinIdRef.current === state.spinId) return;
         lastSpinIdRef.current = state.spinId;
+
+        if (audioEnabled) {
+            playSpinSound(state.spinDurationMs, sliceCount);
+        }
 
         const pointerOffset = state.landedIndex * sliceAngle + sliceAngle / 2;
         const current = rotationRef.current;
@@ -88,7 +139,7 @@ export default function DanceGame({ state }: DanceGameProps) {
 
         const settleTimer = setTimeout(() => setIsSpinning(false), state.spinDurationMs);
         return () => clearTimeout(settleTimer);
-    }, [state.spinId, state.landedIndex, sliceAngle, state.spinDurationMs]);
+    }, [state.spinId, state.landedIndex, sliceAngle, state.spinDurationMs, sliceCount, audioEnabled, playSpinSound]);
 
     // ── Audio playback ─────────────────────────────────────────────────────────
     const stopClip = useCallback(() => {
@@ -198,6 +249,7 @@ export default function DanceGame({ state }: DanceGameProps) {
     const handleEnableAudio = () => {
         setAudioEnabled(true);
         setAudioBlocked(false);
+        ensureAudioCtx(); // unlock Web Audio for the spin sound on this gesture
         try {
             localStorage.setItem(AUDIO_OPT_IN_KEY, 'true');
         } catch {
@@ -274,9 +326,10 @@ export default function DanceGame({ state }: DanceGameProps) {
                                 </div>
                             );
                         })}
-                        <div className="dg-wheel-hub">
-                            <span>♪</span>
-                        </div>
+                    </div>
+                    {/* Flame logo center — stays upright while the wheel spins */}
+                    <div className={`dg-wheel-hub ${isSpinning ? 'spinning' : ''}`}>
+                        <img src="/dance-flame.svg" alt="Crate Hackers" />
                     </div>
                 </div>
 

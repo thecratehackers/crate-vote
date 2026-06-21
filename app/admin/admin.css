@@ -2109,8 +2109,8 @@
     gap: 2px;
     padding: 14px;
     border-radius: 14px;
-    background: rgba(236, 72, 153, 0.12);
-    border: 1px solid rgba(236, 72, 153, 0.4);
+    background: rgba(211, 119, 29, 0.14);
+    border: 1px solid rgba(224, 159, 36, 0.45);
     text-align: center;
 }
 
@@ -2118,7 +2118,7 @@
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #f0abfc;
+    color: #f6c45a;
     font-weight: 700;
 }
 
@@ -2146,7 +2146,7 @@
 }
 
 .dance-spin-btn {
-    background: linear-gradient(135deg, #d946ef, #f43f5e) !important;
+    background: linear-gradient(135deg, #e09f24, #c94e23) !important;
     flex: 1;
     min-width: 200px;
 }
