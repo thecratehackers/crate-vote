@@ -4684,32 +4684,31 @@ function shuffleInPlace<T>(arr: T[]): T[] {
     return arr;
 }
 
-// Build the wheel from the top songs that actually have a playable clip.
-// We scan from the highest-scoring songs downward until we have up to 10
-// danceable tracks, so every slice on the wheel can be landed on and played.
+// Build the wheel from the current TOP 10 songs (by score).
+// We resolve a clip for each (best-effort); the spin only lands on songs that
+// have a playable clip, but all top-10 songs still show on the wheel.
 async function buildDanceWheel(): Promise<DanceWheelEntry[]> {
     const songs = await getSortedSongs();  // Already sorted by score desc
-    const playable: DanceWheelEntry[] = [];
+    const top = songs.slice(0, DANCE_MAX_WHEEL_SONGS);
 
-    for (const song of songs) {
-        if (playable.length >= DANCE_MAX_WHEEL_SONGS) break;
+    const entries: DanceWheelEntry[] = [];
+    for (const song of top) {
         const preview = await resolvePreviewUrl({
             artist: song.artist,
             songName: song.name,
             existingPreviewUrl: song.previewUrl,
         });
-        if (!preview.previewUrl) continue;
-        playable.push({
+        entries.push({
             songId: song.id,
             name: song.name,
             artist: song.artist,
             albumArt: song.albumArt,
-            previewUrl: preview.previewUrl,
+            previewUrl: preview.previewUrl || '',
         });
     }
 
     // Shuffle placement so the wheel layout feels random
-    return shuffleInPlace(playable);
+    return shuffleInPlace(entries);
 }
 
 // Read current state (used by both admin + audience polls)
@@ -4738,7 +4737,7 @@ export async function startDanceGame(): Promise<{
 
         const wheel = await buildDanceWheel();
         if (wheel.length < 2) {
-            return { success: false, error: 'Need at least 2 songs with playable clips. Add more songs and try again.' };
+            return { success: false, error: 'Need at least 2 songs in the playlist to spin the wheel.' };
         }
 
         const state: DanceGameState = {
@@ -4770,23 +4769,25 @@ export async function spinDanceGame(): Promise<{
             return { success: false, error: 'No active dance game. Start one first.' };
         }
 
-        // Keep the wheel stable across spins, but rebuild if it is missing,
-        // too small, or predates playable-preview support (no previewUrl).
-        let wheel = Array.isArray(state.wheel) ? state.wheel : [];
-        const needsRebuild = wheel.length < 2 || wheel.some(entry => !entry.previewUrl);
-        if (needsRebuild) {
-            wheel = await buildDanceWheel();
-        }
+        // Rebuild from the live top 10 each spin so the wheel always reflects
+        // the current standings.
+        const wheel = await buildDanceWheel();
         if (wheel.length < 2) {
-            return { success: false, error: 'Need at least 2 songs with playable clips on the wheel. Add more songs and try again.' };
+            return { success: false, error: 'Need at least 2 songs in the top 10 to spin the wheel.' };
         }
 
-        // Pick a uniformly random slice, excluding the previous landing when possible.
-        let candidateIndexes = wheel.map((_, i) => i);
+        // Land only on top-10 songs that have a playable clip.
+        let candidateIndexes = wheel.map((_, i) => i).filter(i => !!wheel[i].previewUrl);
+        if (candidateIndexes.length === 0) {
+            return { success: false, error: 'None of the top 10 songs have a playable clip right now. Try again in a moment.' };
+        }
+
+        // Avoid landing on the same song twice in a row when possible.
         if (state.landedSongId) {
             const filtered = candidateIndexes.filter(i => wheel[i].songId !== state.landedSongId);
             if (filtered.length > 0) candidateIndexes = filtered;
         }
+
         const landedIndex = candidateIndexes[Math.floor(Math.random() * candidateIndexes.length)];
         const landedEntry = wheel[landedIndex];
 
