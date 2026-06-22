@@ -12,6 +12,7 @@ import JukeboxPlayer from '@/components/JukeboxPlayer';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { SoundEffects } from '@/lib/sounds';
+import { useGameSound } from '@/lib/game-sound';
 import { persistGet, persistSet, persistHydrate, persistSyncToCookie } from '@/lib/persist';
 
 interface PrizeDropTemplate {
@@ -959,8 +960,9 @@ export default function HomePage() {
     const [predictionsLocked, setPredictionsLocked] = useState(false);
     const [showPredictionModal, setShowPredictionModal] = useState(false);
 
-    // Sound effects enabled
-    const [soundsEnabled, setSoundsEnabled] = useState(true);
+    // Game sound (shared across all games) — ON by default, one mute for everything.
+    // Unlocks on the first interaction anywhere on the page.
+    const { soundOn: soundsEnabled } = useGameSound();
 
     // 📺 SHOW CLOCK - ESPN-style segment ticker (client side)
     interface ShowClockClient {
@@ -1025,7 +1027,6 @@ export default function HomePage() {
             const savedName = persistGet('crate-username');
             const savedAvatar = persistGet('crate-avatar');
             const savedColor = persistGet('crate-color');
-            const savedSounds = persistGet('crate-sounds');
             const savedLocation = persistGet('crate-location');
 
             if (savedName) {
@@ -1038,9 +1039,6 @@ export default function HomePage() {
             if (savedColor) {
                 setUserColor(savedColor);
                 setColorInput(savedColor);
-            }
-            if (savedSounds === 'off') {
-                setSoundsEnabled(false);
             }
             if (savedLocation) {
                 setUserLocation(savedLocation);

@@ -2,7 +2,12 @@
  * Sound Effects - Satisfying audio feedback for user actions
  * Uses Web Audio API for low-latency, high-quality sounds
  */
-import { persistGet, persistSet } from '@/lib/persist';
+import {
+    getGameAudioContext,
+    initGameAudioUnlock,
+    isGameSoundOn,
+    setGameSoundMuted,
+} from '@/lib/game-sound';
 
 // Sound frequencies and patterns for synthesized effects
 const SOUNDS = {
@@ -37,27 +42,14 @@ const SOUNDS = {
 
 };
 
-let audioContext: AudioContext | null = null;
-let soundEnabled = true;
-
-// Initialize audio context on first user interaction (required by browsers)
+// Use the shared game audio context so one unlock + one mute controls all games
 function getAudioContext(): AudioContext | null {
-    if (typeof window === 'undefined') return null;
-
-    if (!audioContext) {
-        try {
-            audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        } catch (e) {
-            console.warn('Web Audio API not supported');
-            return null;
-        }
-    }
-    return audioContext;
+    return getGameAudioContext();
 }
 
 // Play a synthesized sound
 function playTone(frequencies: number[], duration: number, type: OscillatorType, volume = 0.15): void {
-    if (!soundEnabled) return;
+    if (!isGameSoundOn()) return;
 
     const ctx = getAudioContext();
     if (!ctx) return;
@@ -89,27 +81,20 @@ function playTone(frequencies: number[], duration: number, type: OscillatorType,
 
 // Public API
 export const SoundEffects = {
-    // Enable/disable sounds
+    // Enable/disable sounds (routes through the shared game-sound mute)
     setEnabled(enabled: boolean): void {
-        soundEnabled = enabled;
-        persistSet('crate-sounds', enabled ? 'on' : 'off');
+        setGameSoundMuted(!enabled);
     },
 
+    // Sound is ON by default for everyone (whole room hears the games together).
     isEnabled(): boolean {
-        const saved = persistGet('crate-sounds');
-        if (saved !== null) return saved !== 'off';
-
-        // Default: OFF on mobile to avoid unexpected audio
-        if (typeof window !== 'undefined' && window.innerWidth <= 640) {
-            return false;
-        }
-        return soundEnabled;
+        return isGameSoundOn();
     },
 
-    // Initialize (call on user interaction)
+    // Initialize — arm the global "unlock on first interaction" listeners.
     init(): void {
+        initGameAudioUnlock();
         getAudioContext();
-        soundEnabled = this.isEnabled();
     },
 
     // Play specific sounds - BOOSTED VOLUMES to stand out over video

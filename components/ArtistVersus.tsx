@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getGameAudioContext, useGameSound } from '@/lib/game-sound';
 import './ArtistVersus.css';
 
 interface ArtistVersusContestant {
@@ -50,16 +51,23 @@ interface ArtistVersusProps {
 
 // Brief explosion overlay duration (ms) after a bomb resolves
 const EXPLOSION_DURATION_MS = 2500;
-const AUDIO_OPT_IN_KEY = 'crate-artist-versus-audio-opt-in';
 
 export default function ArtistVersus({ state }: ArtistVersusProps) {
     const currentRound = state.currentRound > 0 ? state.rounds[state.currentRound - 1] : null;
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const audioStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastCueIdRef = useRef<string | null>(null);
-    const [audioEnabled, setAudioEnabled] = useState(false);
-    const [audioBlocked, setAudioBlocked] = useState(false);
+    const currentCueRef = useRef<ArtistVersusAudioCue | null>(null);
+
+    // Shared, app-wide game sound: ON by default, one mute for every game.
+    const { soundOn, toggleMuted } = useGameSound();
+    const [needsTap, setNeedsTap] = useState(false);
     const [nowPreviewing, setNowPreviewing] = useState<string | null>(null);
+
+    const soundOnRef = useRef(soundOn);
+    soundOnRef.current = soundOn;
+    const needsTapRef = useRef(needsTap);
+    needsTapRef.current = needsTap;
 
     // Show explosion overlay briefly when a round just resolved with a bomb
     const [showExplosion, setShowExplosion] = useState(false);
@@ -108,16 +116,13 @@ export default function ArtistVersus({ state }: ArtistVersusProps) {
             }
             setNowPreviewing(`${cue.artistName} — "${cue.songName}"`);
 
-            audio.play().catch(error => {
+            audio.play().then(() => {
+                setNeedsTap(false);
+            }).catch(error => {
+                // Browser blocked autoplay (no interaction yet). Keep sound ON;
+                // the next tap anywhere on the page will start it.
                 console.warn('Audience preview playback blocked:', error);
-                stopAudiencePreview();
-                setAudioEnabled(false);
-                setAudioBlocked(true);
-                try {
-                    localStorage.setItem(AUDIO_OPT_IN_KEY, 'false');
-                } catch {
-                    // Ignore local storage failures.
-                }
+                setNeedsTap(true);
             });
 
             audioStopTimeoutRef.current = setTimeout(stopAudiencePreview, remainingMs);
@@ -128,16 +133,33 @@ export default function ArtistVersus({ state }: ArtistVersusProps) {
         }
     }, [stopAudiencePreview]);
 
+    // If a preview was blocked (no interaction yet), retry it on the next tap/keypress.
     useEffect(() => {
-        try {
-            setAudioEnabled(localStorage.getItem(AUDIO_OPT_IN_KEY) === 'true');
-        } catch {
-            setAudioEnabled(false);
-        }
-    }, []);
+        const unlock = () => {
+            getGameAudioContext();
+            if (needsTapRef.current) {
+                const cue = currentCueRef.current;
+                if (soundOnRef.current && cue) {
+                    lastCueIdRef.current = cue.cueId;
+                    playAudioCue(cue);
+                }
+                setNeedsTap(false);
+            }
+        };
+        const opts: AddEventListenerOptions = { passive: true };
+        window.addEventListener('pointerdown', unlock, opts);
+        window.addEventListener('touchstart', unlock, opts);
+        window.addEventListener('keydown', unlock, opts);
+        return () => {
+            window.removeEventListener('pointerdown', unlock);
+            window.removeEventListener('touchstart', unlock);
+            window.removeEventListener('keydown', unlock);
+        };
+    }, [playAudioCue]);
 
     useEffect(() => {
         const cue = state.audioCue;
+        currentCueRef.current = (state.active && state.phase === 'round') ? (cue || null) : null;
         if (!state.active || state.phase !== 'round' || !cue) {
             lastCueIdRef.current = null;
             stopAudiencePreview();
@@ -147,26 +169,30 @@ export default function ArtistVersus({ state }: ArtistVersusProps) {
         if (lastCueIdRef.current === cue.cueId) return;
         lastCueIdRef.current = cue.cueId;
 
-        if (!audioEnabled) {
+        if (!soundOn) {
             stopAudiencePreview();
             return;
         }
 
         playAudioCue(cue);
-    }, [audioEnabled, playAudioCue, state.active, state.audioCue, state.phase, stopAudiencePreview]);
+    }, [soundOn, playAudioCue, state.active, state.audioCue, state.phase, stopAudiencePreview]);
 
-    const handleEnableAudienceAudio = () => {
-        setAudioEnabled(true);
-        setAudioBlocked(false);
-        try {
-            localStorage.setItem(AUDIO_OPT_IN_KEY, 'true');
-        } catch {
-            // Ignore local storage failures.
+    // React to the shared mute toggle: start/stop the current preview immediately.
+    useEffect(() => {
+        if (soundOn) {
+            const cue = currentCueRef.current;
+            if (cue) {
+                lastCueIdRef.current = cue.cueId;
+                playAudioCue(cue);
+            }
+        } else {
+            stopAudiencePreview();
         }
-        if (state.audioCue) {
-            lastCueIdRef.current = state.audioCue.cueId;
-            playAudioCue(state.audioCue);
-        }
+    }, [soundOn, playAudioCue, stopAudiencePreview]);
+
+    const handleToggleAudienceAudio = () => {
+        if (!soundOn) setNeedsTap(false);
+        toggleMuted();
     };
 
     if (!state.active) return null;
@@ -195,23 +221,20 @@ export default function ArtistVersus({ state }: ArtistVersusProps) {
             </div>
 
             {!isDamageReport && currentRound && (
-                <div className={`av-audio-consent ${audioEnabled ? 'enabled' : ''}`}>
-                    {!audioEnabled ? (
-                        <>
-                            <div>
-                                <strong>Hear the song previews</strong>
-                                <span>{audioBlocked ? 'Browser blocked audio. Tap again to re-enable previews.' : 'Tap once. When the host hits play, you will hear the same preview.'}</span>
-                            </div>
-                            <button type="button" onClick={handleEnableAudienceAudio}>
-                                Tap To Unmute Previews
-                            </button>
-                        </>
-                    ) : (
-                        <div>
-                            <strong>Audio previews are on.</strong>
-                            <span>{nowPreviewing ? `Now previewing ${nowPreviewing}` : 'Stay here. Clips will play when the host taps play.'}</span>
-                        </div>
-                    )}
+                <div className={`av-audio-consent ${soundOn ? 'enabled' : ''}`}>
+                    <div>
+                        <strong>{soundOn ? '🔊 Sound on' : '🔇 Muted'}</strong>
+                        <span>
+                            {soundOn
+                                ? (needsTap
+                                    ? 'Tap anywhere to start the previews.'
+                                    : (nowPreviewing ? `Now previewing ${nowPreviewing}` : 'Clips play for the whole room when the host taps play.'))
+                                : 'Previews are muted on this device only.'}
+                        </span>
+                    </div>
+                    <button type="button" onClick={handleToggleAudienceAudio}>
+                        {soundOn ? 'Mute' : 'Unmute'}
+                    </button>
                 </div>
             )}
 

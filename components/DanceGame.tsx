@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getGameAudioContext, useGameSound } from '@/lib/game-sound';
 import './DanceGame.css';
 
 export interface DanceWheelEntry {
@@ -39,9 +40,6 @@ interface DanceGameProps {
     state: DanceGameState;
 }
 
-// Persisted only when a viewer explicitly mutes. Absent/false => sound on by default.
-const AUDIO_MUTED_KEY = 'crate-dance-game-muted';
-
 // Crate Hackers brand palette (fire + box) — loops around the wheel
 const SLICE_COLORS = [
     '#e09f24', // gold/amber
@@ -54,14 +52,13 @@ export default function DanceGame({ state }: DanceGameProps) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const audioStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const audioStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const audioCtxRef = useRef<AudioContext | null>(null);
     const lastCueIdRef = useRef<string | null>(null);
     const rotationRef = useRef(0);
     const lastSpinIdRef = useRef<string | null>(null);
     const currentCueRef = useRef<DanceAudioCue | null>(null);
 
-    // Sound defaults ON so the whole room hears clips together. Viewers can mute.
-    const [soundOn, setSoundOn] = useState(true);
+    // Shared, app-wide game sound: ON by default, one mute for every game.
+    const { soundOn, toggleMuted } = useGameSound();
     const [needsTap, setNeedsTap] = useState(false);
     const [rotation, setRotation] = useState(0);
     const [isSpinning, setIsSpinning] = useState(false);
@@ -77,25 +74,8 @@ export default function DanceGame({ state }: DanceGameProps) {
     const sliceAngle = 360 / sliceCount;
 
     // ── Spinning sound (synthesized ticks, no asset needed) ─────────────────────
-    const ensureAudioCtx = useCallback((): AudioContext | null => {
-        if (typeof window === 'undefined') return null;
-        const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!Ctor) return null;
-        if (!audioCtxRef.current) {
-            try {
-                audioCtxRef.current = new Ctor();
-            } catch {
-                return null;
-            }
-        }
-        if (audioCtxRef.current.state === 'suspended') {
-            audioCtxRef.current.resume().catch(() => {});
-        }
-        return audioCtxRef.current;
-    }, []);
-
     const playSpinSound = useCallback((durationMs: number, slices: number) => {
-        const ctx = ensureAudioCtx();
+        const ctx = getGameAudioContext();
         if (!ctx) return;
         const start = ctx.currentTime;
         const durSec = durationMs / 1000;
@@ -120,7 +100,7 @@ export default function DanceGame({ state }: DanceGameProps) {
             osc.start(when);
             osc.stop(when + 0.06);
         }
-    }, [ensureAudioCtx]);
+    }, []);
 
     // ── Spin animation: retrigger whenever spinId changes ──────────────────────
     useEffect(() => {
@@ -207,21 +187,10 @@ export default function DanceGame({ state }: DanceGameProps) {
         }
     }, [stopClip]);
 
-    // Load the saved mute preference (default: sound on)
-    useEffect(() => {
-        try {
-            setSoundOn(localStorage.getItem(AUDIO_MUTED_KEY) !== 'true');
-        } catch {
-            setSoundOn(true);
-        }
-    }, []);
-
-    // Unlock audio on the first interaction ANYWHERE on the page (voting, tapping,
-    // key press). Crate Vote viewers are already interacting, so clips end up
-    // playing for everyone without an explicit opt-in.
+    // If a clip was blocked (no interaction yet), retry it on the next tap/keypress.
     useEffect(() => {
         const unlock = () => {
-            ensureAudioCtx();
+            getGameAudioContext();
             if (needsTapRef.current) {
                 const cue = currentCueRef.current;
                 if (soundOnRef.current && cue && Date.now() < cue.startedAt + cue.durationMs) {
@@ -240,7 +209,20 @@ export default function DanceGame({ state }: DanceGameProps) {
             window.removeEventListener('touchstart', unlock);
             window.removeEventListener('keydown', unlock);
         };
-    }, [ensureAudioCtx, playClip]);
+    }, [playClip]);
+
+    // React to the shared mute toggle: start/stop the current clip immediately.
+    useEffect(() => {
+        if (soundOn) {
+            const cue = currentCueRef.current;
+            if (cue && Date.now() < cue.startedAt + cue.durationMs) {
+                lastCueIdRef.current = cue.cueId;
+                playClip(cue);
+            }
+        } else {
+            stopClip();
+        }
+    }, [soundOn, playClip, stopClip]);
 
     useEffect(() => {
         const cue = state.audioCue;
@@ -280,26 +262,8 @@ export default function DanceGame({ state }: DanceGameProps) {
     useEffect(() => () => stopClip(), [stopClip]);
 
     const toggleSound = () => {
-        setSoundOn(prev => {
-            const next = !prev;
-            try {
-                localStorage.setItem(AUDIO_MUTED_KEY, next ? 'false' : 'true');
-            } catch {
-                // ignore
-            }
-            if (next) {
-                ensureAudioCtx();
-                setNeedsTap(false);
-                const cue = currentCueRef.current;
-                if (cue && Date.now() < cue.startedAt + cue.durationMs) {
-                    lastCueIdRef.current = cue.cueId;
-                    playClip(cue);
-                }
-            } else {
-                stopClip();
-            }
-            return next;
-        });
+        if (!soundOn) setNeedsTap(false);
+        toggleMuted();
     };
 
     const landedSong = useMemo(() => {
