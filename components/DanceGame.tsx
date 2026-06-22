@@ -39,7 +39,8 @@ interface DanceGameProps {
     state: DanceGameState;
 }
 
-const AUDIO_OPT_IN_KEY = 'crate-dance-game-audio-opt-in';
+// Persisted only when a viewer explicitly mutes. Absent/false => sound on by default.
+const AUDIO_MUTED_KEY = 'crate-dance-game-muted';
 
 // Crate Hackers brand palette (fire + box) — loops around the wheel
 const SLICE_COLORS = [
@@ -57,12 +58,19 @@ export default function DanceGame({ state }: DanceGameProps) {
     const lastCueIdRef = useRef<string | null>(null);
     const rotationRef = useRef(0);
     const lastSpinIdRef = useRef<string | null>(null);
+    const currentCueRef = useRef<DanceAudioCue | null>(null);
 
-    const [audioEnabled, setAudioEnabled] = useState(false);
-    const [audioBlocked, setAudioBlocked] = useState(false);
+    // Sound defaults ON so the whole room hears clips together. Viewers can mute.
+    const [soundOn, setSoundOn] = useState(true);
+    const [needsTap, setNeedsTap] = useState(false);
     const [rotation, setRotation] = useState(0);
     const [isSpinning, setIsSpinning] = useState(false);
     const [clipRemaining, setClipRemaining] = useState(0);
+
+    const soundOnRef = useRef(soundOn);
+    soundOnRef.current = soundOn;
+    const needsTapRef = useRef(needsTap);
+    needsTapRef.current = needsTap;
 
     const wheel = state.wheel || [];
     const sliceCount = wheel.length || 1;
@@ -120,7 +128,7 @@ export default function DanceGame({ state }: DanceGameProps) {
         if (lastSpinIdRef.current === state.spinId) return;
         lastSpinIdRef.current = state.spinId;
 
-        if (audioEnabled) {
+        if (soundOn) {
             playSpinSound(state.spinDurationMs, sliceCount);
         }
 
@@ -139,7 +147,7 @@ export default function DanceGame({ state }: DanceGameProps) {
 
         const settleTimer = setTimeout(() => setIsSpinning(false), state.spinDurationMs);
         return () => clearTimeout(settleTimer);
-    }, [state.spinId, state.landedIndex, sliceAngle, state.spinDurationMs, sliceCount, audioEnabled, playSpinSound]);
+    }, [state.spinId, state.landedIndex, sliceAngle, state.spinDurationMs, sliceCount, soundOn, playSpinSound]);
 
     // ── Audio playback ─────────────────────────────────────────────────────────
     const stopClip = useCallback(() => {
@@ -177,15 +185,12 @@ export default function DanceGame({ state }: DanceGameProps) {
                 if (elapsedMs > 1000) {
                     audio.currentTime = elapsedMs / 1000;
                 }
-                audio.play().catch(() => {
-                    stopClip();
-                    setAudioEnabled(false);
-                    setAudioBlocked(true);
-                    try {
-                        localStorage.setItem(AUDIO_OPT_IN_KEY, 'false');
-                    } catch {
-                        // ignore
-                    }
+                audio.play().then(() => {
+                    setNeedsTap(false);
+                }).catch(() => {
+                    // Browser blocked autoplay (no interaction yet). Keep sound ON;
+                    // the next tap anywhere on the page will start it.
+                    setNeedsTap(true);
                 });
                 audioStopTimeoutRef.current = setTimeout(stopClip, remainingMs);
                 audio.addEventListener('ended', stopClip);
@@ -202,16 +207,44 @@ export default function DanceGame({ state }: DanceGameProps) {
         }
     }, [stopClip]);
 
+    // Load the saved mute preference (default: sound on)
     useEffect(() => {
         try {
-            setAudioEnabled(localStorage.getItem(AUDIO_OPT_IN_KEY) === 'true');
+            setSoundOn(localStorage.getItem(AUDIO_MUTED_KEY) !== 'true');
         } catch {
-            setAudioEnabled(false);
+            setSoundOn(true);
         }
     }, []);
 
+    // Unlock audio on the first interaction ANYWHERE on the page (voting, tapping,
+    // key press). Crate Vote viewers are already interacting, so clips end up
+    // playing for everyone without an explicit opt-in.
+    useEffect(() => {
+        const unlock = () => {
+            ensureAudioCtx();
+            if (needsTapRef.current) {
+                const cue = currentCueRef.current;
+                if (soundOnRef.current && cue && Date.now() < cue.startedAt + cue.durationMs) {
+                    lastCueIdRef.current = cue.cueId;
+                    playClip(cue);
+                }
+                setNeedsTap(false);
+            }
+        };
+        const opts: AddEventListenerOptions = { passive: true };
+        window.addEventListener('pointerdown', unlock, opts);
+        window.addEventListener('touchstart', unlock, opts);
+        window.addEventListener('keydown', unlock, opts);
+        return () => {
+            window.removeEventListener('pointerdown', unlock);
+            window.removeEventListener('touchstart', unlock);
+            window.removeEventListener('keydown', unlock);
+        };
+    }, [ensureAudioCtx, playClip]);
+
     useEffect(() => {
         const cue = state.audioCue;
+        currentCueRef.current = cue || null;
         if (!state.active || !cue) {
             lastCueIdRef.current = null;
             stopClip();
@@ -220,12 +253,12 @@ export default function DanceGame({ state }: DanceGameProps) {
         if (lastCueIdRef.current === cue.cueId) return;
         lastCueIdRef.current = cue.cueId;
 
-        if (!audioEnabled) {
+        if (!soundOn) {
             stopClip();
             return;
         }
         playClip(cue);
-    }, [audioEnabled, playClip, state.active, state.audioCue, stopClip]);
+    }, [soundOn, playClip, state.active, state.audioCue, stopClip]);
 
     // ── Clip countdown ──────────────────────────────────────────────────────────
     useEffect(() => {
@@ -246,19 +279,27 @@ export default function DanceGame({ state }: DanceGameProps) {
 
     useEffect(() => () => stopClip(), [stopClip]);
 
-    const handleEnableAudio = () => {
-        setAudioEnabled(true);
-        setAudioBlocked(false);
-        ensureAudioCtx(); // unlock Web Audio for the spin sound on this gesture
-        try {
-            localStorage.setItem(AUDIO_OPT_IN_KEY, 'true');
-        } catch {
-            // ignore
-        }
-        if (state.audioCue) {
-            lastCueIdRef.current = state.audioCue.cueId;
-            playClip(state.audioCue);
-        }
+    const toggleSound = () => {
+        setSoundOn(prev => {
+            const next = !prev;
+            try {
+                localStorage.setItem(AUDIO_MUTED_KEY, next ? 'false' : 'true');
+            } catch {
+                // ignore
+            }
+            if (next) {
+                ensureAudioCtx();
+                setNeedsTap(false);
+                const cue = currentCueRef.current;
+                if (cue && Date.now() < cue.startedAt + cue.durationMs) {
+                    lastCueIdRef.current = cue.cueId;
+                    playClip(cue);
+                }
+            } else {
+                stopClip();
+            }
+            return next;
+        });
     };
 
     const landedSong = useMemo(() => {
@@ -360,28 +401,21 @@ export default function DanceGame({ state }: DanceGameProps) {
                     </div>
                 )}
 
-                {/* Audio opt-in */}
-                <div className={`dg-audio-consent ${audioEnabled ? 'enabled' : ''}`}>
-                    {!audioEnabled ? (
-                        <>
-                            <div>
-                                <strong>Turn on the music</strong>
-                                <span>
-                                    {audioBlocked
-                                        ? 'Browser blocked audio. Tap again to enable the clips.'
-                                        : 'Tap once. When the wheel lands, you will hear the clip.'}
-                                </span>
-                            </div>
-                            <button type="button" onClick={handleEnableAudio}>
-                                Tap To Hear The Music
-                            </button>
-                        </>
-                    ) : (
-                        <div>
-                            <strong>Sound is on.</strong>
-                            <span>Stay on this screen. The clip plays the moment the wheel lands.</span>
-                        </div>
-                    )}
+                {/* Sound is ON by default — viewers can mute their own device */}
+                <div className={`dg-audio-consent ${soundOn ? 'enabled' : 'muted'}`}>
+                    <div>
+                        <strong>{soundOn ? '🔊 Sound on' : '🔇 Muted'}</strong>
+                        <span>
+                            {soundOn
+                                ? (needsTap
+                                    ? 'Tap anywhere to start the music.'
+                                    : 'Everyone hears the clips together. Mute to silence just your device.')
+                                : 'Music is muted on this device only.'}
+                        </span>
+                    </div>
+                    <button type="button" onClick={toggleSound}>
+                        {soundOn ? 'Mute' : 'Unmute'}
+                    </button>
                 </div>
             </div>
         </div>

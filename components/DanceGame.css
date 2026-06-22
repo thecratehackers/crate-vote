@@ -290,6 +290,11 @@
     border-color: rgba(211, 119, 29, 0.5);
 }
 
+.dg-audio-consent.muted {
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.4);
+}
+
 .dg-audio-consent strong {
     display: block;
     font-size: 0.95rem;
