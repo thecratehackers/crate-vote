@@ -4622,7 +4622,7 @@ export async function cancelArtistVersus(): Promise<{ success: boolean }> {
 const DANCE_GAME_KEY = 'hackathon:danceGame';  // Single active "Can You Dance To It?" session
 const DANCE_MAX_WHEEL_SONGS = 10;              // Top 10 songs go on the wheel
 const DANCE_SPIN_DURATION_MS = 5200;           // How long the wheel visibly spins before landing
-const DANCE_CLIP_DURATION_MS = 10000;          // 10-second dance clip
+const DANCE_CLIP_DURATION_MS = 30000;          // 30-second dance clip (host can spin again to skip early)
 
 export interface DanceWheelEntry {
     songId: string;

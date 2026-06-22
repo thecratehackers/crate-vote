@@ -40,18 +40,18 @@ const viewerRules = [
     'Host starts the game from this tab.',
     'The wheel appears on every voting screen.',
     'Host hits Spin. The wheel lands on one song.',
-    'A 10-second clip plays instantly.',
+    'A 30-second clip plays instantly.',
     'Anyone dancing wins — host hands out prizes.',
 ];
 
 const hostScript =
-    'Can you dance to it?! I am about to spin the wheel. When it lands, you get 10 seconds. If you can dance to it, get up and move — movers win prizes.';
+    'Can you dance to it?! I am about to spin the wheel. When it lands, you get 30 seconds. If you can dance to it, get up and move — movers win prizes.';
 
 const runSteps = [
     'Press Start Game to load the wheel on the big screen.',
     'Tell the room to tap "Tap To Hear The Music" once.',
     'Press Spin The Wheel.',
-    'Watch it land and the 10-second clip plays.',
+    'Watch it land and the 30-second clip plays.',
     'Reward whoever is dancing, then Spin again.',
     'Press End Game when you are done.',
 ];
@@ -127,7 +127,7 @@ export default function DanceGame({ adminKey, adminId, onMessage }: DanceGameAdm
                     <h2>Can You Dance To It?</h2>
                     <p>
                         Spin a wheel of the current playlist on the big screen. It lands on one song and instantly plays a
-                        10-second clip. Whoever dances wins.
+                        30-second clip. Whoever dances wins.
                     </p>
                 </div>
                 <button className="admin-btn admin-btn-sm" onClick={fetchState} disabled={isLoading}>
@@ -197,21 +197,30 @@ export default function DanceGame({ adminKey, adminId, onMessage }: DanceGameAdm
                         {isWorking ? 'Starting...' : '▶ Start Game'}
                     </button>
                 ) : (
-                    <div className="dance-admin-live-buttons">
-                        <button
-                            className="prize-hq-drop-btn dance-spin-btn"
-                            onClick={() => runAction('spin', 'Wheel spinning! Clip plays when it lands.')}
-                            disabled={isWorking}
-                        >
-                            {isWorking ? 'Spinning...' : '🎡 Spin The Wheel'}
-                        </button>
-                        <button
-                            className="admin-btn dance-end-btn"
-                            onClick={() => runAction('end', 'Game ended.')}
-                            disabled={isWorking}
-                        >
-                            ⏹ End Game
-                        </button>
+                    <div className="dance-admin-live-wrap">
+                        <div className="dance-admin-live-buttons">
+                            <button
+                                className="prize-hq-drop-btn dance-spin-btn"
+                                onClick={() => runAction('spin', state?.phase === 'playing' ? 'Skipped — spinning again!' : 'Wheel spinning! Clip plays when it lands.')}
+                                disabled={isWorking}
+                            >
+                                {isWorking
+                                    ? 'Spinning...'
+                                    : state?.phase === 'playing'
+                                        ? '⏭ Skip & Spin Again'
+                                        : '🎡 Spin The Wheel'}
+                            </button>
+                            <button
+                                className="admin-btn dance-end-btn"
+                                onClick={() => runAction('end', 'Game ended.')}
+                                disabled={isWorking}
+                            >
+                                ⏹ End Game
+                            </button>
+                        </div>
+                        <p className="dance-admin-hint">
+                            Clips play for 30 seconds. Press Spin anytime to cut the current song and spin again.
+                        </p>
                     </div>
                 )}
             </section>

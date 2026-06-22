@@ -227,7 +227,7 @@ export default function DanceGame({ state }: DanceGameProps) {
         playClip(cue);
     }, [audioEnabled, playClip, state.active, state.audioCue, stopClip]);
 
-    // ── 10-second clip countdown ────────────────────────────────────────────────
+    // ── Clip countdown ──────────────────────────────────────────────────────────
     useEffect(() => {
         const cue = state.audioCue;
         if (!cue) {
@@ -369,7 +369,7 @@ export default function DanceGame({ state }: DanceGameProps) {
                                 <span>
                                     {audioBlocked
                                         ? 'Browser blocked audio. Tap again to enable the clips.'
-                                        : 'Tap once. When the wheel lands, you will hear the 10-second clip.'}
+                                        : 'Tap once. When the wheel lands, you will hear the clip.'}
                                 </span>
                             </div>
                             <button type="button" onClick={handleEnableAudio}>
