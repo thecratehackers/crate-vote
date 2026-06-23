@@ -2095,16 +2095,61 @@
     }
 }
 
-/* ============ PINNED LIVE STREAM PANEL (top of admin) ============ */
+/* ============ PINNED LIVE STREAM PANEL (top of admin, compact) ============ */
 .stream-config-pinned {
     margin-top: 0;
-    margin-bottom: 16px;
-    border-color: rgba(224, 159, 36, 0.55);
-    box-shadow: 0 0 0 1px rgba(224, 159, 36, 0.25), 0 6px 20px rgba(0, 0, 0, 0.35);
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    gap: 6px;
+    border-color: rgba(224, 159, 36, 0.5);
+    box-shadow: 0 0 0 1px rgba(224, 159, 36, 0.2);
 }
 
 .stream-config-pinned .control-label {
-    font-size: 1.05rem;
+    font-size: 0.85rem;
+}
+
+.stream-config-pinned .control-label .tool-icon {
+    font-size: 1rem;
+}
+
+.stream-config-pinned .stream-platform-toggle {
+    gap: 6px;
+}
+
+.stream-config-pinned .platform-btn {
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    border-width: 1px;
+}
+
+.stream-config-pinned .youtube-url-input {
+    padding: 6px 10px;
+    font-size: 0.82rem;
+}
+
+/* Save / Clear / Hide become short single-row buttons instead of tall stacks */
+.stream-config-pinned .stream-actions {
+    gap: 6px;
+}
+
+.stream-config-pinned .tool-btn {
+    flex-direction: row;
+    gap: 6px;
+    padding: 6px 12px;
+}
+
+.stream-config-pinned .tool-btn .tool-icon {
+    font-size: 0.9rem;
+}
+
+.stream-config-pinned .tool-btn .tool-name {
+    font-size: 0.72rem;
+}
+
+.stream-config-pinned .stream-hide-toggle {
+    margin-top: 0;
+    padding: 5px 10px;
 }
 
 /* ============ CAN YOU DANCE TO IT? (admin) ============ */
