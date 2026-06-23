@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { bombSong, getNowPlaying, getNowPlayingBombCount, setNowPlaying, clearNowPlaying, isUserBanned } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
+import { resolveVoterIdentity, attachVoterCookie } from '@/lib/identity';
+import { checkRateLimit, RATE_LIMITS, getRateLimitHeaders, getClientIp } from '@/lib/rate-limit';
 
 // GET - Get now-playing status + bomb count
 export async function GET() {
@@ -18,32 +20,67 @@ export async function GET() {
 
 // POST - Bomb the currently playing song
 export async function POST(request: Request) {
-    const visitorId = getVisitorIdFromRequest(request);
+    // Server-authoritative identity: a valid signed cookie wins; otherwise we mint
+    // one (seeded from the fingerprint header) and set it below. This makes the
+    // per-user bomb dedupe key hard to forge, so a single troll can't stack bombs
+    // and skip the whole room's now-playing song by rotating their visitor id.
+    const identity = resolveVoterIdentity(request, getVisitorIdFromRequest(request));
+    const visitorId = identity.id;
+
+    const respond = (body: unknown, init?: { status?: number; headers?: Record<string, string> }) => {
+        const res = NextResponse.json(body, { status: init?.status });
+        if (init?.headers) {
+            Object.entries(init.headers).forEach(([k, v]) => res.headers.set(k, v));
+        }
+        attachVoterCookie(res, identity);
+        return res;
+    };
+
     if (!visitorId) {
-        return NextResponse.json({ error: 'Session expired. Refresh and try again.' }, { status: 400 });
+        return respond({ error: 'Session expired. Refresh and try again.' }, { status: 400 });
+    }
+
+    // Per-IP ceiling — un-spoofable backstop. Stops one laptop from stacking bombs
+    // across rotated identities to force-skip the live song.
+    const ip = getClientIp(request);
+    const ipCheck = await checkRateLimit(`ip:${ip}:bomb`, RATE_LIMITS.voteIpCeiling);
+    if (!ipCheck.success) {
+        return respond(
+            { error: 'Too many bombs from this network right now. Please wait a moment.' },
+            { status: 429, headers: getRateLimitHeaders(ipCheck) }
+        );
+    }
+
+    // Per-identity bomb rate limit.
+    const rateCheck = await checkRateLimit(`v:${visitorId}:bomb`, RATE_LIMITS.vote);
+    if (!rateCheck.success) {
+        return respond(
+            { error: 'Slow down — you\'re bombing too fast. Try again in a few seconds.' },
+            { status: 429, headers: getRateLimitHeaders(rateCheck) }
+        );
     }
 
     // Check if banned
     const banned = await isUserBanned(visitorId);
     if (banned) {
-        return NextResponse.json({ error: 'Your account has been suspended.' }, { status: 403 });
+        return respond({ error: 'Your account has been suspended.' }, { status: 403 });
     }
 
     try {
         const body = await request.json();
         const { songId } = body;
 
-        if (!songId || typeof songId !== 'string') {
-            return NextResponse.json({ error: 'Invalid song ID.' }, { status: 400 });
+        if (!songId || typeof songId !== 'string' || songId.length > 100) {
+            return respond({ error: 'Invalid song ID.' }, { status: 400 });
         }
 
         const result = await bombSong(songId, visitorId);
 
         if (!result.success) {
-            return NextResponse.json({ error: result.error, bombCount: result.bombCount, threshold: result.threshold }, { status: 400 });
+            return respond({ error: result.error, bombCount: result.bombCount, threshold: result.threshold }, { status: 400 });
         }
 
-        return NextResponse.json({
+        return respond({
             success: true,
             bombCount: result.bombCount,
             threshold: result.threshold,
@@ -51,7 +88,7 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('Bomb error:', error);
-        return NextResponse.json({ error: 'Something went wrong. Try again.' }, { status: 500 });
+        return respond({ error: 'Something went wrong. Try again.' }, { status: 500 });
     }
 }
 
