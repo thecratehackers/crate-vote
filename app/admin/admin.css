@@ -2095,6 +2095,18 @@
     }
 }
 
+/* ============ PINNED LIVE STREAM PANEL (top of admin) ============ */
+.stream-config-pinned {
+    margin-top: 0;
+    margin-bottom: 16px;
+    border-color: rgba(224, 159, 36, 0.55);
+    box-shadow: 0 0 0 1px rgba(224, 159, 36, 0.25), 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.stream-config-pinned .control-label {
+    font-size: 1.05rem;
+}
+
 /* ============ CAN YOU DANCE TO IT? (admin) ============ */
 .dance-admin-shell {
     display: flex;

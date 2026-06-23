@@ -2756,6 +2756,109 @@ export default function AdminPage() {
                 </div>
             )}
 
+            {/* 📺 STREAM PLATFORM SELECTOR — pinned to the top so it's never forgotten */}
+            <div className="youtube-embed-control stream-config-panel stream-config-pinned">
+                <div className="control-label">
+                    <span className="tool-icon">📺</span>
+                    <span className="tool-name">Live Stream</span>
+                </div>
+
+                {/* Platform Toggle */}
+                <div className="stream-platform-toggle">
+                    <button
+                        className={`platform-btn ${streamPlatform === 'youtube' ? 'active youtube-active' : ''}`}
+                        onClick={() => {
+                            markStreamEditing();
+                            if (streamPlatform === 'youtube') {
+                                setStreamPlatform(null);
+                            } else {
+                                setStreamPlatform('youtube');
+                                if (!youtubeUrl) setYoutubeUrl('https://youtube.com/playlist?list=PLhHOzEAFc1RhNtCgvwyhmi25X2dJzODXX');
+                            }
+                        }}
+                    >
+                        ▶️ YouTube
+                    </button>
+                    <button
+                        className={`platform-btn ${streamPlatform === 'twitch' ? 'active twitch-active' : ''}`}
+                        onClick={() => {
+                            markStreamEditing();
+                            if (streamPlatform === 'twitch') {
+                                setStreamPlatform(null);
+                            } else {
+                                setStreamPlatform('twitch');
+                                if (!twitchChannel) setTwitchChannel('thecratehackers');
+                            }
+                        }}
+                    >
+                        🟣 Twitch
+                    </button>
+                </div>
+
+                {/* YouTube Input */}
+                {streamPlatform === 'youtube' && (
+                    <input
+                        type="text"
+                        className="youtube-url-input"
+                        value={youtubeUrl}
+                        onChange={(e) => { markStreamEditing(); setYoutubeUrl(e.target.value); }}
+                        placeholder="Default: Forgot About Pop playlist"
+                    />
+                )}
+
+                {/* Twitch Input */}
+                {streamPlatform === 'twitch' && (
+                    <input
+                        type="text"
+                        className="youtube-url-input twitch-channel-input"
+                        value={twitchChannel}
+                        onChange={(e) => { markStreamEditing(); setTwitchChannel(e.target.value); }}
+                        placeholder="Default: thecratehackers"
+                    />
+                )}
+
+                {/* Save / Clear buttons */}
+                <div className="stream-actions">
+                    <button
+                        className="tool-btn youtube-save"
+                        onClick={() => handleSaveStream()}
+                        disabled={isSavingStream}
+                    >
+                        <span className="tool-icon">💾</span>
+                        <span className="tool-name">{isSavingStream ? 'Saving...' : 'Save Stream'}</span>
+                    </button>
+                    {streamPlatform && (
+                        <button
+                            className="tool-btn danger-subtle"
+                            onClick={() => { setStreamPlatform(null); setYoutubeUrl(''); setTwitchChannel(''); handleSaveStream(null); }}
+                            disabled={isSavingStream}
+                        >
+                            <span className="tool-icon">🗑️</span>
+                            <span className="tool-name">Clear</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* 👁️ Admin-only: hide stream on MY screen (prevents infinite mirror when broadcasting) */}
+                {streamPlatform && (
+                    <button
+                        className={`tool-btn stream-hide-toggle ${hideStreamLocally ? 'active danger-subtle' : ''}`}
+                        onClick={() => {
+                            const newVal = !hideStreamLocally;
+                            setHideStreamLocally(newVal);
+                            if (newVal) {
+                                persistSet('crate-admin-hide-stream', 'true');
+                            } else {
+                                persistRemove('crate-admin-hide-stream');
+                            }
+                        }}
+                    >
+                        <span className="tool-icon">{hideStreamLocally ? '👁️‍🗨️' : '🙈'}</span>
+                        <span className="tool-name">{hideStreamLocally ? 'Stream Hidden (My Screen)' : 'Hide Stream (My Screen)'}</span>
+                    </button>
+                )}
+            </div>
+
             {/* TAB NAVIGATION - Mobile-first tabs */}
             <div className="admin-tabs">
                 <button
@@ -4070,110 +4173,6 @@ export default function AdminPage() {
                                 <span className="tool-icon">🎯</span>
                                 <span className="tool-name">{isRevealingPredictions ? 'Revealing...' : 'Reveal Predictions'}</span>
                             </button>
-
-                            {/* 📺 STREAM PLATFORM SELECTOR */}
-                            <div className="youtube-embed-control stream-config-panel">
-                                <div className="control-label">
-                                    <span className="tool-icon">📺</span>
-                                    <span className="tool-name">Live Stream</span>
-                                </div>
-
-                                {/* Platform Toggle */}
-                                <div className="stream-platform-toggle">
-                                    <button
-                                        className={`platform-btn ${streamPlatform === 'youtube' ? 'active youtube-active' : ''}`}
-                                        onClick={() => {
-                                            markStreamEditing();
-                                            if (streamPlatform === 'youtube') {
-                                                setStreamPlatform(null);
-                                            } else {
-                                                setStreamPlatform('youtube');
-                                                if (!youtubeUrl) setYoutubeUrl('https://youtube.com/playlist?list=PLhHOzEAFc1RhNtCgvwyhmi25X2dJzODXX');
-                                            }
-                                        }}
-                                    >
-                                        ▶️ YouTube
-                                    </button>
-                                    <button
-                                        className={`platform-btn ${streamPlatform === 'twitch' ? 'active twitch-active' : ''}`}
-                                        onClick={() => {
-                                            markStreamEditing();
-                                            if (streamPlatform === 'twitch') {
-                                                setStreamPlatform(null);
-                                            } else {
-                                                setStreamPlatform('twitch');
-                                                if (!twitchChannel) setTwitchChannel('thecratehackers');
-                                            }
-                                        }}
-                                    >
-                                        🟣 Twitch
-                                    </button>
-                                </div>
-
-                                {/* YouTube Input */}
-                                {streamPlatform === 'youtube' && (
-                                    <input
-                                        type="text"
-                                        className="youtube-url-input"
-                                        value={youtubeUrl}
-                                        onChange={(e) => { markStreamEditing(); setYoutubeUrl(e.target.value); }}
-                                        placeholder="Default: Forgot About Pop playlist"
-                                    />
-                                )}
-
-                                {/* Twitch Input */}
-                                {streamPlatform === 'twitch' && (
-                                    <input
-                                        type="text"
-                                        className="youtube-url-input twitch-channel-input"
-                                        value={twitchChannel}
-                                        onChange={(e) => { markStreamEditing(); setTwitchChannel(e.target.value); }}
-                                        placeholder="Default: thecratehackers"
-                                    />
-                                )}
-
-                                {/* Save / Clear buttons */}
-                                <div className="stream-actions">
-                                    <button
-                                        className="tool-btn youtube-save"
-                                        onClick={() => handleSaveStream()}
-                                        disabled={isSavingStream}
-                                    >
-                                        <span className="tool-icon">💾</span>
-                                        <span className="tool-name">{isSavingStream ? 'Saving...' : 'Save Stream'}</span>
-                                    </button>
-                                    {streamPlatform && (
-                                        <button
-                                            className="tool-btn danger-subtle"
-                                            onClick={() => { setStreamPlatform(null); setYoutubeUrl(''); setTwitchChannel(''); handleSaveStream(null); }}
-                                            disabled={isSavingStream}
-                                        >
-                                            <span className="tool-icon">🗑️</span>
-                                            <span className="tool-name">Clear</span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* 👁️ Admin-only: hide stream on MY screen (prevents infinite mirror when broadcasting) */}
-                                {streamPlatform && (
-                                    <button
-                                        className={`tool-btn stream-hide-toggle ${hideStreamLocally ? 'active danger-subtle' : ''}`}
-                                        onClick={() => {
-                                            const newVal = !hideStreamLocally;
-                                            setHideStreamLocally(newVal);
-                                            if (newVal) {
-                                                persistSet('crate-admin-hide-stream', 'true');
-                                            } else {
-                                                persistRemove('crate-admin-hide-stream');
-                                            }
-                                        }}
-                                    >
-                                        <span className="tool-icon">{hideStreamLocally ? '👁️‍🗨️' : '🙈'}</span>
-                                        <span className="tool-name">{hideStreamLocally ? 'Stream Hidden (My Screen)' : 'Hide Stream (My Screen)'}</span>
-                                    </button>
-                                )}
-                            </div>
-
 
                         </div>
                     </div>
