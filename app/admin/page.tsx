@@ -3630,9 +3630,9 @@ export default function AdminPage() {
                                     <label>
                                         Mini-Game
                                         <select value={crateCrackGameType} onChange={(e) => setCrateCrackGameType(e.target.value as typeof crateCrackGameType)}>
-                                            <option value="request_evader">Request Evader Arcade</option>
-                                            <option value="crate_man">Crate-Man</option>
                                             <option value="missile_wedding">Missile Command: Wedding Edition</option>
+                                            <option value="crate_man">Crate-Man</option>
+                                            <option value="request_evader">Request Evader Arcade</option>
                                             <option value="bpm_sort">Sort By BPM</option>
                                         </select>
                                     </label>
