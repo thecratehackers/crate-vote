@@ -56,7 +56,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: true, deleted: result.event, ...(await getCommandStatus()) });
         }
 
-        const duration = body.duration || 30; // Default 30 seconds
+        const duration = body.duration || 90; // Default 90 seconds (longer so poll lag can't eat the whole window)
 
         const result = await startDeleteWindow(duration);
 

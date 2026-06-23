@@ -15,9 +15,9 @@ export const APP_CONFIG = {
     // URLs
     baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://cratehackathon.com',
     domain: 'cratehackathon.com',
-
-    // Auth
-    adminPassword: process.env.ADMIN_PASSWORD || 'admin',
+    // NOTE: admin password intentionally NOT stored here — APP_CONFIG is imported by
+    // client components, so any secret here would ship in the browser bundle. Admin
+    // auth is verified server-side against process.env.ADMIN_PASSWORD only.
 };
 
 // ============ BROADCAST MODE ============
@@ -64,7 +64,7 @@ export const LIMITS = {
     messageTimeoutMs: 3000,     // 3 seconds
 
     // Delete window
-    deleteWindowDurationMs: 30000, // 30 seconds
+    deleteWindowDurationMs: 90000, // 90 seconds
 
     // Versus Battle
     battleDurationMs: 45000,        // 45 seconds
@@ -109,7 +109,7 @@ export const BLOCKED_WORDS = new Set([
 export const GAME_TIPS = [
     '🏆 Top 3 songs earn +5 karma!',
     '📦 Each karma = +1 song, +1 upvote, +1 downvote',
-    '💀 THE PURGE lets you delete any song for 30 seconds',
+    '💀 THE PURGE lets you delete any song for 90 seconds',
     '👑 Push your song to #1 for the crown',
     '🎧 Save playlists to Crate Hackers, Spotify, or TIDAL',
     '🎚️ Upvote songs you love, downvote ones you don\'t',

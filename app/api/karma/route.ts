@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { addKarma, getUserKarma, getKarmaBonuses, grantPresenceKarma } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+// Cooldowns so self-reported actions (share / jukebox watch) can't be farmed by
+// hammering the endpoint. Presence has its own server-side cooldown already.
+const KARMA_COOLDOWNS: Record<string, { limit: number; windowMs: number }> = {
+    share: { limit: 1, windowMs: 30 * 1000 },
+    jukebox: { limit: 1, windowMs: 60 * 1000 },
+};
 
 // POST - Grant karma for actions
 export async function POST(request: Request) {
@@ -13,6 +21,15 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { action } = body;
+
+        // Throttle self-reported karma actions
+        const cooldown = KARMA_COOLDOWNS[action];
+        if (cooldown) {
+            const check = await checkRateLimit(`karma:${action}:${visitorId}`, cooldown);
+            if (!check.success) {
+                return NextResponse.json({ error: 'Slow down — you already earned karma for that recently.' }, { status: 429 });
+            }
+        }
 
         if (action === 'share') {
             // Grant 1 karma for sharing

@@ -89,13 +89,13 @@ const purgeHostGuide: HostGuideContent = {
         'The top 3 songs are safe.',
         'Everything under the top 3 can be deleted.',
         'Each person gets one delete.',
-        'You have 60 seconds.',
+        'You have 90 seconds.',
         'If the host says stop, the round is over.',
     ],
     hostScript:
         'The Purge is open. Top 3 songs are safe. Everything under that line can get deleted. You get one shot. Pick carefully. When the clock hits zero, the crate is locked again.',
     howToRun: [
-        'Press Start 60s Purge.',
+        'Press Start 90s Purge.',
         'Read the script out loud while the timer starts.',
         'Watch Live Deletions for names and songs.',
         'Use Hand Tablet To Volunteer only when someone on camera is choosing.',
@@ -106,7 +106,7 @@ const purgeHostGuide: HostGuideContent = {
 const queueHostGuide: HostGuideContent = {
     title: 'The Queue Host Guide',
     viewerRules: [
-        'This is a 60-second review round.',
+        'This is a 90-second review round.',
         'Only songs with zero votes get spotlighted.',
         'Zero votes does not mean bad. It means nobody checked it yet.',
         'Vote up if it belongs in the crate.',
@@ -115,7 +115,7 @@ const queueHostGuide: HostGuideContent = {
     hostScript:
         'The Queue is live. These are the songs nobody has touched yet. Not bad songs. Just unchecked songs. Give them ears now. Vote up if they belong. Vote down if they do not.',
     howToRun: [
-        'Press Start 60s Queue.',
+        'Press Start 90s Queue.',
         'Call out that zero-vote songs are getting reviewed.',
         'Watch Current Queue Targets for what needs attention.',
         'Use Live Vote Feed to shout out people voting.',
@@ -273,6 +273,10 @@ export default function AdminPage() {
     const [demoNightLinkLabel, setDemoNightLinkLabel] = useState('Download');
     const [isSavingDemoNight, setIsSavingDemoNight] = useState(false);
     const demoNightLoaded = useRef(false);
+
+    const [exportRequirementsEnabled, setExportRequirementsEnabled] = useState(true);
+    const [isSavingExportGate, setIsSavingExportGate] = useState(false);
+    const exportGateLoaded = useRef(false);
 
     // Delete window (chaos mode) state
     const [isStartingDeleteWindow, setIsStartingDeleteWindow] = useState(false);
@@ -535,6 +539,13 @@ export default function AdminPage() {
                     setDemoNightDescription(data.demoNight.description || '');
                     setDemoNightLinkUrl(data.demoNight.linkUrl || '');
                     setDemoNightLinkLabel(data.demoNight.linkLabel || 'Download');
+                }
+            }
+            // Sync export gate toggle ONLY on initial load (prevents overwriting active edits)
+            if (!exportGateLoaded.current) {
+                exportGateLoaded.current = true;
+                if (typeof data.exportRequirementsEnabled === 'boolean') {
+                    setExportRequirementsEnabled(data.exportRequirementsEnabled);
                 }
             }
         } catch (error) {
@@ -1075,45 +1086,59 @@ export default function AdminPage() {
         }
     };
 
-    const handleResetTimer = async () => {
-        setIsTimerAction(true);
-        try {
-            const res = await adminFetch('/api/timer', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'reset' }),
-            });
-            if (res.ok) {
-                setTimerRunning(false);
-                setTimerEndTime(null);
-                setTimerRemaining(0);
-                setMessage({ type: 'success', text: '✓ Timer reset.' });
-            } else {
-                setMessage({ type: 'error', text: 'Failed to reset timer' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to reset timer' });
-        } finally {
-            setIsTimerAction(false);
-        }
+    const handleResetTimer = () => {
+        showConfirmModal(
+            '⏱️ Reset Timer?',
+            'This stops the session timer and clears the countdown. Voting may close for the whole room. Continue?',
+            async () => {
+                setIsTimerAction(true);
+                try {
+                    const res = await adminFetch('/api/timer', {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'reset' }),
+                    });
+                    if (res.ok) {
+                        setTimerRunning(false);
+                        setTimerEndTime(null);
+                        setTimerRemaining(0);
+                        setMessage({ type: 'success', text: '✓ Timer reset.' });
+                    } else {
+                        setMessage({ type: 'error', text: 'Failed to reset timer' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to reset timer' });
+                } finally {
+                    setIsTimerAction(false);
+                }
+            },
+            'Reset Timer'
+        );
     };
 
     // Remove song
-    const handleRemoveSong = async (songId: string) => {
+    const handleRemoveSong = (songId: string) => {
         if (isDeletingSong === songId) return; // Prevent double-click
-        setIsDeletingSong(songId);
-        try {
-            const res = await adminFetch(`/api/songs/${songId}`, { method: 'DELETE' });
-            if (res.ok) {
-                setMessage({ type: 'success', text: '✓ Song removed' });
-                fetchPlaylist();
-            } else {
-                setMessage({ type: 'error', text: 'Failed to remove song' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to remove song - network error' });
-        } finally {
-            setIsDeletingSong(null);
-        }
+        showConfirmModal(
+            '🗑️ Remove Song?',
+            'Permanently remove this song from the live playlist? This cannot be undone.',
+            async () => {
+                setIsDeletingSong(songId);
+                try {
+                    const res = await adminFetch(`/api/songs/${songId}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        setMessage({ type: 'success', text: '✓ Song removed' });
+                        fetchPlaylist();
+                    } else {
+                        setMessage({ type: 'error', text: 'Failed to remove song' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to remove song - network error' });
+                } finally {
+                    setIsDeletingSong(null);
+                }
+            },
+            'Remove'
+        );
     };
 
     // Ban user directly from users list
@@ -1148,31 +1173,38 @@ export default function AdminPage() {
     };
 
 
-    // Quick ban from activity feed - instant action, no confirmation
-    const handleQuickBan = async (visitorId: string, userName: string) => {
+    // Quick ban from activity feed - confirm first (it removes the user + all songs)
+    const handleQuickBan = (visitorId: string, userName: string) => {
         // Skip banning admins
         if (userName.toLowerCase().includes('admin')) {
             setMessage({ type: 'error', text: 'Cannot ban admin users' });
             return;
         }
 
-        try {
-            const res = await adminFetch('/api/playlist', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'ban', visitorId }),
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setMessage({ type: 'success', text: `🚫 ${userName} banned instantly! ${data.deletedSongs || 0} song(s) removed.` });
-                // Remove from activity feed immediately
-                setRecentActivity(prev => prev.filter(a => a.visitorId !== visitorId));
-                fetchPlaylist();
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Failed to ban user' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to ban user' });
-        }
+        showConfirmModal(
+            '🚫 Ban User?',
+            `Ban ${userName}? This removes them AND all their songs. This cannot be undone.`,
+            async () => {
+                try {
+                    const res = await adminFetch('/api/playlist', {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'ban', visitorId }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        setMessage({ type: 'success', text: `🚫 ${userName} banned! ${data.deletedSongs || 0} song(s) removed.` });
+                        // Remove from activity feed immediately
+                        setRecentActivity(prev => prev.filter(a => a.visitorId !== visitorId));
+                        fetchPlaylist();
+                    } else {
+                        setMessage({ type: 'error', text: data.error || 'Failed to ban user' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to ban user' });
+                }
+            },
+            'Ban User'
+        );
     };
 
     // Delete a specific activity from the feed (without banning the user)
@@ -1463,6 +1495,37 @@ export default function AdminPage() {
         }
     };
 
+    const handleToggleExportGate = async () => {
+        const newState = !exportRequirementsEnabled;
+        setExportRequirementsEnabled(newState);
+        setIsSavingExportGate(true);
+        try {
+            const res = await adminFetch('/api/playlist', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'setExportGate',
+                    exportRequirementsEnabled: newState,
+                }),
+            });
+            if (res.ok) {
+                setMessage({
+                    type: 'success',
+                    text: newState
+                        ? '🔒 Export requirements ON — people must participate to grab the crate.'
+                        : '🔓 Open export — anyone can grab the crate, no hoops.',
+                });
+            } else {
+                setExportRequirementsEnabled(!newState);
+                setMessage({ type: 'error', text: 'Failed to update export requirements' });
+            }
+        } catch (error) {
+            setExportRequirementsEnabled(!newState);
+            setMessage({ type: 'error', text: 'Failed to update export requirements' });
+        } finally {
+            setIsSavingExportGate(false);
+        }
+    };
+
     // Legacy compat: save just YouTube
     const handleSaveYouTube = async () => {
         setStreamPlatform('youtube');
@@ -1511,49 +1574,56 @@ export default function AdminPage() {
     };
 
     // Shuffle all songs in the playlist
-    const handleShufflePlaylist = async () => {
+    const handleShufflePlaylist = () => {
         if (songs.length < 2) {
             setMessage({ type: 'error', text: 'Need at least 2 songs to shuffle!' });
             return;
         }
 
-        setIsShuffling(true);
-        try {
-            const res = await adminFetch('/api/admin/shuffle-playlist', {
-                method: 'POST',
-            });
+        showConfirmModal(
+            '🔀 Shuffle Playlist?',
+            'This randomizes the order of every song for the whole room. Continue?',
+            async () => {
+                setIsShuffling(true);
+                try {
+                    const res = await adminFetch('/api/admin/shuffle-playlist', {
+                        method: 'POST',
+                    });
 
-            if (res.ok) {
-                setMessage({ type: 'success', text: '🔀 Playlist shuffled! Songs randomized.' });
-                fetchPlaylist();
-            } else {
-                const data = await res.json();
-                setMessage({ type: 'error', text: data.error || 'Failed to shuffle' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to shuffle - network error' });
-        } finally {
-            setIsShuffling(false);
-        }
+                    if (res.ok) {
+                        setMessage({ type: 'success', text: '🔀 Playlist shuffled! Songs randomized.' });
+                        fetchPlaylist();
+                    } else {
+                        const data = await res.json();
+                        setMessage({ type: 'error', text: data.error || 'Failed to shuffle' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to shuffle - network error' });
+                } finally {
+                    setIsShuffling(false);
+                }
+            },
+            'Shuffle'
+        );
     };
 
-    // Start THE PURGE - grants everyone ONE delete for 60 seconds
+    // Start THE PURGE - grants everyone ONE delete for 90 seconds
     const handleStartDeleteWindow = () => {
         showConfirmModal(
             '💀 START THE PURGE?',
-            'This grants EVERY USER the ability to PURGE ONE song for 60 seconds.\n\nAll crimes are legal - use wisely!',
+            'This grants EVERY USER the ability to PURGE ONE song for 90 seconds.\n\nAll crimes are legal - use wisely!',
             async () => {
                 setIsStartingDeleteWindow(true);
                 try {
                     const res = await adminFetch('/api/admin/delete-window', {
                         method: 'POST',
-                        body: JSON.stringify({ duration: 60 }),
+                        body: JSON.stringify({ duration: 90 }),
                     });
 
                     if (res.ok) {
                         const data = await res.json();
                         applyPurgeStatus(data);
-                        setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 60 seconds to purge ONE song!' });
+                        setMessage({ type: 'success', text: '💀 THE PURGE HAS BEGUN! Everyone has 90 seconds to purge ONE song!' });
                         setActiveTab('purge');
                         fetchPlaylist();
                     } else {
@@ -1594,18 +1664,18 @@ export default function AdminPage() {
     const handleStartQueueWindow = () => {
         showConfirmModal(
             'START THE QUEUE?',
-            'This starts a 60-second zero-vote review. The public screen will gray out everything except songs with no votes.',
+            'This starts a 90-second zero-vote review. The public screen will gray out everything except songs with no votes.',
             async () => {
                 setIsStartingQueueWindow(true);
                 try {
                     const res = await adminFetch('/api/admin/queue-window', {
                         method: 'POST',
-                        body: JSON.stringify({ duration: 60 }),
+                        body: JSON.stringify({ duration: 90 }),
                     });
                     const data = await res.json();
                     if (res.ok) {
                         applyQueueStatus(data);
-                        setMessage({ type: 'success', text: '📡 THE QUEUE IS LIVE! Members have 60 seconds to inspect every zero-vote song.' });
+                        setMessage({ type: 'success', text: '📡 THE QUEUE IS LIVE! Members have 90 seconds to inspect every zero-vote song.' });
                         setActiveTab('queue');
                         fetchPlaylist();
                     } else {
@@ -1810,7 +1880,7 @@ export default function AdminPage() {
         try {
             const res = await adminFetch('/api/admin/delete-window', {
                 method: 'POST',
-                body: JSON.stringify({ duration: 60 }),
+                body: JSON.stringify({ duration: 90 }),
             });
             if (res.ok) {
                 const data = await res.json();
@@ -2032,17 +2102,24 @@ export default function AdminPage() {
         }
     };
 
-    const handleCancelBattle = async () => {
-        try {
-            await adminFetch('/api/admin/versus-battle', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'cancel' }),
-            });
-            setMessage({ type: 'success', text: 'Battle cancelled.' });
-            fetchVersusBattle();
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to cancel battle' });
-        }
+    const handleCancelBattle = () => {
+        showConfirmModal(
+            '⚔️ Cancel Battle?',
+            'End the current Versus Battle now? Votes for this battle will be discarded.',
+            async () => {
+                try {
+                    await adminFetch('/api/admin/versus-battle', {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'cancel' }),
+                    });
+                    setMessage({ type: 'success', text: 'Battle cancelled.' });
+                    fetchVersusBattle();
+                } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to cancel battle' });
+                }
+            },
+            'Cancel Battle'
+        );
     };
 
     // ============ ARTIST VERSUS HANDLERS ============
@@ -3129,7 +3206,7 @@ export default function AdminPage() {
                                             onClick={handleStartDeleteWindow}
                                             disabled={isStartingDeleteWindow || deleteWindowActive || songs.length === 0}
                                         >
-                                            {isStartingDeleteWindow ? 'Starting...' : 'Start 60s Purge'}
+                                            {isStartingDeleteWindow ? 'Starting...' : 'Start 90s Purge'}
                                         </button>
                                         <button
                                             className="purge-master-btn stop"
@@ -3276,7 +3353,7 @@ export default function AdminPage() {
                                     <div className="purge-command-kicker queue-command-kicker">GAME SHOW MODE</div>
                                     <h2>{queueWindowActive ? 'The Queue Is Live' : 'The Queue Command Center'}</h2>
                                     <p>
-                                        Host-triggered zero-vote review. For 60 seconds, the public screen grays out the crate and lights up every song with no votes.
+                                        Host-triggered zero-vote review. For 90 seconds, the public screen grays out the crate and lights up every song with no votes.
                                     </p>
                                 </div>
                                 <div className={`purge-command-timer queue-command-timer ${queueWindowRemaining < 10000 && queueWindowActive ? 'urgent' : ''}`}>
@@ -3291,7 +3368,7 @@ export default function AdminPage() {
                                     onClick={handleStartQueueWindow}
                                     disabled={isStartingQueueWindow || queueWindowActive || queueTargets.length === 0}
                                 >
-                                    {isStartingQueueWindow ? 'Starting...' : 'Start 60s Queue'}
+                                    {isStartingQueueWindow ? 'Starting...' : 'Start 90s Queue'}
                                 </button>
                                 <button
                                     className="purge-master-btn queue-stop"
@@ -3915,6 +3992,28 @@ export default function AdminPage() {
                                     </span>
                                 </label>
                             </div>
+                        </div>
+
+                        {/* 🎟️ EXPORT REQUIREMENTS (the hoops) */}
+                        <div className="youtube-embed-control stream-config-panel" style={{ marginBottom: '16px' }}>
+                            <div className="control-label">
+                                <span className="tool-icon">🎟️</span>
+                                <span className="tool-name">Export Requirements</span>
+                            </div>
+
+                            <button
+                                className={`platform-btn demo-night-toggle ${!exportRequirementsEnabled ? 'active demo-night-active' : ''}`}
+                                onClick={handleToggleExportGate}
+                                disabled={isSavingExportGate}
+                            >
+                                {exportRequirementsEnabled ? '🔒 Requirements ON' : '🔓 Open Export ON'}
+                            </button>
+
+                            <p className="control-hint" style={{ marginTop: '8px', fontSize: '13px', opacity: 0.8 }}>
+                                {exportRequirementsEnabled
+                                    ? 'People must participate (add a song + upvote) before they can export the crate.'
+                                    : 'Open export — anyone can grab the crate, no hoops.'}
+                            </p>
                         </div>
 
                         {/* 📡 DEMO NIGHT MODE */}

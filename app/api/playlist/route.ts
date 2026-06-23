@@ -27,6 +27,7 @@ import {
     getShowClock,
     getDemoNightConfig,
     setDemoNightConfig,
+    setExportRequirementsEnabled,
 } from '@/lib/redis-store';
 
 // GET - Get playlist status and stats
@@ -55,18 +56,20 @@ export async function GET(request: Request) {
         getDemoNightConfig(),
     ]);
 
-    // Format active users for frontend (check ban status and karma for each)
-    // Already sorted by most recent activity from getActiveUsers
-    const activeUsers = await Promise.all(
-        activeUsersRaw.map(async (user) => ({
-            visitorId: user.visitorId,
-            name: user.username,  // Use username from their songs
-            songsAdded: user.songCount,
-            isBanned: await isUserBanned(user.visitorId),
-            karma: await getUserKarma(user.visitorId),
-            lastActivity: user.lastActivity,
-        }))
-    );
+    // Active users carry PII-ish data (visitorId, karma, ban status) and are only
+    // used by the admin panel — never expose them to anonymous callers.
+    const activeUsers = isAdmin
+        ? await Promise.all(
+            activeUsersRaw.map(async (user) => ({
+                visitorId: user.visitorId,
+                name: user.username,  // Use username from their songs
+                songsAdded: user.songCount,
+                isBanned: await isUserBanned(user.visitorId),
+                karma: await getUserKarma(user.visitorId),
+                lastActivity: user.lastActivity,
+            }))
+        )
+        : [];
 
     return NextResponse.json({
         songs,
@@ -195,6 +198,11 @@ export async function POST(request: Request) {
                 };
                 await setDemoNightConfig(demoNightConfig);
                 return NextResponse.json({ success: true, demoNight: demoNightConfig });
+            case 'setExportGate':
+                // Toggle the export participation requirements (the "hoops")
+                const exportRequirementsEnabled = !!body.exportRequirementsEnabled;
+                await setExportRequirementsEnabled(exportRequirementsEnabled);
+                return NextResponse.json({ success: true, exportRequirementsEnabled });
             default:
                 return NextResponse.json({ error: 'Unknown action. Please refresh and try again.' }, { status: 400 });
         }

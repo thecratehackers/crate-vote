@@ -276,6 +276,8 @@ interface Song {
     addedAt: number;
     upvotes?: string[];
     downvotes?: string[];
+    upvoteCount?: number;
+    downvoteCount?: number;
     score: number;
     // Audio features for DJs
     popularity: number;
@@ -408,6 +410,9 @@ export default function HomePage() {
     const [crateCrackMessage, setCrateCrackMessage] = useState('');
     const [isSubmittingCrateCrack, setIsSubmittingCrateCrack] = useState(false);
     const lastCrateCrackRoundId = useRef<string | null>(null);
+    // Per-player exit: which Crate Games round this viewer has personally left.
+    // The round stays globally active so other players keep their 60 seconds.
+    const [crateCrackExitedRoundId, setCrateCrackExitedRoundId] = useState<string | null>(null);
     const [requestPlayer, setRequestPlayer] = useState({ x: 50, y: 78 });
     const requestPlayerRef = useRef(requestPlayer);
     const [requestEnemies, setRequestEnemies] = useState<RequestEnemy[]>([]);
@@ -714,8 +719,10 @@ export default function HomePage() {
     }, [songs, isUserInteracting]);
 
     const getTotalVotes = useCallback((song: Song) => {
-        const upvotes = Array.isArray(song.upvotes) ? song.upvotes.length : 0;
-        const downvotes = Array.isArray(song.downvotes) ? song.downvotes.length : 0;
+        // Server now sends counts (vote arrays are stripped for privacy). Fall back
+        // to array length for any older cached payloads.
+        const upvotes = song.upvoteCount ?? (Array.isArray(song.upvotes) ? song.upvotes.length : 0);
+        const downvotes = song.downvoteCount ?? (Array.isArray(song.downvotes) ? song.downvotes.length : 0);
 
         return upvotes + downvotes;
     }, []);
@@ -1201,6 +1208,11 @@ export default function HomePage() {
     previousRanksRef.current = previousRanks;
     const seenActivityIdsRef = useRef(seenActivityIds);
     seenActivityIdsRef.current = seenActivityIds;
+    // 🔒 Guards against overlapping polls: a slow response can't stomp fresher state
+    const isFetchingRef = useRef(false);
+    // 🔒 Synchronous double-submit guard for votes — React state updates are async, so
+    // two taps in the same tick can both pass a state-based check before re-render.
+    const votingInProgressRef = useRef<Set<string>>(new Set());
     const lastKarmaRainTimestampRef = useRef(lastKarmaRainTimestamp);
     lastKarmaRainTimestampRef.current = lastKarmaRainTimestamp;
     const lastPrizeDropTimestampRef = useRef(lastPrizeDropTimestamp);
@@ -1210,6 +1222,9 @@ export default function HomePage() {
 
     const fetchPlaylist = useCallback(async (showRefreshIndicator = false) => {
         if (!visitorId) return;
+        // 🔒 Skip overlapping polls so out-of-order responses can't overwrite fresh state on slow networks
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
         if (showRefreshIndicator) setIsRefreshing(true);
 
         try {
@@ -1313,6 +1328,7 @@ export default function HomePage() {
                         setCrateCrackOrder(data.crateCrack.cards || []);
                         setCrateCrackReward(null);
                         setCrateCrackMessage('');
+                        setCrateCrackExitedRoundId(null);
                         evaderSubmittedRef.current = false;
                         if (data.crateCrack.gameType === 'request_evader') {
                             setRequestPlayer({ x: 50, y: 58 });
@@ -1514,7 +1530,8 @@ export default function HomePage() {
             // Track consecutive failures for stale data indicator
             setConsecutiveFailures(prev => {
                 const newCount = prev + 1;
-                if (newCount >= 3) setIsStale(true);
+                // Surface the reconnect banner fast (after 2 misses) so a stuck phone is obvious live
+                if (newCount >= 2) setIsStale(true);
                 return newCount;
             });
             // Show user-friendly error for network issues
@@ -1522,6 +1539,7 @@ export default function HomePage() {
                 setMessage({ type: 'error', text: 'Slow connection - retrying...' });
             }
         } finally {
+            isFetchingRef.current = false;
             setIsLoading(false);
             setIsRefreshing(false);
         }
@@ -1569,16 +1587,20 @@ export default function HomePage() {
     }, []);
 
     // REAL-TIME POLLING - optimized for 1000+ concurrent users
-    // Uses 15s base interval + random jitter to prevent thundering herd
+    // Uses 15s base interval + random jitter to prevent thundering herd.
+    // ⚡ While a timed game is live (Purge / Queue / Versus / Crate Games) we poll
+    //    fast (~2.5s) so short windows reach every phone in time — this is the fix
+    //    for "The Purge didn't show up on some phones."
     // Timer data is now merged into the songs response — single fetch per cycle
+    const anyTimedGameActive = deleteWindow.active || queueWindow.active || versusBattle.active || crateCrack.active;
     useEffect(() => {
         if (!visitorId) return;
 
-        // Add random jitter (0-5 seconds) to spread out requests
-        const jitter = Math.random() * 5000;
-        const baseInterval = 15000; // 15 seconds base
+        const baseInterval = anyTimedGameActive ? 2500 : 15000;
+        // Smaller jitter during live games so updates stay snappy; wider when idle to spread load
+        const jitter = anyTimedGameActive ? Math.random() * 500 : Math.random() * 5000;
 
-        // Initial delayed start with jitter
+        // Initial delayed start with jitter (also fires right when a game becomes active)
         const initialTimeout = setTimeout(fetchPlaylist, jitter);
 
         // Subsequent polls at regular interval
@@ -1587,6 +1609,27 @@ export default function HomePage() {
         return () => {
             clearTimeout(initialTimeout);
             clearInterval(interval);
+        };
+    }, [visitorId, fetchPlaylist, anyTimedGameActive]);
+
+    // 📱 WAKE/FOCUS REFETCH - mobile browsers freeze setInterval when the screen
+    // locks or the tab is backgrounded. Without this, a phone that was asleep shows
+    // stale state and can miss a live game entirely. Refetch the instant it wakes.
+    useEffect(() => {
+        if (!visitorId) return;
+
+        const refetchOnWake = () => {
+            if (document.visibilityState === 'visible') {
+                fetchPlaylist();
+            }
+        };
+
+        document.addEventListener('visibilitychange', refetchOnWake);
+        window.addEventListener('focus', refetchOnWake);
+
+        return () => {
+            document.removeEventListener('visibilitychange', refetchOnWake);
+            window.removeEventListener('focus', refetchOnWake);
         };
     }, [visitorId, fetchPlaylist]);
 
@@ -2360,6 +2403,17 @@ export default function HomePage() {
         }
     };
 
+    // 🚪 Leave Crate Games for THIS player only — drops them back to voting while the
+    // shared round keeps running for everyone else. Also halts the local game loops.
+    const exitCrateGames = () => {
+        setCrateCrackExitedRoundId(crateCrack.roundId);
+        setCrateCrackReward(null);
+        setCrateCrackMessage('');
+        setRequestEvaderState('ready');
+        setCrateManState('ready');
+        setWeddingDefenseState('ready');
+    };
+
     // 🗑️ Handle window delete (chaos mode delete)
     const handleWindowDelete = async (songId: string) => {
         if (!visitorId || !deleteWindow.canDelete || isDeleting) return;
@@ -2814,11 +2868,28 @@ export default function HomePage() {
         }
         voteTimestamps.current.set(songId, Date.now());
 
-        // Prevent double-clicks on same song
-        if (votingInProgress.has(songId)) return;
+        // Prevent double-clicks on same song — synchronous ref check beats the async
+        // state check, so a rapid double-tap can't fire two requests.
+        if (votingInProgressRef.current.has(songId)) return;
+        votingInProgressRef.current.add(songId);
 
-        // Mark as voting
+        // Mark as voting (state drives the disabled/⏳ UI)
         setVotingInProgress(prev => new Set(prev).add(songId));
+
+        // 📸 Snapshot pre-vote state so we can roll back if the server rejects the vote.
+        // "Counted" must always mean counted — never leave a phantom vote on screen.
+        const prevUserVotes = userVotes;
+        const prevUserStatus = userStatus;
+        let appliedScoreDelta = 0;
+        const revertOptimistic = () => {
+            setUserVotes(prevUserVotes);
+            setUserStatus(prevUserStatus);
+            if (appliedScoreDelta !== 0) {
+                setSongs(prev => prev.map(s =>
+                    s.id === songId ? { ...s, score: s.score - appliedScoreDelta } : s
+                ));
+            }
+        };
 
         // 🔒 Lock UI from re-sorting during interaction
         markInteraction();
@@ -2852,6 +2923,7 @@ export default function HomePage() {
                     upvotesUsed: prev.upvotesUsed - 1,
                     upvotesRemaining: prev.upvotesRemaining + 1
                 }));
+                appliedScoreDelta = -1;
                 setSongs(prev => prev.map(s =>
                     s.id === songId ? { ...s, score: s.score - 1 } : s
                 ));
@@ -2866,11 +2938,13 @@ export default function HomePage() {
                     upvotesUsed: prev.upvotesUsed + 1,
                     upvotesRemaining: prev.upvotesRemaining - 1
                 }));
+                appliedScoreDelta = 1;
                 setSongs(prev => prev.map(s =>
                     s.id === songId ? { ...s, score: s.score + 1 } : s
                 ));
             } else {
                 toast.info('All upvotes used — watch the Jukebox to earn karma for more! ⚡');
+                votingInProgressRef.current.delete(songId);
                 setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
@@ -2889,6 +2963,7 @@ export default function HomePage() {
                     downvotesUsed: prev.downvotesUsed - 1,
                     downvotesRemaining: prev.downvotesRemaining + 1
                 }));
+                appliedScoreDelta = 1;
                 setSongs(prev => prev.map(s =>
                     s.id === songId ? { ...s, score: s.score + 1 } : s
                 ));
@@ -2903,11 +2978,13 @@ export default function HomePage() {
                     downvotesUsed: prev.downvotesUsed + 1,
                     downvotesRemaining: prev.downvotesRemaining - 1
                 }));
+                appliedScoreDelta = -1;
                 setSongs(prev => prev.map(s =>
                     s.id === songId ? { ...s, score: s.score - 1 } : s
                 ));
             } else {
                 toast.info('All downvotes used — earn karma in the Jukebox for more! ⚡');
+                votingInProgressRef.current.delete(songId);
                 setVotingInProgress(prev => { const next = new Set(prev); next.delete(songId); return next; });
                 return;
             }
@@ -2934,7 +3011,10 @@ export default function HomePage() {
 
             if (!res.ok) {
                 const data = await res.json();
+                // ⛔ The vote did NOT count — undo the optimistic UI so the score/limits
+                // reflect reality. (banned / removed branches resync via fetchPlaylist.)
                 if (data.error?.includes('banned')) {
+                    revertOptimistic();
                     setIsBanned(true);
                     toast.error('A moderator paused your access');
                 } else if (data.error?.includes('not found') || data.error?.includes('locked')) {
@@ -2943,9 +3023,11 @@ export default function HomePage() {
                     fetchPlaylist();
                 } else if (res.status === 429) {
                     // Rate limited — friendly countdown
+                    revertOptimistic();
                     const retryAfter = res.headers.get('Retry-After') || '10';
                     toast.info(`Rate limited — try again in ${retryAfter}s`);
                 } else {
+                    revertOptimistic();
                     toast.error(data.error || 'Vote failed — try again');
                 }
             } else {
@@ -2968,10 +3050,13 @@ export default function HomePage() {
         } catch (error) {
             console.error('Vote failed:', error);
             toast.error('Vote failed — check your connection');
-            // On network error, refresh to ensure sync
+            // Undo the optimistic change immediately so the UI is honest, then
+            // resync from the server to pick up the true state.
+            revertOptimistic();
             fetchPlaylist();
         } finally {
-            // Clear voting state
+            // Clear voting state (ref first so a retry can fire immediately)
+            votingInProgressRef.current.delete(songId);
             setVotingInProgress(prev => {
                 const next = new Set(prev);
                 next.delete(songId);
@@ -3314,7 +3399,7 @@ export default function HomePage() {
 
             {/* CRATE GAMES SIDE QUEST */}
             {
-                ((crateCrack.active && crateCrackRemaining > 0) || crateCrackReward) && (
+                ((crateCrack.active && crateCrackRemaining > 0) || crateCrackReward) && !(!!crateCrack.roundId && crateCrackExitedRoundId === crateCrack.roundId) && (
                     <div className="crate-crack-overlay">
                         <div className="matrix-rain" aria-hidden="true">
                             {Array.from({ length: 18 }).map((_, index) => (
@@ -3331,6 +3416,14 @@ export default function HomePage() {
                             ))}
                         </div>
                         <div className="crate-crack-game">
+                            <button
+                                className="crate-crack-close"
+                                aria-label="Return to voting"
+                                title="Return to voting"
+                                onClick={exitCrateGames}
+                            >
+                                ✕
+                            </button>
                             <div className="crate-crack-topline">
                                 <span>Side Quest</span>
                                 <strong>{crateCrackReward ? 'Prize Ready' : `${Math.ceil(crateCrackRemaining / 1000)}s`}</strong>
@@ -3348,7 +3441,7 @@ export default function HomePage() {
                                     <a href={crateCrackReward.claimUrl} target="_blank" rel="noopener noreferrer" className="claim-prize-btn">
                                         Redeem Prize
                                     </a>
-                                    <button className="crate-games-return-btn" onClick={() => setCrateCrackReward(null)}>
+                                    <button className="crate-games-return-btn" onClick={exitCrateGames}>
                                         Return To Voting
                                     </button>
                                 </div>
@@ -3864,8 +3957,8 @@ export default function HomePage() {
             {/* ⚠️ STALE DATA INDICATOR - Show when offline */}
             {isStale && (
                 <div className="stale-indicator">
-                    ⚠️ You're offline
-                    <button className="stale-retry-btn" onClick={() => { fetchPlaylist(); }}>{isRefreshing ? 'Retrying...' : 'Retry'}</button>
+                    ⚠️ Reconnecting&hellip; your screen may be behind
+                    <button className="stale-retry-btn" onClick={() => { fetchPlaylist(); }}>{isRefreshing ? 'Retrying...' : 'Retry now'}</button>
                 </div>
             )}
 

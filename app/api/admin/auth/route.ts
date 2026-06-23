@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Admin password from server-side environment variable
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+// Admin password from server-side environment variable. NO fallback — if it's
+// unset we fail closed so the admin panel can never be opened with a default.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 export async function POST(request: NextRequest) {
     try {
+        if (!ADMIN_PASSWORD) {
+            console.error('ADMIN_PASSWORD is not configured — admin login disabled.');
+            return NextResponse.json({ success: false, error: 'Admin login is not configured.' }, { status: 503 });
+        }
+
         const { password } = await request.json();
 
         if (!password) {

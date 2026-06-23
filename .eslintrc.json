@@ -1,0 +1,14 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "react/no-unescaped-entities": "off"
+  },
+  "overrides": [
+    {
+      "files": ["app/api/**/*.ts", "lib/**/*.ts"],
+      "rules": {
+        "react-hooks/rules-of-hooks": "off"
+      }
+    }
+  ]
+}

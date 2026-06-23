@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getQueueWindowStatus, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getDemoNightConfig, getCrateCrackStatus, getShowClock } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getQueueWindowStatus, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getDemoNightConfig, getCrateCrackStatus, getShowClock, getExportRequirementsEnabled, sanitizeSongForClient } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
+import { resolveVoterIdentity, attachVoterCookie } from '@/lib/identity';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
 
 // ============ THROTTLED BACKGROUND TASKS ============
@@ -42,7 +43,10 @@ export async function GET(request: Request) {
         }, { status: 503 });
     }
 
-    const visitorId = getVisitorIdFromRequest(request);
+    // Server-authoritative identity: signed cookie wins; otherwise mint one (seeded
+    // from the fingerprint header for continuity) and set it on the response below.
+    const identity = resolveVoterIdentity(request, getVisitorIdFromRequest(request));
+    const visitorId = identity.id;
 
     // Background tasks - THROTTLED (run at most once per 30s, not on every request)
     if (shouldRunPrune()) {
@@ -59,7 +63,7 @@ export async function GET(request: Request) {
 
     // Fetch data in parallel - most of these are cached
     // Timer + ban status included here to eliminate separate /api/timer polling
-    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, queueWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying, demoNight, crateCrack, showClock] = await Promise.all([
+    const [songs, isLocked, playlistTitle, recentActivity, viewerCount, deleteWindowStatus, queueWindowStatus, versusBattleStatus, karmaRainStatus, sessionPermissions, youtubeEmbed, streamConfig, prizeDropStatus, leaderboardKingStatus, timerStatus, isBanned, nowPlaying, demoNight, crateCrack, showClock, exportRequirementsEnabled] = await Promise.all([
         getSortedSongs(),
         isPlaylistLocked(),
         getPlaylistTitle(),
@@ -80,6 +84,7 @@ export async function GET(request: Request) {
         getDemoNightConfig(),
         getCrateCrackStatus(),
         getShowClock(),
+        getExportRequirementsEnabled(),
     ]);
 
     // Check if user can delete during window
@@ -100,8 +105,8 @@ export async function GET(request: Request) {
         canAdd: songCount < MAX_PLAYLIST_SIZE || hasDisplaceable,
     };
 
-    // Censor profanity in song titles/artists for display
-    const censoredSongs = songs.map(song => ({
+    // Censor profanity for display AND strip voter identity arrays (privacy).
+    const censoredSongs = songs.map(song => sanitizeSongForClient({
         ...song,
         name: censorProfanity(song.name),
         artist: censorProfanity(song.artist),
@@ -111,7 +116,7 @@ export async function GET(request: Request) {
     const userStatus = visitorId ? await getUserStatus(visitorId) : { songsRemaining: 5, songsAdded: 0, deletesRemaining: 5, deletesUsed: 0, upvotesRemaining: 5, upvotesUsed: 0, downvotesRemaining: 5, downvotesUsed: 0, isGodMode: false };
     const karmaBonuses = visitorId ? await getKarmaBonuses(visitorId) : { karma: 0, bonusVotes: 0, bonusSongAdds: 0 };
 
-    return NextResponse.json({
+    const response = NextResponse.json({
         songs: censoredSongs,
         userVotes,
         userStatus,
@@ -145,7 +150,11 @@ export async function GET(request: Request) {
         demoNight,
         crateCrack,
         showClock,
+        exportRequirementsEnabled,
     });
+
+    attachVoterCookie(response, identity);
+    return response;
 }
 
 // POST - Add a new song
@@ -158,7 +167,8 @@ export async function POST(request: Request) {
         }, { status: 503 });
     }
 
-    const visitorId = getVisitorIdFromRequest(request);
+    const identity = resolveVoterIdentity(request, getVisitorIdFromRequest(request));
+    const visitorId = identity.id;
     const adminKey = request.headers.get('x-admin-key');
     const isAdmin = adminKey && adminKey === process.env.ADMIN_PASSWORD;
 
@@ -314,7 +324,9 @@ export async function POST(request: Request) {
             userLocation: addedByLocation || undefined,
         });
 
-        return NextResponse.json({ success: true });
+        const okResponse = NextResponse.json({ success: true });
+        attachVoterCookie(okResponse, identity);
+        return okResponse;
     } catch (error) {
         console.error('Add song error:', error);
         return NextResponse.json({ error: 'Unable to add song right now. Please wait a moment and try again.' }, { status: 500 });

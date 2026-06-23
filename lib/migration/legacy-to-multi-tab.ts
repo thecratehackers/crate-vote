@@ -294,8 +294,7 @@ export async function endCurrentShowAndArchive(
 // ----------------------------------------------------------------------------
 // "Stop the hackathon" - the canonical end-of-show flow.
 // ----------------------------------------------------------------------------
-// Called by the legacy reset endpoints (POST /api/playlist {action:'reset'}
-// and POST /api/admin/wipe-session). Always:
+// Called by the legacy reset endpoint (POST /api/playlist {action:'reset'}). Always:
 //   1. Snapshots the current legacy session into an archived Show under the
 //      main tab (preserved with timestamp, votable for 30 days, then locked).
 //   2. Resets the legacy session so a fresh round can start.

@@ -124,8 +124,16 @@ export async function GET(request: Request) {
     // Export ALL songs up to 100 (sorted by score already)
     const validSongs = songs.slice(0, 100);
 
-    // CSV format for download
+    // CSV format for download — contains "Added By" usernames, so it's admin-only.
     if (format === 'csv') {
+        const adminKey = request.headers.get('x-admin-key');
+        if (!adminKey || adminKey !== process.env.ADMIN_PASSWORD) {
+            return NextResponse.json(
+                { error: 'Admin access required to download the CSV export.' },
+                { status: 401 }
+            );
+        }
+
         const header = 'Track Name,Artist,Score,Spotify URI,Added By\n';
         const rows = validSongs.map(s => {
             const name = s.name.replace(/"/g, '""');

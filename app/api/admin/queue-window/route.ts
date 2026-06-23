@@ -22,7 +22,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: true, ...(await getQueueWindowStatus()) });
         }
 
-        const duration = body.duration || 60;
+        const duration = body.duration || 90;
         await startQueueWindow(duration);
 
         return NextResponse.json({

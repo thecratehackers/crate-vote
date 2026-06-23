@@ -82,8 +82,10 @@ export async function POST(request: Request) {
 // GET - Get user's prediction and prediction status
 export async function GET(request: Request) {
     const visitorId = getVisitorIdFromRequest(request);
+    const isAdmin = request.headers.get('x-admin-key') === process.env.ADMIN_PASSWORD;
     const { searchParams } = new URL(request.url);
-    const includeStats = searchParams.get('stats') === 'true';
+    // Aggregate stats are admin-only — never expose them to anonymous callers.
+    const includeStats = searchParams.get('stats') === 'true' && isAdmin;
 
     try {
         const isLocked = await arePredictionsLocked();

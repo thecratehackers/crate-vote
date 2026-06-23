@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { submitCrateCrackResult } from '@/lib/redis-store';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
     const visitorId = getVisitorIdFromRequest(request);
 
     if (!visitorId) {
         return NextResponse.json({ error: 'Session expired. Refresh and try again.' }, { status: 400 });
+    }
+
+    // Throttle submissions (the store already dedupes one result per round).
+    const rate = await checkRateLimit(`cratecrack:${visitorId}`, { limit: 5, windowMs: 10 * 1000 });
+    if (!rate.success) {
+        return NextResponse.json({ error: 'Too many submissions — slow down.' }, { status: 429 });
     }
 
     try {

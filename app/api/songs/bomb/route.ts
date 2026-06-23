@@ -55,11 +55,12 @@ export async function POST(request: Request) {
     }
 }
 
-// PUT - Set or clear the now-playing state (called by jukebox host)
+// PUT - Set or clear the now-playing state (jukebox host only — admin-gated so a
+// random participant can't hijack what the whole room sees as "now playing").
 export async function PUT(request: Request) {
-    const visitorId = getVisitorIdFromRequest(request);
-    if (!visitorId) {
-        return NextResponse.json({ error: 'Session expired.' }, { status: 400 });
+    const adminKey = request.headers.get('x-admin-key');
+    if (!adminKey || adminKey !== process.env.ADMIN_PASSWORD) {
+        return NextResponse.json({ error: 'Admin access required to control now-playing.' }, { status: 401 });
     }
 
     try {

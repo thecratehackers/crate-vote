@@ -13,6 +13,38 @@ const redis = new Redis({
 
 const RATE_LIMIT_PREFIX = 'rl:';
 
+// Per-instance in-memory fallback used ONLY when Redis is unreachable. It can't see
+// other serverless instances, but it stops the app from silently failing fully OPEN
+// (no limits at all) during a Redis blip — the old behavior an attacker could exploit.
+const memoryBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function memoryRateLimit(identifier: string, config: RateLimitConfig): RateLimitResult {
+    const now = Date.now();
+
+    // Opportunistic cleanup so the map can't grow unbounded over a long show.
+    if (memoryBuckets.size > 10000) {
+        const expired: string[] = [];
+        memoryBuckets.forEach((bucket, key) => {
+            if (now > bucket.resetAt) expired.push(key);
+        });
+        expired.forEach(key => memoryBuckets.delete(key));
+    }
+
+    const existing = memoryBuckets.get(identifier);
+    if (!existing || now > existing.resetAt) {
+        const resetAt = now + config.windowMs;
+        memoryBuckets.set(identifier, { count: 1, resetAt });
+        return { success: 1 <= config.limit, remaining: Math.max(0, config.limit - 1), resetTime: resetAt };
+    }
+
+    existing.count += 1;
+    return {
+        success: existing.count <= config.limit,
+        remaining: Math.max(0, config.limit - existing.count),
+        resetTime: existing.resetAt,
+    };
+}
+
 interface RateLimitConfig {
     /** Maximum number of requests allowed in the window */
     limit: number;
@@ -58,13 +90,9 @@ export async function checkRateLimit(
             resetTime,
         };
     } catch (error) {
-        console.error('Redis rate limit error:', error);
-        // Fail open on Redis errors to not break the app
-        return {
-            success: true,
-            remaining: config.limit,
-            resetTime: Date.now() + config.windowMs,
-        };
+        console.error('Redis rate limit error — falling back to in-memory limiter:', error);
+        // Degrade to a per-instance in-memory limiter instead of failing fully open.
+        return memoryRateLimit(identifier, config);
     }
 }
 
@@ -91,6 +119,11 @@ export const RATE_LIMITS = {
 
     // Per-song vote cooldown - 1 per 5 seconds per song
     voteSong: { limit: 1, windowMs: 5 * 1000 },
+
+    // Per-IP vote CEILING - deliberately high so a whole venue sharing one NAT'd
+    // wifi IP is NOT throttled, but a single scripted bot rotating identities from
+    // one IP still gets capped. This backstops the spoofable header path.
+    voteIpCeiling: { limit: 600, windowMs: 60 * 1000 },
 } as const;
 
 /**
@@ -131,4 +164,22 @@ export function getClientIdentifier(request: Request): string {
  */
 export async function checkSongVoteLimit(clientId: string, songId: string): Promise<RateLimitResult> {
     return checkRateLimit(`${clientId}:song:${songId}`, RATE_LIMITS.voteSong);
+}
+
+/**
+ * Extract the real client IP. Prefer `x-real-ip` (set by Vercel to the actual
+ * connecting IP, not client-controllable) over `x-forwarded-for` (whose leftmost
+ * entry a client could spoof).
+ */
+export function getClientIp(request: Request): string {
+    const realIp = request.headers.get('x-real-ip');
+    if (realIp) return realIp.trim();
+
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    if (forwardedFor) return forwardedFor.split(',')[0].trim();
+
+    const cfIp = request.headers.get('cf-connecting-ip');
+    if (cfIp) return cfIp.trim();
+
+    return 'unknown';
 }

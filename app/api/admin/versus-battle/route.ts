@@ -7,12 +7,11 @@ import {
     cancelVersusBattle,
 } from '@/lib/redis-store';
 
-const ADMIN_KEY = process.env.ADMIN_KEY || 'admin123';
-
-// Verify admin key
+// Verify admin key against the SAME secret as every other admin route. No default.
 function isAdmin(request: NextRequest): boolean {
-    const adminKey = request.headers.get('x-admin-key');
-    return adminKey === ADMIN_KEY;
+    const expected = process.env.ADMIN_PASSWORD;
+    if (!expected) return false; // fail closed if unconfigured
+    return request.headers.get('x-admin-key') === expected;
 }
 
 // GET - Get battle status (with vote counts for admin)

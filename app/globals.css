@@ -12079,6 +12079,33 @@ input:disabled {
   z-index: 1;
 }
 
+.crate-crack-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.45);
+  color: #d7ffe8;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.crate-crack-close:hover {
+  background: rgba(255, 60, 60, 0.85);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+  transform: scale(1.06);
+}
+
 .crate-crack-topline {
   display: flex;
   justify-content: space-between;

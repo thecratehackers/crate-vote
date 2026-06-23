@@ -85,6 +85,7 @@ const KARMA_RAIN_KEY = 'hackathon:karmaRain';  // { timestamp: number } - when l
 const SESSION_PERMISSIONS_KEY = 'hackathon:sessionPermissions';  // { canVote: boolean, canAddSongs: boolean }
 const YOUTUBE_EMBED_KEY = 'hackathon:youtubeEmbed';  // YouTube URL for live stream embed (legacy)
 const STREAM_CONFIG_KEY = 'hackathon:streamConfig';  // { platform, youtubeUrl?, twitchChannel? }
+const EXPORT_GATE_KEY = 'hackathon:exportGate';  // { requirementsEnabled: boolean } - admin toggle for export participation hoops
 const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } - when double points mode is active
 const PRIZE_DROP_KEY = 'hackathon:prizeDrop';  // { winnerVisitorId, winnerName, timestamp, prizeType } - active prize drop
 const PRIZE_DROP_HISTORY_KEY = 'hackathon:prizeDropHistory';  // Persistent winner history for admin reference
@@ -276,6 +277,23 @@ export async function getSortedSongs(): Promise<(Song & { score: number })[]> {
 // Invalidate songs cache when data changes
 export function invalidateSongsCache(): void {
     invalidateCache('sorted_songs');
+}
+
+// Strip voter identity arrays before sending songs to the client.
+// The raw upvotes[]/downvotes[] are lists of every voter's id — leaking them is a
+// privacy issue and makes targeted spoofing trivial. Clients only need the counts
+// (for display) and the score (already computed). The current user's own votes are
+// delivered separately via getUserVotes().
+export function sanitizeSongForClient<T extends Song & { score: number }>(song: T): Omit<T, 'upvotes' | 'downvotes'> & { upvotes: never[]; downvotes: never[]; upvoteCount: number; downvoteCount: number } {
+    const upvoteCount = Array.isArray(song.upvotes) ? song.upvotes.length : 0;
+    const downvoteCount = Array.isArray(song.downvotes) ? song.downvotes.length : 0;
+    return {
+        ...song,
+        upvotes: [],
+        downvotes: [],
+        upvoteCount,
+        downvoteCount,
+    };
 }
 
 // Update audio features for an existing song
@@ -610,6 +628,21 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
             return { success: false, error: 'This song was removed from the playlist.' };
         }
 
+        // 🔒 Per-user lock: serializes a single user's concurrent votes (two tabs /
+        // rapid fire) so the read-modify-write of their vote lists can't lose updates
+        // or bypass the vote cap. Per-user key => zero contention between voters.
+        const voteLockKey = `hackathon:votelock:${visitorId}`;
+        let gotLock = false;
+        for (let attempt = 0; attempt < 5 && !gotLock; attempt++) {
+            const acquired = await redis.set(voteLockKey, '1', { nx: true, px: 4000 });
+            gotLock = acquired === 'OK';
+            if (!gotLock) await new Promise(resolve => setTimeout(resolve, 80));
+        }
+        if (!gotLock) {
+            return { success: false, error: 'Your last vote is still processing — try again in a second.' };
+        }
+
+        try {
         // Get user's current vote lists (for limit tracking)
         const userUpvotes = await redis.hget<string[]>(USER_UPVOTE_KEY, visitorId) || [];
         const userDownvotes = await redis.hget<string[]>(USER_DOWNVOTE_KEY, visitorId) || [];
@@ -707,6 +740,10 @@ export async function vote(songId: string, visitorId: string, direction: 1 | -1)
         await updateUserActivity(visitorId);
 
         return { success: true };
+        } finally {
+            // Always release the per-user vote lock
+            await redis.del(voteLockKey).catch(() => { /* lock will expire via TTL */ });
+        }
     } catch (error) {
         console.error('Failed to vote:', error);
         return { success: false, error: 'Could not record your vote. Please try again.' };
@@ -847,6 +884,23 @@ export async function getExportEligibility(visitorId: string): Promise<ExportEli
 
         const upvotesUsed = upvotes.length;
         const downvotesUsed = downvotes.length;
+
+        // Admin can drop the participation hoops entirely. When requirements are
+        // OFF, everyone is eligible regardless of songs/votes — no friction.
+        const requirementsEnabled = await getExportRequirementsEnabled();
+        if (!requirementsEnabled) {
+            return {
+                eligible: true,
+                songsAdded,
+                songsRequired: EXPORT_MIN_SONGS,
+                upvotesUsed,
+                upvotesRequired: EXPORT_MIN_UPVOTES,
+                downvotesUsed,
+                downvotesRequired: EXPORT_MIN_DOWNVOTES,
+                progress: 100,
+                reasons: [],
+            };
+        }
 
         const reasons: string[] = [];
         if (songsAdded < EXPORT_MIN_SONGS) {
@@ -997,6 +1051,29 @@ export async function setYouTubeEmbed(url: string | null): Promise<void> {
         await setStreamConfig({ platform: 'youtube', youtubeUrl: url });
     } else {
         await setStreamConfig({ platform: null });
+    }
+}
+
+// ============ EXPORT GATE (participation requirements toggle) ============
+// When requirements are ON (default), users must participate to export the crate.
+// When an admin turns them OFF, anyone can export with no hoops.
+export async function getExportRequirementsEnabled(): Promise<boolean> {
+    try {
+        const config = await redis.get<{ requirementsEnabled: boolean }>(EXPORT_GATE_KEY);
+        // Default to enabled (hoops on) to preserve existing behavior.
+        if (!config) return true;
+        return config.requirementsEnabled !== false;
+    } catch (error) {
+        console.error('Failed to get export gate config:', error);
+        return true;
+    }
+}
+
+export async function setExportRequirementsEnabled(enabled: boolean): Promise<void> {
+    try {
+        await redis.set(EXPORT_GATE_KEY, { requirementsEnabled: enabled });
+    } catch (error) {
+        console.error('Failed to set export gate config:', error);
     }
 }
 
@@ -1481,7 +1558,7 @@ export async function getRecentPurgeDeletions(limit = MAX_PURGE_DELETION_ITEMS):
 }
 
 // Start a new delete window (admin only)
-export async function startDeleteWindow(durationSeconds: number = 30): Promise<{ success: boolean; endTime: number }> {
+export async function startDeleteWindow(durationSeconds: number = 90): Promise<{ success: boolean; endTime: number }> {
     const startedAt = Date.now();
     const endTime = Date.now() + (durationSeconds * 1000);
 
@@ -1499,7 +1576,7 @@ export async function stopDeleteWindow(): Promise<{ success: boolean }> {
     return { success: true };
 }
 
-export async function startQueueWindow(durationSeconds: number = 60): Promise<{ success: boolean; endTime: number }> {
+export async function startQueueWindow(durationSeconds: number = 90): Promise<{ success: boolean; endTime: number }> {
     const startedAt = Date.now();
     const endTime = startedAt + (durationSeconds * 1000);
 
