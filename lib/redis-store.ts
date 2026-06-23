@@ -1,6 +1,7 @@
 import { Redis } from '@upstash/redis';
 import { resolvePreviewUrl } from './preview-resolver';
 import { PrizeRevealMode, PrizeTemplateId, getPrizeTemplate } from './prize-templates';
+import { STREAM_SCHEDULE } from './config';
 
 // Validate Redis configuration
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
@@ -85,6 +86,7 @@ const KARMA_RAIN_KEY = 'hackathon:karmaRain';  // { timestamp: number } - when l
 const SESSION_PERMISSIONS_KEY = 'hackathon:sessionPermissions';  // { canVote: boolean, canAddSongs: boolean }
 const YOUTUBE_EMBED_KEY = 'hackathon:youtubeEmbed';  // YouTube URL for live stream embed (legacy)
 const STREAM_CONFIG_KEY = 'hackathon:streamConfig';  // { platform, youtubeUrl?, twitchChannel? }
+const STREAM_FLIP_MARKER_KEY = 'hackathon:streamSchedule:flippedDate';  // dateKey we already flipped back to YouTube for (one flip per show day)
 const EXPORT_GATE_KEY = 'hackathon:exportGate';  // { requirementsEnabled: boolean } - admin toggle for export participation hoops
 const DOUBLE_POINTS_KEY = 'hackathon:doublePoints';  // { endTime: timestamp } - when double points mode is active
 const PRIZE_DROP_KEY = 'hackathon:prizeDrop';  // { winnerVisitorId, winnerName, timestamp, prizeType } - active prize drop
@@ -1038,6 +1040,88 @@ export async function setStreamConfig(config: StreamConfig): Promise<void> {
     } catch (error) {
         console.error('Failed to set stream config:', error);
     }
+}
+
+// ============ SCHEDULED STREAM OVERRIDE ============
+// Forces Twitch during the weekly show window, then flips back to YouTube once.
+// This is the SOURCE OF TRUTH that viewer + admin GET routes read from, so the
+// schedule wins over any manual platform change ("by any means necessary").
+
+const WEEKDAY_INDEX: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
+// Current wall-clock weekday + minutes-since-midnight in the schedule's timezone.
+// Uses Intl so daylight saving is handled automatically.
+function getScheduleClock(now: Date = new Date()): { weekday: number; minutes: number; dateKey: string } {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: STREAM_SCHEDULE.timeZone,
+        weekday: 'short',
+        hourCycle: 'h23',
+        hour: '2-digit',
+        minute: '2-digit',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(now);
+    const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+    const weekday = WEEKDAY_INDEX[get('weekday')] ?? -1;
+    const hour = parseInt(get('hour'), 10) % 24;
+    const minute = parseInt(get('minute'), 10);
+    return {
+        weekday,
+        minutes: (Number.isNaN(hour) ? 0 : hour) * 60 + (Number.isNaN(minute) ? 0 : minute),
+        dateKey: `${get('year')}-${get('month')}-${get('day')}`,
+    };
+}
+
+/**
+ * Returns the platform that should actually be on screen right now, applying the
+ * automatic show schedule on top of whatever an admin has stored.
+ *
+ *  - Inside the window  → always Twitch (overrides any manual change instantly)
+ *  - At the window end  → flips stored config back to YouTube exactly once
+ *  - Any other time     → respects the admin's stored config (incl. "off")
+ */
+export async function getEffectiveStreamConfig(): Promise<StreamConfig> {
+    const stored = await getStreamConfig();
+    if (!STREAM_SCHEDULE.enabled) return stored;
+
+    const { weekday, minutes, dateKey } = getScheduleClock();
+    if (weekday !== STREAM_SCHEDULE.day) return stored;
+
+    const windowStart = STREAM_SCHEDULE.startHour * 60 + STREAM_SCHEDULE.startMinute;
+    const windowEnd = STREAM_SCHEDULE.endHour * 60 + STREAM_SCHEDULE.endMinute;
+
+    // Inside the show window → force Twitch for everyone, no matter what's stored.
+    if (minutes >= windowStart && minutes < windowEnd) {
+        return {
+            platform: 'twitch',
+            twitchChannel: stored.twitchChannel || STREAM_SCHEDULE.defaultTwitchChannel,
+            youtubeUrl: stored.youtubeUrl,
+        };
+    }
+
+    // Just past the window end → flip back to YouTube once, then hand control back.
+    if (minutes >= windowEnd) {
+        try {
+            const alreadyFlipped = await redis.get<string>(STREAM_FLIP_MARKER_KEY);
+            if (alreadyFlipped !== dateKey) {
+                const flipped: StreamConfig = {
+                    platform: 'youtube',
+                    youtubeUrl: stored.youtubeUrl || STREAM_SCHEDULE.defaultYoutubeUrl,
+                    twitchChannel: stored.twitchChannel,
+                };
+                await setStreamConfig(flipped);
+                await redis.set(STREAM_FLIP_MARKER_KEY, dateKey);
+                return flipped;
+            }
+        } catch (error) {
+            console.error('Failed to apply scheduled YouTube flip:', error);
+        }
+    }
+
+    return stored;
 }
 
 // Legacy compat wrappers

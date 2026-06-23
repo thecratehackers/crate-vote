@@ -87,6 +87,28 @@ export const FEATURES = {
     enableShoutouts: true,
 } as const;
 
+// ============ STREAM AUTO-SCHEDULE ============
+// Automatically forces the main viewing panel to Twitch during the live show,
+// then flips back to YouTube when the window ends. This runs SERVER-SIDE inside
+// getEffectiveStreamConfig(), so it cannot be circumvented from the admin UI,
+// a manual toggle, or anything else — viewers get the scheduled platform on
+// their next poll regardless of what was clicked.
+//
+// Timeline (all times interpreted in `timeZone`):
+//   - day @ startHour:startMinute → force TWITCH for everyone (overrides manual changes)
+//   - day @ endHour:endMinute     → flip back to YOUTUBE once, then admin controls again
+export const STREAM_SCHEDULE = {
+    enabled: true,
+    timeZone: 'America/Chicago',   // US Central
+    day: 2,                        // 0=Sun, 1=Mon, 2=Tue … the weekly show day
+    startHour: 18,                 // 6:50 PM Central — 10 min before the 7 PM show
+    startMinute: 50,
+    endHour: 20,                   // 8:50 PM Central — 2 hours after the Twitch flip
+    endMinute: 50,
+    defaultTwitchChannel: 'thecratehackers',
+    defaultYoutubeUrl: 'https://youtube.com/playlist?list=PLhHOzEAFc1RhNtCgvwyhmi25X2dJzODXX',
+} as const;
+
 // ============ RESERVED USERNAMES ============
 export const RESERVED_USERNAMES = [
     'admin',

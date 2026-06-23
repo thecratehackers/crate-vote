@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getQueueWindowStatus, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getDemoNightConfig, getCrateCrackStatus, getShowClock, getExportRequirementsEnabled, sanitizeSongForClient } from '@/lib/redis-store';
+import { getSortedSongs, addSong, adminAddSong, getUserStatus, getUserVotes, isPlaylistLocked, isUserBanned, containsProfanity, censorProfanity, getPlaylistTitle, getRecentActivity, addActivity, getKarmaBonuses, autoPruneSongs, checkAndGrantTop3Karma, isRedisConfigured, updateViewerHeartbeat, getActiveViewerCount, getDeleteWindowStatus, canUserDeleteInWindow, getQueueWindowStatus, getVersusBattleStatus, getKarmaRainStatus, getSessionPermissions, getYouTubeEmbed, getEffectiveStreamConfig, getPrizeDropStatus, getLeaderboardKingStatus, getTimerStatus, getNowPlaying, getDemoNightConfig, getCrateCrackStatus, getShowClock, getExportRequirementsEnabled, sanitizeSongForClient } from '@/lib/redis-store';
 import { getVisitorIdFromRequest } from '@/lib/fingerprint';
 import { resolveVoterIdentity, attachVoterCookie } from '@/lib/identity';
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
         getKarmaRainStatus(),
         getSessionPermissions(),
         getYouTubeEmbed(),
-        getStreamConfig(),
+        getEffectiveStreamConfig(),
         getPrizeDropStatus(),
         getLeaderboardKingStatus(),
         getTimerStatus(),

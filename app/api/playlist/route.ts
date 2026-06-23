@@ -22,7 +22,7 @@ import {
     setSessionPermissions,
     getYouTubeEmbed,
     setYouTubeEmbed,
-    getStreamConfig,
+    getEffectiveStreamConfig,
     setStreamConfig,
     getShowClock,
     getDemoNightConfig,
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
         isAdmin ? getRecentActivity() : Promise.resolve([]),  // Only fetch for admins
         getSessionPermissions(),
         getYouTubeEmbed(),
-        getStreamConfig(),
+        getEffectiveStreamConfig(),
         getShowClock(),
         getDemoNightConfig(),
     ]);
