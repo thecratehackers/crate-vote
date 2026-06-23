@@ -325,7 +325,7 @@ export default function AdminPage() {
     });
     const [isStartingCrateCrack, setIsStartingCrateCrack] = useState(false);
     const [isStoppingCrateCrack, setIsStoppingCrateCrack] = useState(false);
-    const [crateCrackGameType, setCrateCrackGameType] = useState<'request_evader' | 'crate_man' | 'missile_wedding' | 'bpm_sort'>('request_evader');
+    const [crateCrackGameType, setCrateCrackGameType] = useState<'request_evader' | 'crate_man' | 'missile_wedding' | 'bpm_sort'>('missile_wedding');
     const [crateCrackDuration, setCrateCrackDuration] = useState(60);
     const [crateCrackRewardLabel, setCrateCrackRewardLabel] = useState('14 Free Days');
     const [crateCrackRewardUrl, setCrateCrackRewardUrl] = useState('https://www.cratehackers.com/14daytrial');
