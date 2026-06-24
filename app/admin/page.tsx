@@ -2354,9 +2354,15 @@ export default function AdminPage() {
     };
 
     const handleArtistVersusCancel = async () => {
-        const confirmed = window.confirm('Cancel 1s and 0s? Note: Cancelling does NOT un-nuke any bombed artists.');
-        if (!confirmed) return;
-        const ok = await artistVersusAction({ action: 'cancel' }, '1s and 0s cancelled.');
+        // The damage report is post-game — closing it can't un-nuke anything, so
+        // never gate it behind a native confirm() (those can be auto-dismissed or
+        // blocked on mobile/embedded admin views, leaving the overlay stuck up).
+        // Only warn for a genuine mid-game cancel.
+        if (artistVersus.phase !== 'damageReport') {
+            const confirmed = window.confirm('Cancel 1s and 0s? Note: Cancelling does NOT un-nuke any bombed artists.');
+            if (!confirmed) return;
+        }
+        const ok = await artistVersusAction({ action: 'cancel' }, '1s and 0s closed.');
         if (ok) {
             setArtistVersus(initialArtistVersus);
             setBombArmedSide(null);
