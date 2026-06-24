@@ -2353,20 +2353,31 @@ export default function AdminPage() {
         await artistVersusAction({ action: 'end' }, 'Damage report shown.');
     };
 
-    const handleArtistVersusCancel = async () => {
-        // The damage report is post-game — closing it can't un-nuke anything, so
-        // never gate it behind a native confirm() (those can be auto-dismissed or
-        // blocked on mobile/embedded admin views, leaving the overlay stuck up).
-        // Only warn for a genuine mid-game cancel.
-        if (artistVersus.phase !== 'damageReport') {
-            const confirmed = window.confirm('Cancel 1s and 0s? Note: Cancelling does NOT un-nuke any bombed artists.');
-            if (!confirmed) return;
+    const handleArtistVersusCancel = () => {
+        const doCancel = async () => {
+            const ok = await artistVersusAction({ action: 'cancel' }, '1s and 0s closed.');
+            if (ok) {
+                setArtistVersus(initialArtistVersus);
+                setBombArmedSide(null);
+            }
+        };
+
+        // Post-game "Close": nothing to un-nuke, so dismiss instantly.
+        if (artistVersus.phase === 'damageReport') {
+            void doCancel();
+            return;
         }
-        const ok = await artistVersusAction({ action: 'cancel' }, '1s and 0s closed.');
-        if (ok) {
-            setArtistVersus(initialArtistVersus);
-            setBombArmedSide(null);
-        }
+
+        // Mid-game "Cancel": confirm via the IN-APP modal, never native confirm().
+        // The admin re-polls every 1s; on iPad/iOS Safari a native dialog gets
+        // auto-dismissed when the page re-renders under it, which silently ate the
+        // host's tap last time. showConfirmModal pauses polling while it's open.
+        showConfirmModal(
+            'Cancel 1s and 0s?',
+            'Cancelling does NOT un-nuke any bombed artists.',
+            () => { void doCancel(); },
+            'Cancel Game'
+        );
     };
 
     // ============ SHOW CLOCK HANDLERS ============
