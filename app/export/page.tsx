@@ -446,8 +446,8 @@ export default function ExportPage() {
                         color: var(--orange-primary);
                     }
                     .missing-tracks-note {
-                        background: rgba(251, 191, 36, 0.1);
-                        border: 1px solid rgba(251, 191, 36, 0.3);
+                        background: rgba(224, 159, 36, 0.1);
+                        border: 1px solid rgba(224, 159, 36, 0.3);
                         border-radius: 10px;
                         padding: 12px 16px;
                         margin-bottom: 20px;
@@ -457,7 +457,7 @@ export default function ExportPage() {
                     }
                     .missing-tracks-note p {
                         margin: 0 0 8px;
-                        color: #fbbf24;
+                        color: #e09f24;
                         font-weight: 600;
                     }
                     .missing-tracks-note ul {
@@ -520,7 +520,7 @@ export default function ExportPage() {
                     .back-to-home-btn:hover {
                         background: rgba(211, 119, 29, 0.15);
                         border-color: rgba(211, 119, 29, 0.6);
-                        color: #e0a030;
+                        color: #e09f24;
                         box-shadow: 0 0 20px rgba(211, 119, 29, 0.15);
                     }
                     .back-to-home-btn:hover .back-chevron {
@@ -797,7 +797,7 @@ export default function ExportPage() {
                 .back-btn:hover {
                     background: rgba(211, 119, 29, 0.15);
                     border-color: rgba(211, 119, 29, 0.6);
-                    color: #e0a030;
+                    color: #e09f24;
                     box-shadow: 0 0 16px rgba(211, 119, 29, 0.15);
                 }
                 .back-btn:hover .back-chevron {
@@ -830,9 +830,9 @@ export default function ExportPage() {
                     color: var(--text-secondary);
                 }
                 .error-msg {
-                    background: rgba(239, 68, 68, 0.1);
-                    border: 1px solid rgba(239, 68, 68, 0.3);
-                    color: #ef4444;
+                    background: rgba(201, 78, 35, 0.1);
+                    border: 1px solid rgba(201, 78, 35, 0.3);
+                    color: #c94e23;
                     padding: 12px;
                     border-radius: 8px;
                     margin-bottom: 16px;
@@ -840,8 +840,8 @@ export default function ExportPage() {
 
                 /* ── PARTICIPATION GATE ─────────────────────────── */
                 .participation-gate {
-                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(211, 119, 29, 0.12) 50%, rgba(239, 68, 68, 0.06) 100%);
-                    border: 1px solid rgba(239, 68, 68, 0.35);
+                    background: linear-gradient(135deg, rgba(201, 78, 35, 0.08) 0%, rgba(211, 119, 29, 0.12) 50%, rgba(201, 78, 35, 0.06) 100%);
+                    border: 1px solid rgba(201, 78, 35, 0.35);
                     border-radius: 16px;
                     padding: 28px 24px;
                     margin-bottom: 24px;
@@ -855,7 +855,7 @@ export default function ExportPage() {
                     left: 0;
                     right: 0;
                     height: 3px;
-                    background: linear-gradient(90deg, #ef4444, #d3771d, #ef4444);
+                    background: linear-gradient(90deg, #c94e23, #d3771d, #c94e23);
                     animation: gate-shimmer 3s linear infinite;
                 }
                 @keyframes gate-shimmer {
@@ -905,7 +905,7 @@ export default function ExportPage() {
                 }
                 .gate-progress-fill {
                     height: 100%;
-                    background: linear-gradient(90deg, #ef4444, #d3771d, #22c55e);
+                    background: linear-gradient(90deg, #c94e23, #d3771d, #e09f24);
                     border-radius: 10px;
                     transition: width 0.6s ease;
                     box-shadow: 0 0 8px rgba(211, 119, 29, 0.4);
@@ -935,8 +935,8 @@ export default function ExportPage() {
                     transition: all 0.3s ease;
                 }
                 .gate-check-item.done {
-                    background: rgba(34, 197, 94, 0.08);
-                    border-color: rgba(34, 197, 94, 0.25);
+                    background: rgba(224, 159, 36, 0.08);
+                    border-color: rgba(224, 159, 36, 0.25);
                 }
                 .check-icon {
                     font-size: 1.1rem;
@@ -949,7 +949,7 @@ export default function ExportPage() {
                     color: var(--text-primary);
                 }
                 .gate-check-item.done .check-label {
-                    color: #22c55e;
+                    color: #e09f24;
                 }
                 .check-progress {
                     font-size: 0.8rem;
@@ -958,7 +958,7 @@ export default function ExportPage() {
                     font-variant-numeric: tabular-nums;
                 }
                 .gate-check-item.done .check-progress {
-                    color: #22c55e;
+                    color: #e09f24;
                 }
                 .gate-cta {
                     display: inline-flex;
@@ -966,7 +966,7 @@ export default function ExportPage() {
                     justify-content: center;
                     gap: 8px;
                     padding: 14px 32px;
-                    background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
+                    background: linear-gradient(135deg, #d3771d 0%, #e09f24 100%);
                     color: #000;
                     font-weight: 700;
                     font-size: 1rem;
@@ -1098,8 +1098,8 @@ export default function ExportPage() {
                     min-width: 40px;
                     text-align: right;
                 }
-                .track-score.pos { color: #22c55e; }
-                .track-score.neg { color: #ef4444; }
+                .track-score.pos { color: #e09f24; }
+                .track-score.neg { color: #c94e23; }
 
                 /* ── DESTINATION CARDS ────────────────────────────── */
                 .export-destinations {
@@ -1278,7 +1278,7 @@ export default function ExportPage() {
                     left: 0;
                     right: 0;
                     height: 3px;
-                    background: linear-gradient(90deg, #d3771d, #e0a030, #d3771d);
+                    background: linear-gradient(90deg, #d3771d, #e09f24, #d3771d);
                     opacity: 0.8;
                 }
                 .crate-hackers-card:hover:not(.disabled-card) {
@@ -1297,14 +1297,14 @@ export default function ExportPage() {
                     font-size: 0.55rem;
                     font-weight: 800;
                     letter-spacing: 1.5px;
-                    background: linear-gradient(135deg, #d3771d, #e0a030);
+                    background: linear-gradient(135deg, #d3771d, #e09f24);
                     color: #000;
                     padding: 3px 8px;
                     border-radius: 20px;
                     text-transform: uppercase;
                 }
                 .ch-action {
-                    background: linear-gradient(135deg, #d3771d 0%, #e0a030 100%);
+                    background: linear-gradient(135deg, #d3771d 0%, #e09f24 100%);
                     color: #000;
                     font-weight: 700;
                     text-decoration: none;
@@ -1314,7 +1314,7 @@ export default function ExportPage() {
                 .ch-action:hover:not(:disabled) {
                     transform: scale(1.02);
                     box-shadow: 0 4px 20px rgba(211, 119, 29, 0.45);
-                    background: linear-gradient(135deg, #e0a030 0%, #d3771d 100%);
+                    background: linear-gradient(135deg, #e09f24 0%, #d3771d 100%);
                 }
                 .ch-syncing {
                     color: #d3771d;

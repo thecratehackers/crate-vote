@@ -7,6 +7,7 @@ import { PlaylistSkeleton } from '@/components/Skeleton';
 import VersusBattle from '@/components/VersusBattle';
 import ArtistVersus, { type ArtistVersusState as ArtistVersusComponentState } from '@/components/ArtistVersus';
 import DanceGame, { type DanceGameState as DanceGameComponentState } from '@/components/DanceGame';
+import SoundPrimer from '@/components/SoundPrimer';
 import VideoPreview from '@/components/VideoPreview';
 import JukeboxPlayer from '@/components/JukeboxPlayer';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -766,7 +767,7 @@ export default function HomePage() {
     const [avatarInput, setAvatarInput] = useState<string>('🎧');
     const [userColor, setUserColor] = useState<string>('#ffffff');
     const [colorInput, setColorInput] = useState<string>(() => {
-        const colors = ['#ffffff', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#a855f7'];
+        const colors = ['#ffffff', '#e09f24', '#d3771d', '#c94e23', '#874b23', '#f3e8d0'];
         return colors[Math.floor(Math.random() * colors.length)];
     });
     const [showRulesPopover, setShowRulesPopover] = useState(false);
@@ -798,11 +799,11 @@ export default function HomePage() {
     // Color options for user name - limited to readable colors on dark background
     const COLOR_OPTIONS = [
         '#ffffff', // White
-        '#ef4444', // Red
-        '#f97316', // Orange (Crate Hackers brand)
-        '#22c55e', // Green
-        '#3b82f6', // Blue
-        '#a855f7', // Purple
+        '#e09f24', // Gold (Crate Hackers brand)
+        '#d3771d', // Deep Orange
+        '#c94e23', // Burnt Orange
+        '#874b23', // Dark Brown
+        '#f3e8d0', // Warm cream
     ];
 
     // Audio preview state
@@ -4736,6 +4737,10 @@ export default function HomePage() {
                     </ErrorBoundary>
                 )
             }
+
+            {/* 🔊 Pre-arm sound before any game starts so the first clip never gets
+                blocked. Hidden during the dance game (it has its own sound prompt). */}
+            {!danceGame.active && <SoundPrimer />}
 
             {isBanned && <div className="banned-banner">⚠️ A moderator paused your access. <span className="banned-detail">It resets next round.</span></div>}
 

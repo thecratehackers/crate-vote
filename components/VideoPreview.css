@@ -80,8 +80,8 @@
 }
 
 .video-preview-header .close-btn:hover {
-    background: rgba(255, 107, 53, 0.3);
-    color: #ff6b35;
+    background: rgba(211, 119, 29, 0.3);
+    color: #d3771d;
 }
 
 /* Video Container */
@@ -153,8 +153,8 @@
 }
 
 .mute-btn.unmuted {
-    background: rgba(74, 222, 128, 0.2);
-    color: #4ade80;
+    background: rgba(224, 159, 36, 0.2);
+    color: #e09f24;
 }
 
 .youtube-link {

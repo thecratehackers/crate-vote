@@ -37,13 +37,13 @@
 }
 
 .toast-success {
-    border-color: rgba(34, 197, 94, 0.4);
-    background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(34, 197, 94, 0.1));
+    border-color: rgba(224, 159, 36, 0.4);
+    background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(224, 159, 36, 0.1));
 }
 
 .toast-error {
-    border-color: rgba(239, 68, 68, 0.4);
-    background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(239, 68, 68, 0.1));
+    border-color: rgba(201, 78, 35, 0.4);
+    background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(201, 78, 35, 0.1));
 }
 
 .toast-info {
@@ -63,13 +63,13 @@
 }
 
 .toast-success .toast-icon {
-    background: rgba(34, 197, 94, 0.2);
-    color: #22c55e;
+    background: rgba(224, 159, 36, 0.2);
+    color: #e09f24;
 }
 
 .toast-error .toast-icon {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
+    background: rgba(201, 78, 35, 0.2);
+    color: #c94e23;
 }
 
 .toast-info .toast-icon {

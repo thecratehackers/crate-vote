@@ -38,11 +38,11 @@ export const BROADCAST = {
     reminderDismissMs: 5000,          // Auto-dismiss reminder banners
     segmentIcons: ['🗳️', '❓', '🏆', '🎧', '🎛️', '💀', '🌧️', '⚡'],
     hypeLevels: [
-        { threshold: 0, label: 'CHILL', emoji: '🔈', color: '#6b7280' },
-        { threshold: 20, label: 'WARMING UP', emoji: '🔉', color: '#f59e0b' },
-        { threshold: 40, label: 'ON FIRE', emoji: '🔊', color: '#3b82f6' },
-        { threshold: 65, label: 'HYPE', emoji: '📡', color: '#8b5cf6' },
-        { threshold: 85, label: 'INSANE', emoji: '🚨', color: '#ef4444' },
+        { threshold: 0, label: 'CHILL', emoji: '🔈', color: '#874b23' },
+        { threshold: 20, label: 'WARMING UP', emoji: '🔉', color: '#d3771d' },
+        { threshold: 40, label: 'ON FIRE', emoji: '🔊', color: '#e09f24' },
+        { threshold: 65, label: 'HYPE', emoji: '📡', color: '#c94e23' },
+        { threshold: 85, label: 'INSANE', emoji: '🚨', color: '#e09f24' },
     ],
 } as const;
 

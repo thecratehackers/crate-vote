@@ -4,26 +4,27 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .artist-versus-banner {
-    background: linear-gradient(135deg, #1a0a1a 0%, #2a0a2a 50%, #1a0a1a 100%);
-    border: 2px solid #d946ef;
+    background: linear-gradient(135deg, #1a1008 0%, #2a1508 50%, #1a1008 100%);
+    border: 2px solid #d3771d;
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: 0 0 30px rgba(217, 70, 239, 0.4);
+    box-shadow: 0 0 30px rgba(211, 119, 29, 0.4);
     position: relative;
     overflow: hidden;
     animation: av-pulse-glow 2.5s infinite;
+    font-family: 'Roboto', sans-serif;
 }
 
 @keyframes av-pulse-glow {
 
     0%,
     100% {
-        box-shadow: 0 0 20px rgba(217, 70, 239, 0.3);
+        box-shadow: 0 0 20px rgba(211, 119, 29, 0.3);
     }
 
     50% {
-        box-shadow: 0 0 50px rgba(217, 70, 239, 0.6);
+        box-shadow: 0 0 50px rgba(211, 119, 29, 0.6);
     }
 }
 
@@ -36,7 +37,7 @@
 
 .av-player-banner {
     display: inline-block;
-    background: #d946ef;
+    background: #d3771d;
     color: #fff;
     font-size: 0.8rem;
     font-weight: 800;
@@ -45,16 +46,17 @@
     border-radius: 999px;
     margin-bottom: 8px;
     text-transform: uppercase;
-    box-shadow: 0 0 12px rgba(217, 70, 239, 0.5);
+    box-shadow: 0 0 12px rgba(211, 119, 29, 0.5);
 }
 
 .av-title {
     font-size: 1.5rem;
-    color: #f0abfc;
+    color: #e09f24;
     margin: 0;
     letter-spacing: 2px;
-    text-shadow: 0 0 12px rgba(240, 171, 252, 0.6);
+    text-shadow: 0 0 12px rgba(224, 159, 36, 0.6);
     font-weight: 700;
+    font-family: 'Rubik', sans-serif;
 }
 
 .av-round-counter {
@@ -77,9 +79,9 @@
 }
 
 .av-bomb-status.armed {
-    background: #b91c1c;
+    background: #874b23;
     color: #fff;
-    box-shadow: 0 0 12px rgba(185, 28, 28, 0.6);
+    box-shadow: 0 0 12px rgba(135, 75, 35, 0.6);
     animation: av-bomb-pulse 1.5s infinite;
 }
 
@@ -95,17 +97,17 @@
     gap: 12px;
     margin: 0 0 14px;
     padding: 14px 16px;
-    background: linear-gradient(135deg, rgba(217, 70, 239, 0.22), rgba(0, 0, 0, 0.42));
-    border: 2px solid rgba(240, 171, 252, 0.42);
+    background: linear-gradient(135deg, rgba(211, 119, 29, 0.22), rgba(0, 0, 0, 0.42));
+    border: 2px solid rgba(224, 159, 36, 0.42);
     border-radius: 14px;
     color: rgba(255, 255, 255, 0.84);
     font-size: 0.95rem;
-    box-shadow: 0 0 18px rgba(217, 70, 239, 0.22);
+    box-shadow: 0 0 18px rgba(211, 119, 29, 0.22);
 }
 
 .av-audio-consent.enabled {
-    border-color: rgba(74, 222, 128, 0.35);
-    background: rgba(74, 222, 128, 0.08);
+    border-color: rgba(224, 159, 36, 0.35);
+    background: rgba(224, 159, 36, 0.08);
 }
 
 .av-audio-consent strong {
@@ -126,15 +128,15 @@
     padding: 12px 18px;
     border: none;
     border-radius: 999px;
-    background: #f0abfc;
-    color: #1a0a1a;
+    background: #e09f24;
+    color: #1a1008;
     font-size: 0.95rem;
     font-weight: 900;
     letter-spacing: 0.5px;
     text-transform: uppercase;
     white-space: nowrap;
     cursor: pointer;
-    box-shadow: 0 0 18px rgba(240, 171, 252, 0.48);
+    box-shadow: 0 0 18px rgba(224, 159, 36, 0.48);
 }
 
 .av-twitch-rules {
@@ -156,8 +158,8 @@
 }
 
 .av-rule-card.left {
-    border-color: rgba(74, 222, 128, 0.48);
-    background: rgba(74, 222, 128, 0.1);
+    border-color: rgba(224, 159, 36, 0.48);
+    background: rgba(224, 159, 36, 0.1);
 }
 
 .av-rule-card.right {
@@ -227,7 +229,7 @@
     align-items: center;
     justify-content: center;
     padding: 0 8px;
-    color: #f0abfc;
+    color: #e09f24;
     font-size: 0.72rem;
     font-weight: 900;
     letter-spacing: 1.5px;
@@ -266,15 +268,15 @@
 .av-vs span {
     font-size: 2rem;
     font-weight: 900;
-    color: #d946ef;
-    text-shadow: 0 0 16px rgba(217, 70, 239, 0.7);
+    color: #d3771d;
+    text-shadow: 0 0 16px rgba(211, 119, 29, 0.7);
     letter-spacing: 2px;
 }
 
 /* ============ Contestant cards ============ */
 .av-contestant {
     background: rgba(255, 255, 255, 0.05);
-    border: 2px solid rgba(217, 70, 239, 0.3);
+    border: 2px solid rgba(211, 119, 29, 0.3);
     border-radius: 12px;
     padding: 16px 12px;
     text-align: center;
@@ -317,9 +319,9 @@
 }
 
 .av-contestant.winner {
-    background: rgba(74, 222, 128, 0.18);
-    border-color: #4ade80;
-    box-shadow: 0 0 24px rgba(74, 222, 128, 0.5);
+    background: rgba(224, 159, 36, 0.18);
+    border-color: #e09f24;
+    box-shadow: 0 0 24px rgba(224, 159, 36, 0.5);
 }
 
 .av-contestant.loser {
@@ -328,9 +330,9 @@
 }
 
 .av-contestant.nuked {
-    background: rgba(185, 28, 28, 0.25);
-    border-color: #ef4444;
-    box-shadow: 0 0 30px rgba(239, 68, 68, 0.7);
+    background: rgba(135, 75, 35, 0.25);
+    border-color: #c94e23;
+    box-shadow: 0 0 30px rgba(201, 78, 35, 0.7);
     animation: av-nuked-shake 0.5s;
 }
 
@@ -397,7 +399,7 @@
 
 .av-song-count {
     font-size: 0.7rem;
-    color: #f0abfc;
+    color: #e09f24;
     letter-spacing: 1px;
 }
 
@@ -414,7 +416,7 @@
 }
 
 .av-badge.winner-badge {
-    background: #4ade80;
+    background: #e09f24;
     color: #000;
 }
 
@@ -424,9 +426,9 @@
 }
 
 .av-badge.nuked-badge {
-    background: #ef4444;
+    background: #c94e23;
     color: #fff;
-    box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+    box-shadow: 0 0 12px rgba(201, 78, 35, 0.7);
 }
 
 .av-badge.survivor-badge {
@@ -453,19 +455,19 @@
 }
 
 .av-round-pip.current {
-    border-color: #d946ef;
-    background: rgba(217, 70, 239, 0.15);
-    box-shadow: 0 0 12px rgba(217, 70, 239, 0.4);
+    border-color: #d3771d;
+    background: rgba(211, 119, 29, 0.15);
+    box-shadow: 0 0 12px rgba(211, 119, 29, 0.4);
 }
 
 .av-round-pip.resolved {
-    background: rgba(74, 222, 128, 0.1);
-    border-color: rgba(74, 222, 128, 0.4);
+    background: rgba(224, 159, 36, 0.1);
+    border-color: rgba(224, 159, 36, 0.4);
 }
 
 .av-round-pip.resolved.bomb {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(201, 78, 35, 0.15);
+    border-color: rgba(201, 78, 35, 0.5);
 }
 
 .av-round-pip.pending {
@@ -474,7 +476,7 @@
 
 .av-round-pip-num {
     font-size: 0.75rem;
-    color: #f0abfc;
+    color: #e09f24;
     font-weight: 700;
     letter-spacing: 1px;
 }
@@ -499,12 +501,12 @@
 }
 
 .av-instructions.resolved {
-    color: #4ade80;
+    color: #e09f24;
     font-weight: 600;
 }
 
 .av-instructions.resolved.nuked {
-    color: #ef4444;
+    color: #c94e23;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 2px;
@@ -514,7 +516,7 @@
 .av-explosion {
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at center, #fef08a 0%, #f97316 30%, #b91c1c 60%, transparent 100%);
+    background: radial-gradient(circle at center, #fef08a 0%, #d3771d 30%, #874b23 60%, transparent 100%);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -552,8 +554,8 @@
     color: #fff;
     text-shadow:
         0 0 20px #fff,
-        0 0 40px #f97316,
-        0 0 60px #b91c1c;
+        0 0 40px #d3771d,
+        0 0 60px #874b23;
     letter-spacing: 8px;
     animation: av-explosion-shake 0.15s infinite;
 }
@@ -598,7 +600,7 @@
     text-align: center;
     font-size: 1.1rem;
     font-weight: 800;
-    color: #f0abfc;
+    color: #e09f24;
     margin-bottom: 16px;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -609,8 +611,8 @@
 }
 
 .av-damage-section.nuked-section {
-    background: rgba(185, 28, 28, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: rgba(135, 75, 35, 0.1);
+    border: 1px solid rgba(201, 78, 35, 0.3);
     border-radius: 8px;
     padding: 12px;
 }
@@ -618,14 +620,14 @@
 .av-damage-section-title {
     font-size: 0.85rem;
     font-weight: 700;
-    color: #d946ef;
+    color: #d3771d;
     margin-bottom: 8px;
     letter-spacing: 1px;
     text-transform: uppercase;
 }
 
 .nuked-section .av-damage-section-title {
-    color: #ef4444;
+    color: #c94e23;
 }
 
 .av-damage-row {
@@ -647,9 +649,9 @@
 
 .av-damage-round {
     font-size: 0.75rem;
-    color: #f0abfc;
+    color: #e09f24;
     font-weight: 700;
-    background: rgba(217, 70, 239, 0.2);
+    background: rgba(211, 119, 29, 0.2);
     padding: 2px 6px;
     border-radius: 4px;
 }

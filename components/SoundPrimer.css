@@ -1,0 +1,86 @@
+.sound-primer {
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 1200;
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    max-width: calc(100vw - 24px);
+    border-radius: 16px;
+    background: rgba(26, 18, 7, 0.92);
+    border: 1px solid rgba(224, 159, 36, 0.7);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    overflow: hidden;
+    animation: sound-primer-in 220ms ease-out, sound-primer-pulse 1.9s ease-in-out 220ms infinite;
+    font-family: 'Roboto', sans-serif;
+}
+
+.sound-primer-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px 12px 16px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sound-primer-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.sound-primer-text strong {
+    display: block;
+    font-size: 0.98rem;
+    font-weight: 800;
+    color: #fff;
+    font-family: 'Rubik', sans-serif;
+}
+
+.sound-primer-text small {
+    display: block;
+    font-size: 0.78rem;
+    color: #f3e8d0;
+    margin-top: 2px;
+}
+
+.sound-primer-dismiss {
+    flex-shrink: 0;
+    width: 40px;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sound-primer-dismiss:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+@keyframes sound-primer-in {
+    from { opacity: 0; transform: translate(-50%, 12px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes sound-primer-pulse {
+    0%, 100% { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(224, 159, 36, 0.4); }
+    50% { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 7px rgba(224, 159, 36, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sound-primer {
+        animation: sound-primer-in 220ms ease-out;
+    }
+}

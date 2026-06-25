@@ -3,18 +3,19 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .versus-battle-banner {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    border: 2px solid #ff6b35;
+    background: linear-gradient(135deg, #1a1008 0%, #160c03 100%);
+    border: 2px solid #d3771d;
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: 0 0 30px rgba(255, 107, 53, 0.4);
+    box-shadow: 0 0 30px rgba(211, 119, 29, 0.4);
     animation: pulse-glow 2s infinite;
+    font-family: 'Roboto', sans-serif;
 }
 
 .versus-battle-banner.lightning {
-    border-color: #ffd700;
-    box-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
+    border-color: #e09f24;
+    box-shadow: 0 0 40px rgba(224, 159, 36, 0.5);
     animation: lightning-pulse 0.5s infinite;
 }
 
@@ -22,11 +23,11 @@
 
     0%,
     100% {
-        box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+        box-shadow: 0 0 20px rgba(211, 119, 29, 0.3);
     }
 
     50% {
-        box-shadow: 0 0 40px rgba(255, 107, 53, 0.5);
+        box-shadow: 0 0 40px rgba(211, 119, 29, 0.5);
     }
 }
 
@@ -34,11 +35,11 @@
 
     0%,
     100% {
-        box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+        box-shadow: 0 0 30px rgba(224, 159, 36, 0.4);
     }
 
     50% {
-        box-shadow: 0 0 50px rgba(255, 215, 0, 0.7);
+        box-shadow: 0 0 50px rgba(224, 159, 36, 0.7);
     }
 }
 
@@ -50,16 +51,17 @@
 
 .battle-title {
     font-size: 1.25rem;
-    color: #ff6b35;
+    color: #d3771d;
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 2px;
-    text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+    text-shadow: 0 0 10px rgba(211, 119, 29, 0.5);
+    font-family: 'Rubik', sans-serif;
 }
 
 .lightning .battle-title {
-    color: #ffd700;
-    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    color: #e09f24;
+    text-shadow: 0 0 10px rgba(224, 159, 36, 0.5);
 }
 
 .battle-countdown {
@@ -72,7 +74,7 @@
 }
 
 .battle-countdown.urgent {
-    color: #ff4444;
+    color: #c94e23;
     animation: countdown-pulse 0.5s infinite;
 }
 
@@ -109,25 +111,25 @@
 }
 
 .battle-song:hover:not(.voted):not(.winner):not(.loser) {
-    border-color: rgba(255, 107, 53, 0.5);
-    background: rgba(255, 107, 53, 0.1);
+    border-color: rgba(211, 119, 29, 0.5);
+    background: rgba(211, 119, 29, 0.1);
     transform: scale(1.02);
 }
 
 .battle-song:focus {
-    outline: 2px solid #ff6b35;
+    outline: 2px solid #d3771d;
     outline-offset: 2px;
 }
 
 .battle-song.voted {
-    background: rgba(74, 222, 128, 0.2);
-    border-color: #4ade80;
+    background: rgba(224, 159, 36, 0.2);
+    border-color: #e09f24;
     cursor: default;
 }
 
 .battle-song.winner {
-    background: rgba(74, 222, 128, 0.3);
-    border-color: #4ade80;
+    background: rgba(224, 159, 36, 0.3);
+    border-color: #e09f24;
     cursor: default;
 }
 
@@ -181,7 +183,7 @@
     bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
-    background: #4ade80;
+    background: #e09f24;
     color: #000;
 }
 
@@ -189,7 +191,7 @@
     bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
-    background: #ffd700;
+    background: #e09f24;
     color: #000;
 }
 
@@ -218,8 +220,8 @@
 .battle-vs span {
     font-size: 1.5rem;
     font-weight: 800;
-    color: #ff6b35;
-    text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+    color: #d3771d;
+    text-shadow: 0 0 10px rgba(211, 119, 29, 0.5);
 }
 
 /* Instructions */
@@ -231,7 +233,7 @@
 }
 
 .battle-instructions.voted {
-    color: #4ade80;
+    color: #e09f24;
 }
 
 /* Standard Mobile Responsive (640px) */

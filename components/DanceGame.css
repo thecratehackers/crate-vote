@@ -12,6 +12,7 @@
     padding: 20px;
     background: radial-gradient(circle at 50% 28%, #3a1e08 0%, #1c0f04 55%, #0b0602 100%);
     overflow-y: auto;
+    font-family: 'Roboto', sans-serif;
 }
 
 .dance-game-stage {
@@ -37,7 +38,7 @@
     font-weight: 800;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: #f6c45a;
+    color: #e09f24;
     background: rgba(224, 159, 36, 0.16);
     border: 1px solid rgba(224, 159, 36, 0.45);
     padding: 4px 14px;
@@ -52,13 +53,14 @@
     color: #fff;
     text-shadow: 0 0 24px rgba(211, 119, 29, 0.75);
     line-height: 1.05;
+    font-family: 'Rubik', sans-serif;
 }
 
 .dg-tagline {
     margin: 0;
     font-size: clamp(0.95rem, 3vw, 1.25rem);
     font-weight: 700;
-    color: #f6c45a;
+    color: #e09f24;
     text-shadow: 0 0 12px rgba(224, 159, 36, 0.4);
     min-height: 1.4em;
 }
@@ -322,5 +324,50 @@
 }
 
 .dg-audio-consent button:hover {
-    background: #f0b53e;
+    background: #d3771d;
+}
+
+/* Pre-playback prompt: a single obvious tap target shown until audio is unlocked. */
+.dg-audio-enable {
+    width: 100%;
+    max-width: 460px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(224, 159, 36, 0.7);
+    background: linear-gradient(180deg, rgba(224, 159, 36, 0.22), rgba(201, 78, 35, 0.22));
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+    animation: dg-audio-pulse 1.8s ease-in-out infinite;
+}
+
+.dg-audio-enable:hover {
+    border-color: rgba(240, 181, 62, 0.9);
+}
+
+.dg-audio-enable-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.dg-audio-enable-text strong {
+    display: block;
+    font-size: 1rem;
+    color: #fff;
+}
+
+.dg-audio-enable-text small {
+    display: block;
+    font-size: 0.8rem;
+    color: #f3e8d0;
+    margin-top: 2px;
+}
+
+@keyframes dg-audio-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(224, 159, 36, 0.45); }
+    50% { box-shadow: 0 0 0 8px rgba(224, 159, 36, 0); }
 }

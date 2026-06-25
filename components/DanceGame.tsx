@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getGameAudioContext, useGameSound } from '@/lib/game-sound';
+import { serverNow, syncServerClock, ensureClockFresh } from '@/lib/server-clock';
+import {
+    prefetchClips,
+    getDecodedClip,
+    decodeClip,
+    scheduleClip,
+    type ClipHandle,
+} from '@/lib/synced-clip-player';
 import './DanceGame.css';
 
 export interface DanceWheelEntry {
@@ -49,20 +57,28 @@ const SLICE_COLORS = [
 ];
 
 export default function DanceGame({ state }: DanceGameProps) {
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+    // Web Audio playback (sample-accurate, scheduled on the shared clock)
+    const clipHandleRef = useRef<ClipHandle | null>(null);
+    // HTMLAudio fallback (only if a clip can't be decoded on this browser)
+    const audioElRef = useRef<HTMLAudioElement | null>(null);
     const audioStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const audioStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Bumped on every stop/replay so stale async decodes can't start late
+    const playTokenRef = useRef(0);
     const lastCueIdRef = useRef<string | null>(null);
     const rotationRef = useRef(0);
     const lastSpinIdRef = useRef<string | null>(null);
     const currentCueRef = useRef<DanceAudioCue | null>(null);
 
     // Shared, app-wide game sound: ON by default, one mute for every game.
-    const { soundOn, toggleMuted } = useGameSound();
+    const { soundOn, unlocked, toggleMuted } = useGameSound();
     const [needsTap, setNeedsTap] = useState(false);
     const [rotation, setRotation] = useState(0);
     const [isSpinning, setIsSpinning] = useState(false);
     const [clipRemaining, setClipRemaining] = useState(0);
+    // True once real audio has actually played this session — gates the Mute button
+    // so it only appears after the music is genuinely coming out of the speaker.
+    const [hasAudioStarted, setHasAudioStarted] = useState(false);
 
     const soundOnRef = useRef(soundOn);
     soundOnRef.current = soundOn;
@@ -131,6 +147,8 @@ export default function DanceGame({ state }: DanceGameProps) {
 
     // ── Audio playback ─────────────────────────────────────────────────────────
     const stopClip = useCallback(() => {
+        // Invalidate any in-flight async start (decode that hasn't fired yet).
+        playTokenRef.current += 1;
         if (audioStopTimeoutRef.current) {
             clearTimeout(audioStopTimeoutRef.current);
             audioStopTimeoutRef.current = null;
@@ -139,39 +157,35 @@ export default function DanceGame({ state }: DanceGameProps) {
             clearTimeout(audioStartTimeoutRef.current);
             audioStartTimeoutRef.current = null;
         }
-        if (audioRef.current) {
+        if (clipHandleRef.current) {
+            clipHandleRef.current.stop();
+            clipHandleRef.current = null;
+        }
+        if (audioElRef.current) {
             try {
-                audioRef.current.pause();
-                audioRef.current.src = '';
+                audioElRef.current.pause();
+                audioElRef.current.src = '';
             } catch {
                 // element may already be gone
             }
-            audioRef.current = null;
+            audioElRef.current = null;
         }
     }, []);
 
-    const playClip = useCallback((cue: DanceAudioCue) => {
-        stopClip();
-
+    // Last-resort path for browsers that can't decode the clip into Web Audio.
+    // Still scheduled on the shared clock so it lands close to everyone else.
+    const fallbackHtmlAudio = useCallback((cue: DanceAudioCue, token: number) => {
         const begin = () => {
-            const elapsedMs = Math.max(0, Date.now() - cue.startedAt);
-            const remainingMs = Math.max(0, cue.durationMs - elapsedMs);
+            if (token !== playTokenRef.current) return;
+            const elapsedMs = Math.max(0, serverNow() - cue.startedAt);
+            const remainingMs = cue.durationMs - elapsedMs;
             if (remainingMs <= 0) return;
-
             try {
                 const audio = new Audio(cue.previewUrl);
                 audio.volume = 0.9;
-                audioRef.current = audio;
-                if (elapsedMs > 1000) {
-                    audio.currentTime = elapsedMs / 1000;
-                }
-                audio.play().then(() => {
-                    setNeedsTap(false);
-                }).catch(() => {
-                    // Browser blocked autoplay (no interaction yet). Keep sound ON;
-                    // the next tap anywhere on the page will start it.
-                    setNeedsTap(true);
-                });
+                audioElRef.current = audio;
+                if (elapsedMs > 250) audio.currentTime = elapsedMs / 1000;
+                audio.play().then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
                 audioStopTimeoutRef.current = setTimeout(stopClip, remainingMs);
                 audio.addEventListener('ended', stopClip);
             } catch {
@@ -179,7 +193,7 @@ export default function DanceGame({ state }: DanceGameProps) {
             }
         };
 
-        const delay = cue.startedAt - Date.now();
+        const delay = cue.startedAt - serverNow();
         if (delay > 0) {
             audioStartTimeoutRef.current = setTimeout(begin, delay);
         } else {
@@ -187,17 +201,92 @@ export default function DanceGame({ state }: DanceGameProps) {
         }
     }, [stopClip]);
 
+    const playClip = useCallback((cue: DanceAudioCue) => {
+        stopClip();
+        const token = playTokenRef.current;
+
+        const ctx = getGameAudioContext();
+        // Audio can't run until the viewer has tapped once. Flag it; the unlock
+        // handler below will retry this same cue after the gesture.
+        if (!ctx || ctx.state !== 'running') {
+            setNeedsTap(true);
+            return;
+        }
+
+        const startWebAudio = (buffer: AudioBuffer): boolean => {
+            if (token !== playTokenRef.current) return true; // superseded by a newer cue
+            const handle = scheduleClip({
+                buffer,
+                startAtServerMs: cue.startedAt,
+                serverNowMs: serverNow(),
+                durationMs: cue.durationMs,
+                volume: 0.9,
+            });
+            if (handle) {
+                clipHandleRef.current = handle;
+                setNeedsTap(false);
+                return true;
+            }
+            return false;
+        };
+
+        // Best case: prefetched + already decoded → schedule instantly.
+        const decoded = getDecodedClip(cue.previewUrl);
+        if (decoded && startWebAudio(decoded)) return;
+
+        // Otherwise decode now (bytes are usually already prefetched, so this is
+        // just CPU work and finishes well inside the ~5s wheel spin).
+        decodeClip(cue.previewUrl).then(buffer => {
+            if (token !== playTokenRef.current) return;
+            if (buffer && getGameAudioContext()?.state === 'running' && startWebAudio(buffer)) return;
+            fallbackHtmlAudio(cue, token);
+        });
+    }, [stopClip, fallbackHtmlAudio]);
+
+    // ── Shared clock: keep this device's offset from the server fresh ───────────
+    useEffect(() => {
+        void syncServerClock();
+        const onWake = () => {
+            if (document.visibilityState === 'visible') void syncServerClock(3);
+        };
+        document.addEventListener('visibilitychange', onWake);
+        window.addEventListener('focus', onWake);
+        const interval = setInterval(() => ensureClockFresh(30000), 10000);
+        return () => {
+            document.removeEventListener('visibilitychange', onWake);
+            window.removeEventListener('focus', onWake);
+            clearInterval(interval);
+        };
+    }, []);
+
+    // ── Prefetch every wheel clip's bytes while active so the landed one is ready ─
+    const wheelPreviewKey = useMemo(
+        () => (state.wheel || []).map(w => w.previewUrl).join('|'),
+        [state.wheel],
+    );
+    useEffect(() => {
+        if (!state.active) return;
+        prefetchClips(wheelPreviewKey.split('|').filter(Boolean));
+    }, [state.active, wheelPreviewKey]);
+
     // If a clip was blocked (no interaction yet), retry it on the next tap/keypress.
     useEffect(() => {
         const unlock = () => {
-            getGameAudioContext();
-            if (needsTapRef.current) {
+            const ctx = getGameAudioContext();
+            const proceed = () => {
+                if (!needsTapRef.current) return;
                 const cue = currentCueRef.current;
-                if (soundOnRef.current && cue && Date.now() < cue.startedAt + cue.durationMs) {
+                if (soundOnRef.current && cue && serverNow() < cue.startedAt + cue.durationMs) {
                     lastCueIdRef.current = cue.cueId;
                     playClip(cue);
                 }
                 setNeedsTap(false);
+            };
+            // Resuming the audio context is async — wait for it before scheduling.
+            if (ctx && ctx.state !== 'running') {
+                ctx.resume().then(proceed).catch(proceed);
+            } else {
+                proceed();
             }
         };
         const opts: AddEventListenerOptions = { passive: true };
@@ -215,7 +304,7 @@ export default function DanceGame({ state }: DanceGameProps) {
     useEffect(() => {
         if (soundOn) {
             const cue = currentCueRef.current;
-            if (cue && Date.now() < cue.startedAt + cue.durationMs) {
+            if (cue && serverNow() < cue.startedAt + cue.durationMs) {
                 lastCueIdRef.current = cue.cueId;
                 playClip(cue);
             }
@@ -251,7 +340,7 @@ export default function DanceGame({ state }: DanceGameProps) {
         }
         const tick = () => {
             const endsAt = cue.startedAt + cue.durationMs;
-            const remaining = Math.max(0, endsAt - Date.now());
+            const remaining = Math.max(0, endsAt - serverNow());
             setClipRemaining(remaining);
         };
         tick();
@@ -261,9 +350,40 @@ export default function DanceGame({ state }: DanceGameProps) {
 
     useEffect(() => () => stopClip(), [stopClip]);
 
+    // Flip "audio has started" the moment a clip is actually live + unblocked.
+    // This is what reveals the Mute button, so the control matches reality.
+    useEffect(() => {
+        const clipLive = clipRemaining > 0 && !isSpinning;
+        if (soundOn && !needsTap && clipLive) setHasAudioStarted(true);
+    }, [soundOn, needsTap, clipRemaining, isSpinning]);
+
+    // Reset when the game ends so the next session starts fresh.
+    useEffect(() => {
+        if (!state.active) setHasAudioStarted(false);
+    }, [state.active]);
+
     const toggleSound = () => {
         if (!soundOn) setNeedsTap(false);
         toggleMuted();
+    };
+
+    // Explicit "turn on sound" button for the pre-playback prompt. Tapping anywhere
+    // also unlocks audio (global listener), but a real button is clearer for guests.
+    const enableSound = () => {
+        const ctx = getGameAudioContext();
+        const proceed = () => {
+            setNeedsTap(false);
+            const cue = currentCueRef.current;
+            if (soundOn && cue && serverNow() < cue.startedAt + cue.durationMs) {
+                lastCueIdRef.current = cue.cueId;
+                playClip(cue);
+            }
+        };
+        if (ctx && ctx.state !== 'running') {
+            ctx.resume().then(proceed).catch(proceed);
+        } else {
+            proceed();
+        }
     };
 
     const landedSong = useMemo(() => {
@@ -365,22 +485,35 @@ export default function DanceGame({ state }: DanceGameProps) {
                     </div>
                 )}
 
-                {/* Sound is ON by default — viewers can mute their own device */}
-                <div className={`dg-audio-consent ${soundOn ? 'enabled' : 'muted'}`}>
-                    <div>
-                        <strong>{soundOn ? '🔊 Sound on' : '🔇 Muted'}</strong>
-                        <span>
-                            {soundOn
-                                ? (needsTap
-                                    ? 'Tap anywhere to start the music.'
-                                    : 'Everyone hears the clips together. Mute to silence just your device.')
-                                : 'Music is muted on this device only.'}
-                        </span>
+                {/* Sound bar tells the truth about what's happening:
+                    1) muted        → Unmute
+                    2) playing/ready → Sound on + Mute (only after audio is real)
+                    3) blocked       → big "Turn on sound" prompt (no Mute yet) */}
+                {!soundOn ? (
+                    <div className="dg-audio-consent muted">
+                        <div>
+                            <strong>🔇 Muted</strong>
+                            <span>Music is muted on this device only.</span>
+                        </div>
+                        <button type="button" onClick={toggleSound}>Unmute</button>
                     </div>
-                    <button type="button" onClick={toggleSound}>
-                        {soundOn ? 'Mute' : 'Unmute'}
+                ) : hasAudioStarted || unlocked ? (
+                    <div className="dg-audio-consent enabled">
+                        <div>
+                            <strong>🔊 Sound on</strong>
+                            <span>Everyone hears the clips together. Mute to silence just your device.</span>
+                        </div>
+                        <button type="button" onClick={toggleSound}>Mute</button>
+                    </div>
+                ) : (
+                    <button type="button" className="dg-audio-enable" onClick={enableSound}>
+                        <span className="dg-audio-enable-icon">🔊</span>
+                        <span className="dg-audio-enable-text">
+                            <strong>Tap to turn on sound</strong>
+                            <small>So you can hear the clips and dance along</small>
+                        </span>
                     </button>
-                </div>
+                )}
             </div>
         </div>
     );

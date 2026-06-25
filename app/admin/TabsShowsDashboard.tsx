@@ -157,7 +157,7 @@ export default function TabsShowsDashboard({ adminKey }: TabsShowsDashboardProps
         const slug = prompt('Tab slug (URL, e.g., "reggaeton")', name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40));
         if (!slug) return;
         const description = prompt('Short description (optional)') || undefined;
-        const themeColor = prompt('Theme accent color in hex (optional, e.g., #00ff99)') || undefined;
+        const themeColor = prompt('Theme accent color in hex (optional, e.g., #e09f24)') || undefined;
 
         setBusy(true);
         try {
